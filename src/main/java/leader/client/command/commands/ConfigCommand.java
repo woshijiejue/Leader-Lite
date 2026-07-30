@@ -40,7 +40,7 @@ public class ConfigCommand extends Command {
         }
         String sub = subCommand.toLowerCase(Locale.ROOT);
 
-        File mainDir = Leader.getMainDir();
+        File mainDir = Leader.mainDir;
 
         switch (sub) {
             case "load":

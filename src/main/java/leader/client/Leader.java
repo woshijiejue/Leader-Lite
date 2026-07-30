@@ -41,7 +41,7 @@ public class Leader implements InstanceAccess {
     public static String clientName = "&7[&bLea&3der &9Li&1te&7]&r ";
     public static String version;
 
-    private final File mainDir = new File(mc.mcDataDir, folderName);
+    public static File mainDir = new File(mc.mcDataDir, folderName);
 
     private Path dataFolder;
 
