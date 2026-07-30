@@ -1,7 +1,7 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.render.ESP;
+import leader.client.Leader;
+import leader.client.module.modules.render.ESP;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;

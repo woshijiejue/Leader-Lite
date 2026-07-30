@@ -1,6 +1,6 @@
 {
   "package": "leader.mixin",
-  "plugin": "leader.init.FMLLoadingPlugin",
+  "plugin": "leader.FMLLoadingPlugin",
   "refmap": "mixins.${modid}.refmap.json",
   "minVersion": "0.7",
   "compatibilityLevel": "JAVA_8"

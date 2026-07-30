@@ -2,10 +2,10 @@ package leader.mixin;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.concurrent.GenericFutureListener;
-import leader.Leader;
-import leader.event.EventManager;
-import leader.event.types.EventType;
-import leader.events.PacketEvent;
+import leader.client.Leader;
+import leader.client.event.EventManager;
+import leader.client.event.types.EventType;
+import leader.client.events.PacketEvent;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.INetHandlerPlayClient;

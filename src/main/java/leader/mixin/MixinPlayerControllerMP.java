@@ -1,9 +1,9 @@
 package leader.mixin;
 
-import leader.event.EventManager;
-import leader.events.AttackEvent;
-import leader.events.CancelUseEvent;
-import leader.events.WindowClickEvent;
+import leader.client.event.EventManager;
+import leader.client.events.AttackEvent;
+import leader.client.events.CancelUseEvent;
+import leader.client.events.WindowClickEvent;
 import net.minecraft.client.multiplayer.PlayerControllerMP;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;

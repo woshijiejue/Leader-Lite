@@ -1,11 +1,11 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.event.EventManager;
-import leader.events.StrafeEvent;
-import leader.management.RotationState;
-import leader.module.modules.movement.Jesus;
-import leader.module.modules.render.Animations;
+import leader.client.Leader;
+import leader.client.event.EventManager;
+import leader.client.events.StrafeEvent;
+import leader.client.management.RotationState;
+import leader.client.module.modules.movement.Jesus;
+import leader.client.module.modules.render.Animations;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;

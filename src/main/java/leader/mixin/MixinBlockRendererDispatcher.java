@@ -1,8 +1,8 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.render.BedESP;
-import leader.module.modules.render.Xray;
+import leader.client.Leader;
+import leader.client.module.modules.render.BedESP;
+import leader.client.module.modules.render.Xray;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockBed;
 import net.minecraft.block.BlockBed.EnumPartType;

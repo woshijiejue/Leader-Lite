@@ -1,9 +1,9 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.render.Chams;
-import leader.module.modules.render.ViewClip;
-import leader.module.modules.render.Xray;
+import leader.client.Leader;
+import leader.client.module.modules.render.Chams;
+import leader.client.module.modules.render.ViewClip;
+import leader.client.module.modules.render.Xray;
 import net.minecraft.client.renderer.chunk.SetVisibility;
 import net.minecraft.client.renderer.chunk.VisGraph;
 import net.minecraftforge.fml.relauncher.Side;

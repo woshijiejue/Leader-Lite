@@ -1,9 +1,9 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.event.EventManager;
-import leader.events.KnockbackEvent;
-import leader.events.SafeWalkEvent;
+import leader.client.Leader;
+import leader.client.event.EventManager;
+import leader.client.events.KnockbackEvent;
+import leader.client.events.SafeWalkEvent;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;

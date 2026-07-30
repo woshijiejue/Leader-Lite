@@ -1,7 +1,7 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.render.Animations;
+import leader.client.Leader;
+import leader.client.module.modules.render.Animations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.entity.EntityPlayerSP;

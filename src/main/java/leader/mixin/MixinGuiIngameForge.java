@@ -1,14 +1,14 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.event.EventManager;
-import leader.events.Render2DEvent;
-import leader.module.modules.render.HUD;
-import leader.module.modules.render.NickHider;
-import leader.module.modules.render.Notification;
-import leader.module.modules.render.Potion;
-import leader.module.modules.render.TargetHUD;
-import leader.util.shader.ShaderElement;
+import leader.client.Leader;
+import leader.client.event.EventManager;
+import leader.client.events.Render2DEvent;
+import leader.client.module.modules.render.HUD;
+import leader.client.module.modules.render.NickHider;
+import leader.client.module.modules.render.Notification;
+import leader.client.module.modules.render.Potion;
+import leader.client.module.modules.render.TargetHUD;
+import leader.client.util.render.shader.ShaderElement;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraftforge.client.GuiIngameForge;
 import net.minecraftforge.fml.relauncher.Side;

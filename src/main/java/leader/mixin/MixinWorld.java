@@ -1,8 +1,8 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.misc.AntiObbyTrap;
-import leader.module.modules.movement.Jesus;
+import leader.client.Leader;
+import leader.client.module.modules.misc.AntiObbyTrap;
+import leader.client.module.modules.movement.Jesus;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.Entity;

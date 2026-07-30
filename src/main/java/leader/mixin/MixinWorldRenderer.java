@@ -1,7 +1,7 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.render.Xray;
+import leader.client.Leader;
+import leader.client.module.modules.render.Xray;
 import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;

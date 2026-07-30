@@ -1,15 +1,15 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.event.EventManager;
-import leader.event.types.EventType;
-import leader.events.LivingUpdateEvent;
-import leader.events.MoveInputEvent;
-import leader.events.PlayerUpdateEvent;
-import leader.events.UpdateEvent;
-import leader.management.RotationState;
-import leader.module.modules.misc.AntiDebuff;
-import leader.module.modules.movement.NoSlow;
+import leader.client.Leader;
+import leader.client.event.EventManager;
+import leader.client.event.types.EventType;
+import leader.client.events.LivingUpdateEvent;
+import leader.client.events.MoveInputEvent;
+import leader.client.events.PlayerUpdateEvent;
+import leader.client.events.UpdateEvent;
+import leader.client.management.RotationState;
+import leader.client.module.modules.misc.AntiDebuff;
+import leader.client.module.modules.movement.NoSlow;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.potion.Potion;
 import net.minecraft.util.BlockPos;

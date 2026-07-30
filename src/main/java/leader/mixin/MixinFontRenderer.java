@@ -1,8 +1,8 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.misc.AntiObfuscate;
-import leader.module.modules.render.NickHider;
+import leader.client.Leader;
+import leader.client.module.modules.misc.AntiObfuscate;
+import leader.client.module.modules.render.NickHider;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;

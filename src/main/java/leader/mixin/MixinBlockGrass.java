@@ -1,7 +1,7 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.render.Xray;
+import leader.client.Leader;
+import leader.client.module.modules.render.Xray;
 import net.minecraft.block.BlockGrass;
 import net.minecraft.util.EnumWorldBlockLayer;
 import net.minecraftforge.fml.relauncher.Side;

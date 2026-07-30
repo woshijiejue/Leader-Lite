@@ -1,11 +1,8 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.misc.Disabler;
-import leader.module.modules.player.KeepSprint;
-import leader.util.PacketUtil;
+import leader.client.Leader;
+import leader.client.module.modules.player.KeepSprint;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.network.play.client.C09PacketHeldItemChange;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,8 +10,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Redirect;
-
-import static leader.config.Config.mc;
 
 @SideOnly(Side.CLIENT)
 @Mixin(value = {EntityPlayer.class}, priority = 9999)

@@ -1,12 +1,12 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.init.Initializer;
-import leader.event.EventManager;
-import leader.event.types.EventType;
-import leader.events.*;
-import leader.module.modules.player.NoHitDelay;
-import leader.module.modules.render.BetterFPS;
+import leader.client.Leader;
+import leader.Initializer;
+import leader.client.event.EventManager;
+import leader.client.event.types.EventType;
+import leader.client.events.*;
+import leader.client.module.modules.player.NoHitDelay;
+import leader.client.module.modules.render.BetterFPS;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiScreen;

@@ -1,7 +1,7 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.movement.Sprint;
+import leader.client.Leader;
+import leader.client.module.modules.movement.Sprint;
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.Entity;

@@ -1,6 +1,6 @@
 package leader.mixin;
 
-import leader.management.RotationState;
+import leader.client.management.RotationState;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.entity.Entity;

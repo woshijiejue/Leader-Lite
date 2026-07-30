@@ -1,11 +1,11 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.event.EventManager;
-import leader.event.types.EventType;
-import leader.events.RenderLivingEvent;
-import leader.module.modules.render.ESP;
-import leader.module.modules.render.NameTags;
+import leader.client.Leader;
+import leader.client.event.EventManager;
+import leader.client.event.types.EventType;
+import leader.client.events.RenderLivingEvent;
+import leader.client.module.modules.render.ESP;
+import leader.client.module.modules.render.NameTags;
 import net.minecraft.client.renderer.entity.Render;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.entity.RendererLivingEntity;

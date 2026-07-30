@@ -1,7 +1,7 @@
 package leader.mixin;
 
-import leader.event.EventManager;
-import leader.events.SwapItemEvent;
+import leader.client.event.EventManager;
+import leader.client.events.SwapItemEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraftforge.fml.relauncher.Side;

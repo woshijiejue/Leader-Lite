@@ -1,8 +1,8 @@
 package leader.mixin;
 
-import leader.Leader;
-import leader.module.modules.player.AutoBlockIn;
-import leader.module.modules.player.Scaffold;
+import leader.client.Leader;
+import leader.client.module.modules.player.AutoBlockIn;
+import leader.client.module.modules.player.Scaffold;
 import net.minecraft.client.gui.GuiIngame;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
