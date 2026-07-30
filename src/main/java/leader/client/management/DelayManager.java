@@ -5,6 +5,7 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.PacketEvent;
 import leader.client.events.TickEvent;
+import leader.client.util.InstanceAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.network.Packet;
@@ -22,8 +23,7 @@ import net.minecraft.network.status.client.C01PacketPing;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-public class DelayManager {
-    public static Minecraft mc = Minecraft.getMinecraft();
+public class DelayManager implements InstanceAccess {
     public DelayModules delayModule = DelayModules.NONE;
     public long delay = 0L;
     public Deque<Packet<INetHandlerPlayClient>> delayedPacket = new ConcurrentLinkedDeque<>();

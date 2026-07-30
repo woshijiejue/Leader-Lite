@@ -3,12 +3,12 @@ package leader.client.management;
 import leader.client.enums.FloatModules;
 import leader.client.event.EventTarget;
 import leader.client.events.PlayerUpdateEvent;
+import leader.client.util.InstanceAccess;
 import net.minecraft.client.Minecraft;
 
 import java.util.LinkedHashMap;
 
-public class FloatManager {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+public class FloatManager implements InstanceAccess {
     private final LinkedHashMap<FloatModules, Boolean> activeMap;
     private boolean floating;
 

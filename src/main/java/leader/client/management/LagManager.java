@@ -4,6 +4,7 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.PacketEvent;
 import leader.client.events.TickEvent;
+import leader.client.util.InstanceAccess;
 import leader.client.util.PacketUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.Packet;
@@ -20,8 +21,7 @@ import net.minecraft.util.Vec3;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-public class LagManager {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+public class LagManager implements InstanceAccess {
     public final Deque<LagPacket> packetQueue;
     private int tickDelay;
     private boolean flushing;

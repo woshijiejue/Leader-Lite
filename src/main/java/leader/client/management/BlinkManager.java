@@ -7,6 +7,7 @@ import leader.client.event.types.EventType;
 import leader.client.events.PacketEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.modules.player.BlinkSettings;
+import leader.client.util.InstanceAccess;
 import leader.client.util.PacketUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.Packet;
@@ -23,8 +24,7 @@ import net.minecraft.network.status.client.C01PacketPing;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-public class BlinkManager {
-    public static Minecraft mc = Minecraft.getMinecraft();
+public class BlinkManager implements InstanceAccess {
     public BlinkModules blinkModule = BlinkModules.NONE;
     public boolean blinking = false;
     public Deque<Packet<?>> blinkedPackets = new ConcurrentLinkedDeque<>();

@@ -2,32 +2,49 @@ package leader.client;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import leader.client.command.CommandManager;
+import leader.client.command.commands.*;
+import leader.client.config.ConfigManager;
+import leader.client.event.EventManager;
+import leader.client.management.*;
+import leader.client.module.Module;
+import leader.client.module.ModuleManager;
 import leader.client.module.modules.combat.*;
 import leader.client.module.modules.legit.*;
 import leader.client.module.modules.misc.*;
 import leader.client.module.modules.movement.*;
 import leader.client.module.modules.player.*;
 import leader.client.module.modules.render.*;
-import me.ksyz.accountmanager.AccountManager;
-import leader.client.command.CommandManager;
-import leader.client.command.commands.*;
-import leader.client.config.Config;
-import leader.client.event.EventManager;
-import leader.client.management.*;
-import leader.client.module.Module;
-import leader.client.module.ModuleManager;
 import leader.client.property.Property;
 import leader.client.property.PropertyManager;
+import leader.client.util.InstanceAccess;
+import lombok.Getter;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.audio.SoundCategory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.io.File;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Objects;
 
-public class Leader {
+@Getter
+public class Leader implements InstanceAccess {
+    public static final Logger LOGGER = LogManager.getLogger(Leader.class);
+
+    public static String folderName = "Leader";
     public static String clientName = "&7[&bLea&3der &9Li&1te&7]&r ";
     public static String version;
+
+    private final File mainDir = new File(mc.mcDataDir, folderName);
+
+    private Path dataFolder;
+
     public static RotationManager rotationManager;
     public static FloatManager floatManager;
     public static BlinkManager blinkManager;
@@ -39,11 +56,15 @@ public class Leader {
     public static PropertyManager propertyManager;
     public static ModuleManager moduleManager;
     public static CommandManager commandManager;
+    public static ConfigManager configManager;
+
     public Leader() {
         this.init();
     }
 
     public void init() {
+        setupMainDirectory();
+
         rotationManager = new RotationManager();
         floatManager = new FloatManager();
         blinkManager = new BlinkManager();
@@ -55,6 +76,7 @@ public class Leader {
         propertyManager = new PropertyManager();
         moduleManager = new ModuleManager();
         commandManager = new CommandManager();
+
         EventManager.register(rotationManager);
         EventManager.register(floatManager);
         EventManager.register(blinkManager);
@@ -62,6 +84,7 @@ public class Leader {
         EventManager.register(lagManager);
         EventManager.register(moduleManager);
         EventManager.register(commandManager);
+
         moduleManager.modules.put(Animations.class, new Animations());
         moduleManager.modules.put(AimAssist.class, new AimAssist());
         moduleManager.modules.put(AntiAFK.class, new AntiAFK());
@@ -74,8 +97,8 @@ public class Leader {
         moduleManager.modules.put(AutoHeal.class, new AutoHeal());
         moduleManager.modules.put(AutoTool.class, new AutoTool());
         moduleManager.modules.put(BetterFPS.class, new BetterFPS());
-        moduleManager.modules.put(BlockHit.class,new BlockHit());
-        moduleManager.modules.put(BackTrack.class,new BackTrack());
+        moduleManager.modules.put(BlockHit.class, new BlockHit());
+        moduleManager.modules.put(BackTrack.class, new BackTrack());
         moduleManager.modules.put(BedESP.class, new BedESP());
         moduleManager.modules.put(BedTracker.class, new BedTracker());
         moduleManager.modules.put(Blink.class, new Blink());
@@ -100,7 +123,7 @@ public class Leader {
         moduleManager.modules.put(Indicators.class, new Indicators());
         moduleManager.modules.put(InventoryClicker.class, new InventoryClicker());
         moduleManager.modules.put(BedNuker.class, new BedNuker());
-        moduleManager.modules.put(InvManager.class,new InvManager());
+        moduleManager.modules.put(InvManager.class, new InvManager());
         moduleManager.modules.put(InvWalk.class, new InvWalk());
         moduleManager.modules.put(ItemESP.class, new ItemESP());
         moduleManager.modules.put(Jesus.class, new Jesus());
@@ -143,6 +166,7 @@ public class Leader {
         moduleManager.modules.put(ViewClip.class, new ViewClip());
         moduleManager.modules.put(Wtap.class, new Wtap());
         moduleManager.modules.put(Xray.class, new Xray());
+
         commandManager.commands.add(new BindCommand());
         commandManager.commands.add(new ConfigCommand());
         commandManager.commands.add(new DenickCommand());
@@ -158,6 +182,7 @@ public class Leader {
         commandManager.commands.add(new TargetCommand());
         commandManager.commands.add(new ToggleCommand());
         commandManager.commands.add(new VclipCommand());
+
         for (Module module : moduleManager.modules.values()) {
             ArrayList<Property<?>> properties = new ArrayList<>();
             for (final Field field : module.getClass().getDeclaredFields()) {
@@ -176,25 +201,41 @@ public class Leader {
             propertyManager.properties.put(module.getClass(), properties);
             EventManager.register(module);
         }
-        Config config = new Config("default", true);
-        if (config.file.exists()) {
-            config.load();
-        }
-        if (friendManager.file.exists()) {
-            friendManager.load();
-        }
-        if (targetManager.file.exists()) {
-            targetManager.load();
-        }
-        Runtime.getRuntime().addShutdownHook(new Thread(config::save));
 
-        try (InputStreamReader reader = new InputStreamReader(Objects.requireNonNull(Leader.class.getResourceAsStream("/version.json")), StandardCharsets.UTF_8)) {
-            JsonObject modInfo = new JsonParser().parse(reader).getAsJsonObject();
-            version = modInfo.get("version").getAsString();
+        configManager = new ConfigManager();
+        dataFolder = Paths.get(mc.mcDataDir.getAbsolutePath()).resolve(clientName);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> configManager.saveConfigs()));
+
+        try {
+            InputStream stream = Leader.class.getResourceAsStream("/version.json");
+            if (stream != null) {
+                try (InputStreamReader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                    JsonObject modInfo = new JsonParser().parse(reader).getAsJsonObject();
+                    version = modInfo.get("version").getAsString();
+                }
+            } else {
+                version = "dev";
+            }
         } catch (Exception e) {
+            LOGGER.warn("Failed to load version.json, falling back to dev version", e);
             version = "dev";
         }
+    }
 
-        AccountManager.init();
+    private void setupMainDirectory() {
+        if (!mainDir.exists()) {
+            boolean dirCreated = mainDir.mkdir();
+            if (dirCreated) {
+                LOGGER.info("Created main directory at {}", mainDir.getAbsolutePath());
+            } else {
+                LOGGER.warn("Failed to create main directory at {}", mainDir.getAbsolutePath());
+            }
+            Minecraft.getMinecraft().gameSettings.setSoundLevel(SoundCategory.MUSIC, 0);
+        } else {
+            LOGGER.info("Main directory already exists at {}", mainDir.getAbsolutePath());
+        }
+
+        this.dataFolder = Paths.get(Minecraft.getMinecraft().mcDataDir.getAbsolutePath()).resolve(clientName);
     }
 }

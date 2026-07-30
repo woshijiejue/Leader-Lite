@@ -1,47 +1,53 @@
 package leader.client.management;
 
-import net.minecraft.client.Minecraft;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import leader.client.Leader;
+import leader.client.config.Config;
+import leader.client.util.InstanceAccess;
+import lombok.Getter;
 
-import java.awt.*;
-import java.io.*;
+import java.awt.Color;
 import java.util.ArrayList;
-import java.util.stream.Collectors;
 
-public abstract class PlayerFileManager {
-    public static Minecraft mc = Minecraft.getMinecraft();
+@Getter
+public class PlayerFileManager extends Config implements InstanceAccess {
     public ArrayList<String> players;
-    public File file;
     public Color color;
 
-    public PlayerFileManager(File file, Color color) {
+    public PlayerFileManager(String name, Color color) {
+        super(name);
         this.players = new ArrayList<>();
-        this.file = file;
         this.color = color;
     }
 
-    public void load() {
-        if (!file.exists()) {
-            try {
-                if ((file.getParentFile().exists() || file.getParentFile().mkdirs()) && file.createNewFile()) {
-                    System.out.printf("File created: %s%n", file.getName());
-                }
-            } catch (IOException e) {
-                System.err.println("Error creating file: " + e.getMessage());
-            }
-        }
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+    @Override
+    public void loadConfig(JsonObject object) {
+        if (object.has("players")) {
             players.clear();
-            players.addAll(reader.lines().map(String::trim).collect(Collectors.toList()));
-        } catch (IOException e) {
-            System.err.println("Error reading file: " + e.getMessage());
+            JsonArray array = object.getAsJsonArray("players");
+            for (JsonElement element : array) {
+                players.add(element.getAsString());
+            }
         }
     }
 
+    @Override
+    public JsonObject saveConfig() {
+        JsonObject object = new JsonObject();
+        JsonArray array = new JsonArray();
+        for (String player : players) {
+            array.add(new JsonPrimitive(player));
+        }
+        object.add("players", array);
+        return object;
+    }
+
     public void save() {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
-            writer.print(String.join("\n", players));
-        } catch (IOException e) {
-            System.err.println("Error saving file: " + e.getMessage());
+        if (Leader.configManager != null) {
+            Leader.configManager.saveConfig(this);
         }
     }
 
@@ -72,13 +78,5 @@ public abstract class PlayerFileManager {
 
     public boolean isFriend(String string) {
         return this.players.stream().anyMatch(string2 -> string2.equalsIgnoreCase(string));
-    }
-
-    public ArrayList<String> getPlayers() {
-        return this.players;
-    }
-
-    public Color getColor() {
-        return this.color;
     }
 }

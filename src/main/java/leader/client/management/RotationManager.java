@@ -5,11 +5,11 @@ import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
 import leader.client.events.Render3DEvent;
 import leader.client.events.TickEvent;
+import leader.client.util.InstanceAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.MathHelper;
 
-public class RotationManager {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+public class RotationManager implements InstanceAccess {
     private float lastUpdate;
     private float yawDelta;
     private float pitchDelta;

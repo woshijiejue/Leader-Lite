@@ -9,8 +9,6 @@ import leader.client.module.Module;
 import leader.client.property.properties.BooleanProperty;
 import leader.client.property.properties.IntProperty;
 
-import static leader.client.config.Config.mc;
-
 public class SmartAttack extends Module {
     public SmartAttack(){super("SmartAttack",false,false);}
     private final BooleanProperty onGround = new BooleanProperty("CancelGroundAttack",true);
@@ -20,12 +18,14 @@ public class SmartAttack extends Module {
     public static final BooleanProperty cancelAuraBlocking = new BooleanProperty("CancelAuraBlocking",true,onKillAura::getValue);
     public static boolean shouldCancel;
     private EntityLivingBase target;
+
     @EventTarget
     public void onAttack(AttackEvent event){
         if (isEnabled()){
             target = (EntityLivingBase) event.getTarget();
         }
     }
+
     @EventTarget
     public void onUpdate(UpdateEvent event) {
         if (isEnabled()){

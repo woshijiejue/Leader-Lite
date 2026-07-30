@@ -14,18 +14,23 @@ public class PlayerStateManager {
         if (packet instanceof C02PacketUseEntity) {
             this.attacking = true;
         }
+
         if (packet instanceof C07PacketPlayerDigging) {
             this.digging = true;
         }
+
         if (packet instanceof C08PacketPlayerBlockPlacement) {
             this.placing = true;
         }
+
         if (packet instanceof C09PacketHeldItemChange) {
             this.swapping = true;
         }
+
         if (packet instanceof C0APacketAnimation) {
             this.swinging = true;
         }
+
         if (packet instanceof C03PacketPlayer) {
             this.attacking = false;
             this.digging = false;

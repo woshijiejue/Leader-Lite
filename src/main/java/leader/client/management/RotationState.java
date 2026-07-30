@@ -1,16 +1,23 @@
 package leader.client.management;
 
+import leader.client.util.InstanceAccess;
+import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.MathHelper;
 
-public class RotationState {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+public class RotationState implements InstanceAccess {
     private static int state = -1;
+    @Getter
     private static float prevRenderYawOffset;
+    @Getter
     private static float renderYawOffset;
+    @Getter
     private static float prevRotationYawHead;
+    @Getter
     private static float rotationYawHead;
+    @Getter
     private static float prevRotationPitch;
+    @Getter
     private static float rotationPitch;
     private static float smoothYaw;
     private static int priority;
@@ -19,12 +26,15 @@ public class RotationState {
         float newYawOffset = currentYawOffset;
         double deltaX = RotationState.mc.thePlayer.posX - RotationState.mc.thePlayer.prevPosX;
         double deltaZ = RotationState.mc.thePlayer.posZ - RotationState.mc.thePlayer.prevPosZ;
+
         if ((float) (deltaX * deltaX + deltaZ * deltaZ) > 0.0025000002f) {
             newYawOffset = (float) MathHelper.atan2(deltaZ, deltaX) * 180.0f / (float) Math.PI - 90.0f;
         }
+
         if (RotationState.mc.thePlayer.swingProgress > 0.0f) {
             newYawOffset = targetYaw;
         }
+
         float f4 = MathHelper.wrapAngleTo180_float(newYawOffset - currentYawOffset);
         float f5 = MathHelper.wrapAngleTo180_float(targetYaw - (currentYawOffset += f4 * 0.3f));
         if (f5 < -75.0f) {
@@ -59,30 +69,6 @@ public class RotationState {
     public static boolean isRotated(int state) {
         if (RotationState.state < 0) return false;
         return RotationState.state <= state;
-    }
-
-    public static float getPrevRenderYawOffset() {
-        return prevRenderYawOffset;
-    }
-
-    public static float getRenderYawOffset() {
-        return renderYawOffset;
-    }
-
-    public static float getPrevRotationYawHead() {
-        return prevRotationYawHead;
-    }
-
-    public static float getRotationYawHead() {
-        return rotationYawHead;
-    }
-
-    public static float getPrevRotationPitch() {
-        return prevRotationPitch;
-    }
-
-    public static float getRotationPitch() {
-        return rotationPitch;
     }
 
     public static float getSmoothedYaw() {
