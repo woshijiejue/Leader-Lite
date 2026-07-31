@@ -1,15 +1,18 @@
 package leader.client.module.modules.render;
 
 import leader.client.Leader;
-import leader.client.enums.ChatColors;
+import leader.client.util.misc.ChatColors;
 import leader.client.event.EventTarget;
 import leader.client.event.types.Priority;
 import leader.client.events.Render2DEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.*;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ColorValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.TeamUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.player.EntityPlayer;
@@ -19,21 +22,22 @@ import java.awt.*;
 import java.util.stream.Collectors;
 
 public class Radar extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final ModeProperty colorMode = new ModeProperty("color", 0, new String[]{"DEFAULT", "TEAMS", "HUD"});
-    public final IntProperty position = new IntProperty("position", 0, 0, 4);
-    public final IntProperty offsetX = new IntProperty("offset-x", 60, 0, 1000, () -> position.getValue() != 4);
-    public final IntProperty offsetY = new IntProperty("offset-y", 60, 0, 1000, () -> position.getValue() != 4);
-    public final IntProperty radarRadius = new IntProperty("radar-radius", 55, 10, 200);
-    public final FloatProperty dotRadius = new FloatProperty("dot-radius", 1.5F, 0.1F, 5.0F);
-    public final BooleanProperty showPlayers = new BooleanProperty("players", true);
-    public final BooleanProperty showFriends = new BooleanProperty("friends", true);
-    public final BooleanProperty showEnemies = new BooleanProperty("enemies", true);
-    public final BooleanProperty showBots = new BooleanProperty("bots", false);
-    public final BooleanProperty showPVP = new BooleanProperty("show-pvp", false);
-    public final ColorProperty fillColor = new ColorProperty("fill-color", Color.GRAY.getRGB());
-    public final ColorProperty outlineColor = new ColorProperty("outline-color", Color.DARK_GRAY.getRGB());
-    public final ColorProperty crossColor = new ColorProperty("cross-color", Color.LIGHT_GRAY.getRGB());
+
+    public final ListValue colorMode = new ListValue("color", new String[]{"DEFAULT", "TEAMS", "HUD"}, "DEFAULT", this);
+    public final SliderValue position = new SliderValue("position", 0, 0, 4, Representation.INT, this);
+    public final SliderValue offsetX = new SliderValue("offset-x", 60, 0, 1000, () -> this.position.getValue().intValue() != 4, Representation.INT, this);
+    public final SliderValue offsetY = new SliderValue("offset-y", 60, 0, 1000, () -> this.position.getValue().intValue() != 4, Representation.INT, this);
+    public final SliderValue radarRadius = new SliderValue("radar-radius", 55, 10, 200, Representation.INT, this);
+    public final SliderValue dotRadius = new SliderValue("dot-radius", 1.5, 0.1, 5.0, Representation.FLOAT, this);
+    public final BoolValue showPlayers = new BoolValue("players", true, this);
+    public final BoolValue showFriends = new BoolValue("friends", true, this);
+    public final BoolValue showEnemies = new BoolValue("enemies", true, this);
+    public final BoolValue showBots = new BoolValue("bots", false, this);
+    public final BoolValue showPVP = new BoolValue("show-pvp", false, this);
+    public final ColorValue fillColor = new ColorValue("fill-color", Color.GRAY, this);
+    public final ColorValue outlineColor = new ColorValue("outline-color", Color.DARK_GRAY, this);
+    public final ColorValue crossColor = new ColorValue("cross-color", Color.LIGHT_GRAY, this);
+
     public Radar() {
         super("Radar", false);
     }
@@ -58,23 +62,22 @@ public class Radar extends Module {
 
     private Color getEntityColor(EntityPlayer entityPlayer) {
         if (TeamUtil.isFriend(entityPlayer)) {
-            Color color = Leader.friendManager.getColor();
+            Color color = Leader.friendComponent.getColor();
             return new Color(color.getRed(), color.getGreen(), color.getBlue(), 255);
         } else if (TeamUtil.isTarget(entityPlayer)) {
-            Color color = Leader.targetManager.getColor();
+            Color color = Leader.targetComponent.getColor();
             return new Color(color.getRed(), color.getGreen(), color.getBlue(), 255);
         } else {
-            switch (this.colorMode.getValue()) {
-                case 0:
-                    return TeamUtil.getTeamColor(entityPlayer, 1.0F);
-                case 1:
-                    int teamColor = TeamUtil.isSameTeam(entityPlayer) ? ChatColors.BLUE.toAwtColor() : ChatColors.RED.toAwtColor();
-                    return new Color(teamColor | 255 << 24, true);
-                case 2:
-                    int color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB();
-                    return new Color(color | 255 << 24, true);
-                default:
-                    return Color.WHITE;
+            if (this.colorMode.is("DEFAULT")) {
+                return TeamUtil.getTeamColor(entityPlayer, 1.0F);
+            } else if (this.colorMode.is("TEAMS")) {
+                int teamColor = TeamUtil.isSameTeam(entityPlayer) ? ChatColors.BLUE.toAwtColor() : ChatColors.RED.toAwtColor();
+                return new Color(teamColor | 255 << 24, true);
+            } else if (this.colorMode.is("HUD")) {
+                int color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB();
+                return new Color(color | 255 << 24, true);
+            } else {
+                return Color.WHITE;
             }
         }
     }
@@ -87,12 +90,16 @@ public class Radar extends Module {
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
 
         double centerX, centerY;
-        if (position.getValue() == 4) {
+        int posVal = this.position.getValue().intValue();
+        int offXVal = this.offsetX.getValue().intValue();
+        int offYVal = this.offsetY.getValue().intValue();
+        int radiusVal = this.radarRadius.getValue().intValue();
+        if (posVal == 4) {
             centerX = sr.getScaledWidth() / 2.0F;
             centerY = sr.getScaledHeight() / 2.0F;
         } else {
-            centerX = (position.getValue() & 0x1) == 0x1 ? Math.max(sr.getScaledWidth() - offsetX.getValue(), 0) : Math.min(offsetX.getValue(), sr.getScaledWidth());
-            centerY = (position.getValue() & 0x2) == 0x2 ? Math.max(sr.getScaledHeight() - offsetY.getValue(), 0) : Math.min(offsetY.getValue(), sr.getScaledHeight());
+            centerX = (posVal & 0x1) == 0x1 ? Math.max(sr.getScaledWidth() - offXVal, 0) : Math.min(offXVal, sr.getScaledWidth());
+            centerY = (posVal & 0x2) == 0x2 ? Math.max(sr.getScaledHeight() - offYVal, 0) : Math.min(offYVal, sr.getScaledHeight());
         }
 
         GlStateManager.pushMatrix();
@@ -108,8 +115,8 @@ public class Radar extends Module {
         double cos = Math.cos(yaw);
         double sin = Math.sin(yaw);
 
-        Color fill = new Color(fillColor.getValue());
-        this.drawRadarCircle(0.0, 0, yaw, radarRadius.getValue(), 64, new Color(fill.getRed(),fill.getGreen(),fill.getBlue(),100).getRGB(), outlineColor.getValue(), crossColor.getValue());
+        Color fill = this.fillColor.getValue();
+        this.drawRadarCircle(0.0, 0, yaw, radiusVal, 64, new Color(fill.getRed(), fill.getGreen(), fill.getBlue(), 100).getRGB(), this.outlineColor.getValue().getRGB(), this.crossColor.getValue().getRGB());
         for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRender((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
             double dx = (player.lastTickPosX + (player.posX - player.lastTickPosX) * event.getPartialTicks()) - mc.thePlayer.posX;
             double dz = (player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * event.getPartialTicks()) - mc.thePlayer.posZ;
@@ -118,22 +125,21 @@ public class Radar extends Module {
             double relY = dz * cos - dx * sin;
 
             double dist = Math.sqrt(relX * relX + relY * relY);
-            double scale = dist < radarRadius.getValue() ? 1.0F : radarRadius.getValue() / dist;
+            double scale = dist < radiusVal ? 1.0F : (double) radiusVal / dist;
             double px = relX * scale;
             double py = relY * scale;
 
             RenderUtil.fillCircle(px, py, dotRadius.getValue(), 12, getEntityColor(player).getRGB());
-
         }
         if (this.showPVP.getValue()) {
-            double dx = - mc.thePlayer.posX;
-            double dz = - mc.thePlayer.posZ;
+            double dx = -mc.thePlayer.posX;
+            double dz = -mc.thePlayer.posZ;
 
             double relX = dx * cos + dz * sin;
             double relY = dz * cos - dx * sin;
 
             double dist = Math.sqrt(relX * relX + relY * relY);
-            double scale = dist < radarRadius.getValue() * 2 ? 1.0F : radarRadius.getValue() * 2 / dist;
+            double scale = dist < radiusVal * 2 ? 1.0F : (double) radiusVal * 2 / dist;
             double px = relX * scale;
             double py = relY * scale;
             GlStateManager.pushMatrix();

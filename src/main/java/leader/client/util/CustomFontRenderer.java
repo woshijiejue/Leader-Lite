@@ -1,7 +1,6 @@
 package leader.client.util;
 
-import leader.mixin.FontRendererAccessor;
-import net.minecraft.client.Minecraft;
+import leader.mixin.accessor.FontRendererAccessor;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
 
@@ -14,9 +13,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
-public class CustomFontRenderer {
+public class CustomFontRenderer implements InstanceAccess {
 
-    private static final Minecraft mc = Minecraft.getMinecraft();
     private final boolean antiAlias;
     private final byte[][] charWidths = new byte[256][];
     private final int[] textures = new int[256];

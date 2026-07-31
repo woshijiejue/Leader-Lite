@@ -7,14 +7,15 @@ import leader.client.event.types.Priority;
 import leader.client.events.LeftClickMouseEvent;
 import leader.client.events.Render3DEvent;
 import leader.client.events.TickEvent;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.TeamUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ColorProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ColorValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -40,13 +41,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class HitBox extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
     private MovingObjectPosition targetEntity = null;
-    public final FloatProperty multiplier = new FloatProperty("multiplier", 1.2F, 1.0F, 5.0F);
-    public final ModeProperty showHitbox = new ModeProperty("show-hitbox", 0, new String[]{"NONE", "PLAYERS", "MOBS", "ANIMALS", "ALL"});
-    public final ColorProperty color = new ColorProperty("color", new Color(255, 255, 255).getRGB(), () -> this.showHitbox.getValue() != 0);
-    public final BooleanProperty teams = new BooleanProperty("teams", true, () -> this.showHitbox.getValue() == 1 || this.showHitbox.getValue() == 4);
-    public final BooleanProperty botCheck = new BooleanProperty("bot-check", true, () -> this.showHitbox.getValue() == 1 || this.showHitbox.getValue() == 4);
+    public final SliderValue multiplier = (SliderValue) new SliderValue("multiplier", 1.2, 1.0, 5.0, Representation.FLOAT, this)
+            .displayName("Multi Plier");
+    public final ListValue showHitbox = new ListValue("show-hitbox", new String[]{"None", "Players", "Mobs", "Animals", "All"}, "None", this);
+    public final ColorValue color = new ColorValue("color", new Color(255, 255, 255), () -> !this.showHitbox.is("None"), this);
+    public final BoolValue teams = new BoolValue("teams", true, () -> this.showHitbox.is("Players") || this.showHitbox.is("All"), this);
+    public final BoolValue botCheck = new BoolValue("bot-check", true, () -> this.showHitbox.is("Players") || this.showHitbox.is("All"), this);
 
     public HitBox() {
         super("HitBox", false);
@@ -133,55 +135,57 @@ public class HitBox extends Module {
         if (!entity.ignoreFrustumCheck && !RenderUtil.isInViewFrustum(entity.getEntityBoundingBox(), 0.1F)) {
             return false;
         }
-        switch (this.showHitbox.getValue()) {
-            case 0:
-                return false;
-            case 1:
-                if (entity instanceof EntityPlayer) {
-                    EntityPlayer player = (EntityPlayer) entity;
-                    if (TeamUtil.isFriend(player)) {
-                        return false;
-                    }
-                    if (this.teams.getValue() && TeamUtil.isSameTeam(player)) {
-                        return false;
-                    }
-                    if (this.botCheck.getValue() && TeamUtil.isBot(player)) {
-                        return false;
-                    }
-                    return true;
+        if (this.showHitbox.is("None")) {
+            return false;
+        }
+        if (this.showHitbox.is("Players")) {
+            if (entity instanceof EntityPlayer) {
+                EntityPlayer player = (EntityPlayer) entity;
+                if (TeamUtil.isFriend(player)) {
+                    return false;
                 }
-                return false;
-            case 2:
-                if (entity instanceof EntityDragon || entity instanceof EntityWither) {
-                    return true;
+                if (this.teams.getValue() && TeamUtil.isSameTeam(player)) {
+                    return false;
                 }
-                if (entity instanceof EntityMob || entity instanceof EntitySlime) {
-                    return !(entity instanceof EntitySilverfish);
-                }
-                return false;
-            case 3:
-                return entity instanceof EntityAnimal
-                        || entity instanceof EntityBat
-                        || entity instanceof EntitySquid
-                        || entity instanceof EntityVillager
-                        || entity instanceof EntityIronGolem;
-            case 4:
-                if (entity instanceof EntityPlayer) {
-                    EntityPlayer player = (EntityPlayer) entity;
-                    if (TeamUtil.isFriend(player)) {
-                        return false;
-                    }
-                    if (this.teams.getValue() && TeamUtil.isSameTeam(player)) {
-                        return false;
-                    }
-                    if (this.botCheck.getValue() && TeamUtil.isBot(player)) {
-                        return false;
-                    }
+                if (this.botCheck.getValue() && TeamUtil.isBot(player)) {
+                    return false;
                 }
                 return true;
-            default:
-                return false;
+            }
+            return false;
         }
+        if (this.showHitbox.is("Mobs")) {
+            if (entity instanceof EntityDragon || entity instanceof EntityWither) {
+                return true;
+            }
+            if (entity instanceof EntityMob || entity instanceof EntitySlime) {
+                return !(entity instanceof EntitySilverfish);
+            }
+            return false;
+        }
+        if (this.showHitbox.is("Animals")) {
+            return entity instanceof EntityAnimal
+                    || entity instanceof EntityBat
+                    || entity instanceof EntitySquid
+                    || entity instanceof EntityVillager
+                    || entity instanceof EntityIronGolem;
+        }
+        if (this.showHitbox.is("All")) {
+            if (entity instanceof EntityPlayer) {
+                EntityPlayer player = (EntityPlayer) entity;
+                if (TeamUtil.isFriend(player)) {
+                    return false;
+                }
+                if (this.teams.getValue() && TeamUtil.isSameTeam(player)) {
+                    return false;
+                }
+                if (this.botCheck.getValue() && TeamUtil.isBot(player)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     @EventTarget
@@ -200,7 +204,7 @@ public class HitBox extends Module {
 
     @EventTarget
     public void onRender(Render3DEvent event) {
-        if (this.isEnabled() && this.showHitbox.getValue() != 0) {
+        if (this.isEnabled() && !this.showHitbox.is("None")) {
             List<EntityLivingBase> entities = mc.theWorld.loadedEntityList
                     .stream()
                     .filter(entity -> entity instanceof EntityLivingBase)
@@ -209,7 +213,7 @@ public class HitBox extends Module {
                     .collect(Collectors.toList());
             if (!entities.isEmpty()) {
                 RenderUtil.enableRenderState();
-                Color renderColor = new Color(this.color.getValue());
+                Color renderColor = this.color.getValue();
                 for (EntityLivingBase entity : entities) {
                     float collisionSize = (float) ((double) entity.getCollisionBorderSize() * this.multiplier.getValue());
                     AxisAlignedBB expandedBox = entity.getEntityBoundingBox().expand(collisionSize, collisionSize, collisionSize);

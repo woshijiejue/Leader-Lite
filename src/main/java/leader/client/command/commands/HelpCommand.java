@@ -2,7 +2,7 @@ package leader.client.command.commands;
 
 import leader.client.Leader;
 import leader.client.command.Command;
-import leader.client.util.ChatUtil;
+import leader.client.util.DebugUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,10 +15,10 @@ public class HelpCommand extends Command {
     @Override
     public void runCommand(ArrayList<String> args) {
         if (!Leader.moduleManager.modules.isEmpty()) {
-            ChatUtil.sendFormatted(String.format("%sCommands:&r", Leader.clientName));
+            DebugUtil.sendFormatted(String.format("%sCommands:&r", Leader.clientName));
             for (Command command : Leader.commandManager.commands) {
                 if (!(command instanceof ModuleCommand)) {
-                    ChatUtil.sendFormatted(String.format("&7»&r .%s&r", String.join(" &7/&r .", command.names)));
+                    DebugUtil.sendFormatted(String.format("&7»&r .%s&r", String.join(" &7/&r .", command.names)));
                 }
             }
         }

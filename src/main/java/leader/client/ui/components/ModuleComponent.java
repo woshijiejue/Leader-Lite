@@ -3,8 +3,8 @@ package leader.client.ui.components;
 import leader.client.Leader;
 import leader.client.module.Module;
 import leader.client.module.modules.render.HUD;
-import leader.client.property.Property;
-import leader.client.property.properties.*;
+import leader.client.module.values.Value;
+import leader.client.module.values.impl.*;
 import leader.client.ui.Component;
 import leader.client.ui.dataset.impl.*;
 import leader.client.util.render.RenderUtil;
@@ -27,16 +27,12 @@ public class ModuleComponent implements Component {
         this.settings = new ArrayList<>();
         this.panelExpand = false;
         int y = offsetY + 12;
-        if (!Leader.propertyManager.properties.get(mod.getClass()).isEmpty()) {
-            for (Property<?> prop : Leader.propertyManager.properties.get(mod.getClass())) {
-                if (prop instanceof BooleanProperty)      { settings.add(new CheckBoxComponent((BooleanProperty) prop, this, y)); y += 12; }
-                else if (prop instanceof FloatProperty)   { settings.add(new SliderComponent(new FloatSlider((FloatProperty) prop), this, y)); y += 16; }
-                else if (prop instanceof IntProperty)     { settings.add(new SliderComponent(new IntSlider((IntProperty) prop), this, y)); y += 16; }
-                else if (prop instanceof PercentProperty) { settings.add(new SliderComponent(new PercentageSlider((PercentProperty) prop), this, y)); y += 16; }
-                else if (prop instanceof ModeProperty)    { settings.add(new ModeComponent((ModeProperty) prop, this, y)); y += 12; }
-                else if (prop instanceof ColorProperty)   { settings.add(new ColorSliderComponent((ColorProperty) prop, this, y)); y += 32; }
-                else if (prop instanceof TextProperty)    { settings.add(new TextComponent((TextProperty) prop, this, y)); y += 12; }
-            }
+        for (Value<?> value : mod.getValues()) {
+            if (value instanceof BoolValue)              { settings.add(new ValueCheckBoxComponent((BoolValue) value, this, y)); y += 12; }
+            else if (value instanceof SliderValue)       { settings.add(new SliderComponent(new ValueSlider((SliderValue) value), this, y)); y += 16; }
+            else if (value instanceof ListValue)         { settings.add(new ValueModeComponent((ListValue) value, this, y)); y += 12; }
+            else if (value instanceof ColorValue)        { settings.add(new ValueColorSliderComponent((ColorValue) value, this, y)); y += 32; }
+            else if (value instanceof StringValue)       { settings.add(new ValueTextComponent((StringValue) value, this, y)); y += 12; }
         }
         settings.add(new BindComponent(this, y));
     }

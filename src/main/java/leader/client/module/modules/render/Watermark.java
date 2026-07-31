@@ -4,9 +4,9 @@ import leader.client.Leader;
 import leader.client.event.EventTarget;
 import leader.client.events.Render2DEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.RenderUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
@@ -17,7 +17,7 @@ import java.awt.Color;
 
 public class Watermark extends Module {
 
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
     private static final String CLIENT_NAME = "Leader Lite";
     private static final long PHASE_MS = 2200L;
     private static final long FADE_MS = 350L;
@@ -26,11 +26,11 @@ public class Watermark extends Module {
     private int displayFps = 0;
     private int frameCount = 0;
 
-    public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN"});
-    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
-    public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
-    public final IntProperty offX = new IntProperty("offset-x", 4, 0, 500);
-    public final IntProperty offY = new IntProperty("offset-y", 4, 0, 500);
+    public final ListValue mode = new ListValue("mode", new String[]{"CLASSIC", "MODERN"}, "MODERN", this);
+    public final SliderValue scale = new SliderValue("scale", 1.0, 0.5, 2.0, Representation.FLOAT, this);
+    public final SliderValue fontScale = new SliderValue("font-scale", 1.0, 0.7, 1.5, Representation.FLOAT, this);
+    public final SliderValue offX = new SliderValue("offset-x", 4, 0, 500, Representation.INT, this);
+    public final SliderValue offY = new SliderValue("offset-y", 4, 0, 500, Representation.INT, this);
 
     public Watermark() {
         super("Watermark", false);
@@ -93,7 +93,7 @@ public class Watermark extends Module {
         HUD hud = getHud();
         Color tc = hud != null ? hud.getColor(now) : new Color(0, 190, 255);
 
-        if (this.mode.getValue() == 0) {
+        if (this.mode.is("CLASSIC")) {
             renderClassic(curText, nextText, anim, tc);
             return;
         }

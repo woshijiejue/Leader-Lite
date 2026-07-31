@@ -1,11 +1,11 @@
 package leader.client.util.render;
 
-import leader.client.enums.ChatColors;
+import leader.client.util.misc.ChatColors;
 import leader.client.module.modules.render.FontManager;
-import leader.mixin.IAccessorEntityRenderer;
-import leader.mixin.IAccessorMinecraft;
-import leader.mixin.IAccessorRenderManager;
-import net.minecraft.client.Minecraft;
+import leader.client.util.InstanceAccess;
+import leader.mixin.accessor.IAccessorEntityRenderer;
+import leader.mixin.accessor.IAccessorMinecraft;
+import leader.mixin.accessor.IAccessorRenderManager;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.*;
@@ -34,24 +34,14 @@ import java.nio.IntBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class RenderUtil {
-    private static Minecraft mc;
-    private static Frustum cameraFrustum;
-    private static IntBuffer viewportBuffer;
-    private static FloatBuffer modelViewBuffer;
-    private static FloatBuffer projectionBuffer;
-    private static FloatBuffer vectorBuffer;
-    private static Map<Integer, EnchantmentData> enchantmentMap;
+public class RenderUtil implements InstanceAccess {
+    private static final Frustum cameraFrustum = new Frustum();
+    private static final IntBuffer viewportBuffer = GLAllocation.createDirectIntBuffer(16);
+    private static final FloatBuffer modelViewBuffer = GLAllocation.createDirectFloatBuffer(16);
+    private static final FloatBuffer projectionBuffer = GLAllocation.createDirectFloatBuffer(16);
+    private static final FloatBuffer vectorBuffer = GLAllocation.createDirectFloatBuffer(4);
+    private static final Map<Integer, EnchantmentData> enchantmentMap = new EnchantmentMap();
 
-    static {
-        RenderUtil.mc = Minecraft.getMinecraft();
-        RenderUtil.cameraFrustum = new Frustum();
-        RenderUtil.viewportBuffer = GLAllocation.createDirectIntBuffer(16);
-        RenderUtil.modelViewBuffer = GLAllocation.createDirectFloatBuffer(16);
-        RenderUtil.projectionBuffer = GLAllocation.createDirectFloatBuffer(16);
-        RenderUtil.vectorBuffer = GLAllocation.createDirectFloatBuffer(4);
-        RenderUtil.enchantmentMap = new EnchantmentMap();
-    }
     public static void drawRoundedRect(float x, float y, float x2, float y2, float radius, int color) {
         float a = (color >> 24 & 255) / 255.0F;
         float r = (color >> 16 & 255) / 255.0F;
@@ -101,24 +91,12 @@ public class RenderUtil {
         }
         tessellator.draw();
     }
-    /** 颜色线性插值 */
-    public static int interpolateColor(int c1, int c2, float fraction) {
-        int a1 = (c1 >> 24 & 255), a2 = (c2 >> 24 & 255);
-        int r1 = (c1 >> 16 & 255), r2 = (c2 >> 16 & 255);
-        int g1 = (c1 >> 8 & 255),  g2 = (c2 >> 8 & 255);
-        int b1 = (c1 & 255),       b2 = (c2 & 255);
-        return ((int)(a1 + (a2 - a1) * fraction) << 24) |
-                ((int)(r1 + (r2 - r1) * fraction) << 16) |
-                ((int)(g1 + (g2 - g1) * fraction) << 8)  |
-                (int)(b1 + (b2 - b1) * fraction);
-    }
+
     private static ChatColors getColorForLevel(int currentLevel, int maxLevel) {
-        if (currentLevel > maxLevel) {
-            return ChatColors.LIGHT_PURPLE;
-        }
-        if (currentLevel == maxLevel) {
-            return ChatColors.RED;
-        }
+        if (currentLevel > maxLevel) return ChatColors.LIGHT_PURPLE;
+
+        if (currentLevel == maxLevel) return ChatColors.RED;
+
         switch (currentLevel) {
             case 1: {
                 return ChatColors.AQUA;
@@ -133,6 +111,7 @@ public class RenderUtil {
                 return ChatColors.GOLD;
             }
         }
+
         return ChatColors.GRAY;
     }
     public static void drawOutlinedString(String text, float x, float y) {
@@ -147,6 +126,7 @@ public class RenderUtil {
     public static void renderEnchantmentText(ItemStack itemStack, float x, float y, float scale) {
         NBTTagList nBTTagList;
         nBTTagList = itemStack.getItem() == Items.enchanted_book ? Items.enchanted_book.getEnchantments(itemStack) : itemStack.getEnchantmentTagList();
+
         if (nBTTagList != null) {
             for (int i = 0; i < nBTTagList.tagCount(); ++i) {
                 EnchantmentData enchantmentData = enchantmentMap.get(nBTTagList.getCompoundTagAt(i).getInteger("id"));

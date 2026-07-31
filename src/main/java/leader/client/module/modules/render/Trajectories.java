@@ -2,11 +2,12 @@ package leader.client.module.modules.render;
 
 import leader.client.event.EventTarget;
 import leader.client.events.Render3DEvent;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
 import leader.client.util.render.RenderUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.PercentProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
@@ -23,11 +24,11 @@ import java.awt.*;
 import java.util.ArrayList;
 
 public class Trajectories extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final PercentProperty opacity = new PercentProperty("opacity", 100);
-    public final BooleanProperty bow = new BooleanProperty("bow", true);
-    public final BooleanProperty projectiles = new BooleanProperty("projectiles", false);
-    public final BooleanProperty pearls = new BooleanProperty("pearls", true);
+    
+    public final SliderValue opacity = new SliderValue("opacity", 100, 0, 100, Representation.INT, this);
+    public final BoolValue bow = new BoolValue("bow", true, this);
+    public final BoolValue projectiles = new BoolValue("projectiles", false, this);
+    public final BoolValue pearls = new BoolValue("pearls", true, this);
 
     public Trajectories() {
         super("Trajectories", false, true);

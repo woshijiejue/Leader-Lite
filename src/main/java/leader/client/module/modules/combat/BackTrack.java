@@ -1,7 +1,6 @@
 package leader.client.module.modules.combat;
 
 import leader.client.util.player.RotationUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.WorldRenderer;
@@ -17,10 +16,10 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.*;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.util.PacketUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.util.server.PacketUtil;
 import leader.client.util.timer.TimedPacket;
 
 import java.util.Deque;
@@ -32,16 +31,13 @@ import java.util.ArrayList;
 
 public class BackTrack extends Module {
 
-   private static final Minecraft mc = Minecraft.getMinecraft();
-
-  
-   private final IntProperty trackMs = new IntProperty("TrackMS", 200, 1, 1000);
-   private final FloatProperty maxDistance = new FloatProperty("Max Track Range", 4.0F, 3.1F, 6.0F);
-   private final BooleanProperty rayTrance = new BooleanProperty("Ray Trance",true);
-   private final BooleanProperty renderRealPos = new BooleanProperty("Render Real Position", true);
-   private final BooleanProperty smart = new BooleanProperty("Smart", true);
-   private final BooleanProperty onlyHighSpeed = new BooleanProperty("Only On Target High Speed", false);
-   private final FloatProperty highSpeedThreshold = new FloatProperty("HighSpeed Threshold", 0.2F, 0.01F, 1.0F,onlyHighSpeed::getValue);
+   private final SliderValue trackMs = new SliderValue("TrackMS", 200, 1, 1000, Representation.INT, this);
+   private final SliderValue maxDistance = new SliderValue("Max Track Range", 4.0, 3.1, 6.0, Representation.FLOAT, this);
+   private final BoolValue rayTrance = new BoolValue("Ray Trance", true, this);
+   private final BoolValue renderRealPos = new BoolValue("Render Real Position", true, this);
+   private final BoolValue smart = new BoolValue("Smart", true, this);
+   private final BoolValue onlyHighSpeed = new BoolValue("Only On Target High Speed", false, this);
+   private final SliderValue highSpeedThreshold = new SliderValue("HighSpeed Threshold", 0.2, 0.01, 1.0, () -> onlyHighSpeed.getValue(), Representation.FLOAT, this);
 
    private final Queue<TimedPacket> packetQueue = new ConcurrentLinkedQueue<>();
    private final List<Packet<?>> skipPackets = new ArrayList<>();
@@ -59,7 +55,7 @@ public class BackTrack extends Module {
 
    @Override
    public String[] getSuffix() {
-      return new String[]{trackMs.getValue() + "ms"};
+      return new String[]{trackMs.getValue().intValue() + "ms"};
    }
 
    @Override
@@ -96,9 +92,9 @@ public class BackTrack extends Module {
          double dx = player.posX - player.prevPosX;
          double dy = player.posY - player.prevPosY;
          double dz = player.posZ - player.prevPosZ;
-         double speed = Math.sqrt(dx * dx + dy * dy + dz * dz); 
+         double speed = Math.sqrt(dx * dx + dy * dy + dz * dz);
          if (speed < highSpeedThreshold.getValue()) {
-            return; 
+            return;
          }
       }
       if (target != null && player.getEntityId() == target.getEntityId()) {
@@ -178,7 +174,7 @@ public class BackTrack extends Module {
    }
 
    private void processPacketQueue() {
-      long maxDelay = trackMs.getValue();
+      long maxDelay = trackMs.getValue().longValue();
 
       while (!packetQueue.isEmpty()) {
          TimedPacket timedPacket = packetQueue.peek();
@@ -261,10 +257,11 @@ public class BackTrack extends Module {
 
       return new Vec3(x / totalWeight, y / totalWeight, z / totalWeight);
    }
+
    @EventTarget
-   public void onUpdate(UpdateEvent event){
-      if (!isEnabled() || target == null)return;
-      if (rayTrance.getValue() && RotationUtil.rayTrace(this.target.getEntityBoundingBox(),event.getNewYaw(),event.getNewPitch(),maxDistance.getValue()) == null){
+   public void onUpdate(UpdateEvent event) {
+      if (!isEnabled() || target == null) return;
+      if (rayTrance.getValue() && RotationUtil.rayTrace(this.target.getEntityBoundingBox(), event.getNewYaw(), event.getNewPitch(), maxDistance.getValue()) == null) {
          resetAndRelease();
       }
    }

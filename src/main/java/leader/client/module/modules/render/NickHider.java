@@ -1,18 +1,18 @@
 package leader.client.module.modules.render;
 
-import leader.client.enums.ChatColors;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.TextProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.StringValue;
 
 import java.util.regex.Matcher;
 
+import leader.client.util.misc.ChatColors;
+
 public class NickHider extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final TextProperty protectName = new TextProperty("name", "You");
-    public final BooleanProperty scoreboard = new BooleanProperty("scoreboard", true);
-    public final BooleanProperty level = new BooleanProperty("level", true);
+
+    public final StringValue protectName = new StringValue("name", "You", this);
+    public final BoolValue scoreboard = new BoolValue("scoreboard", true, this);
+    public final BoolValue level = new BoolValue("level", true, this);
 
     public NickHider() {
         super("NickHider", false, true);

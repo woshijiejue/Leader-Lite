@@ -3,13 +3,13 @@ package leader.client.module.modules.movement;
 import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.UpdateEvent;
-import leader.mixin.IAccessorKeyBinding;
+import leader.mixin.accessor.IAccessorKeyBinding;
 import leader.client.module.Module;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.GameSettings;
 
 public class AntiAFK extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
     private int lastInput;
 
     public AntiAFK() {

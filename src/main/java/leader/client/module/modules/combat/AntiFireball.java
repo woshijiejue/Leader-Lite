@@ -5,19 +5,16 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
 import leader.client.events.*;
-import leader.client.management.RotationState;
+import leader.client.component.impl.rotaion.RotationState;
 import leader.client.module.Module;
 import leader.client.module.modules.render.HUD;
-import leader.client.util.*;
-import leader.client.property.properties.*;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.util.player.ItemUtil;
-import leader.client.util.player.PlayerUtil;
-import leader.client.util.player.RotationUtil;
-import leader.client.util.player.TeamUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.util.player.*;
 import leader.client.util.render.RenderUtil;
-import net.minecraft.client.Minecraft;
+import leader.client.util.server.PacketUtil;
 import net.minecraft.entity.projectile.EntityFireball;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C02PacketUseEntity.Action;
@@ -30,20 +27,20 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class AntiFireball extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private final ArrayList<EntityFireball> farList = new ArrayList<>();
     private final ArrayList<EntityFireball> nearList = new ArrayList<>();
     private EntityFireball target = null;
-    public final FloatProperty range = new FloatProperty("range", 5.0F, 3.0F, 8.0F);
-    public final IntProperty fov = new IntProperty("fov", 360, 1, 360);
-    public final BooleanProperty rotations = new BooleanProperty("rotations", true);
-    public final BooleanProperty swing = new BooleanProperty("swing", true);
-    public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT", "STRICT"});
-    public final ModeProperty showTarget = new ModeProperty("show-target", 0, new String[]{"NONE", "DEFAULT", "HUD"});
+    public final SliderValue range = new SliderValue("range", 5.0, 3.0, 8.0, Representation.FLOAT, this);
+    public final SliderValue fov = new SliderValue("fov", 360, 1, 360, Representation.INT, this);
+    public final BoolValue rotations = new BoolValue("rotations", true, this);
+    public final BoolValue swing = new BoolValue("swing", true, this);
+    public final ListValue moveFix = new ListValue("move-fix", new String[]{"NONE", "SILENT", "STRICT"}, "SILENT", this);
+    public final ListValue showTarget = new ListValue("show-target", new String[]{"NONE", "DEFAULT", "HUD"}, "NONE", this);
 
     private boolean isValidTarget(EntityFireball entityFireball) {
         return !entityFireball.getEntityBoundingBox().hasNaN() && RotationUtil.distanceToEntity(entityFireball) <= (double) this.range.getValue() + 3.0
-                && RotationUtil.angleToEntity(entityFireball) <= (float) this.fov.getValue();
+                && RotationUtil.angleToEntity(entityFireball) <= this.fov.getValue().intValue();
     }
 
     private void doAttackAnimation() {
@@ -97,9 +94,9 @@ public class AntiFireball extends Module {
                         && !ItemUtil.isUsingBow()
                         && !ItemUtil.hasHoldItem()) {
                     event.setRotation(rotations[0], rotations[1], 0);
-                    event.setPervRotation(this.moveFix.getValue() != 0 ? rotations[0] : mc.thePlayer.rotationYaw, 0);
+                    event.setPervRotation(!this.moveFix.is("NONE") ? rotations[0] : mc.thePlayer.rotationYaw, 0);
                 }
-                if (!Leader.playerStateManager.attacking && !Leader.playerStateManager.digging && !Leader.playerStateManager.placing) {
+                if (!Leader.playerStateComponent.attacking && !Leader.playerStateComponent.digging && !Leader.playerStateComponent.placing) {
                     this.doAttackAnimation();
                     if (RotationUtil.distanceToEntity(this.target) <= (double) this.range.getValue().floatValue()) {
                         PacketUtil.sendPacket(new C02PacketUseEntity(this.target, Action.ATTACK));
@@ -113,7 +110,7 @@ public class AntiFireball extends Module {
     @EventTarget
     public void onMove(MoveInputEvent event) {
         if (this.isEnabled()) {
-            if (this.moveFix.getValue() == 1
+            if (this.moveFix.is("SILENT")
                     && RotationState.isActived()
                     && RotationState.getPriority() == 0.0F
                     && MoveUtil.isForwardPressed()) {
@@ -125,22 +122,20 @@ public class AntiFireball extends Module {
     @EventTarget
     public void onRender(Render3DEvent event) {
         if (this.isEnabled()) {
-            if (this.showTarget.getValue() != 0 && TeamUtil.isEntityLoaded(this.target)) {
+            if (!this.showTarget.is("NONE") && TeamUtil.isEntityLoaded(this.target)) {
                 Color color = new Color(-1);
-                switch (this.showTarget.getValue()) {
-                    case 1:
-                        double dist = (this.target.posX - this.target.lastTickPosX) * (mc.thePlayer.posX - this.target.posX)
-                                + (this.target.posY - this.target.lastTickPosY)
-                                * (mc.thePlayer.posY + (double) mc.thePlayer.getEyeHeight() - this.target.posY - (double) this.target.height / 2.0)
-                                + (this.target.posZ - this.target.lastTickPosZ) * (mc.thePlayer.posZ - this.target.posZ);
-                        if (dist < 0.0) {
-                            color = new Color(16733525);
-                        } else {
-                            color = new Color(5635925);
-                        }
-                        break;
-                    case 2:
-                        color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());
+                if (this.showTarget.is("DEFAULT")) {
+                    double dist = (this.target.posX - this.target.lastTickPosX) * (mc.thePlayer.posX - this.target.posX)
+                            + (this.target.posY - this.target.lastTickPosY)
+                            * (mc.thePlayer.posY + (double) mc.thePlayer.getEyeHeight() - this.target.posY - (double) this.target.height / 2.0)
+                            + (this.target.posZ - this.target.lastTickPosZ) * (mc.thePlayer.posZ - this.target.posZ);
+                    if (dist < 0.0) {
+                        color = new Color(16733525);
+                    } else {
+                        color = new Color(5635925);
+                    }
+                } else if (this.showTarget.is("HUD")) {
+                    color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());
                 }
                 RenderUtil.enableRenderState();
                 RenderUtil.drawEntityBox(this.target, color.getRed(), color.getGreen(), color.getBlue());

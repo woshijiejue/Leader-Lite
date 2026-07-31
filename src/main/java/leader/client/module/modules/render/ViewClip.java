@@ -4,7 +4,7 @@ import leader.client.module.Module;
 import net.minecraft.client.Minecraft;
 
 public class ViewClip extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
 
     public ViewClip() {
         super("ViewClip", false);

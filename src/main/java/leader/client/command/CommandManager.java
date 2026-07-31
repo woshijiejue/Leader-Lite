@@ -5,7 +5,7 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
 import leader.client.events.PacketEvent;
-import leader.client.util.ChatUtil;
+import leader.client.util.DebugUtil;
 import net.minecraft.network.play.client.C01PacketChatMessage;
 
 import java.util.ArrayList;
@@ -23,7 +23,7 @@ public class CommandManager {
         List<String> params = Arrays.asList(string.substring(1).trim().split("\\s+"));
         ArrayList<String> arrayList = new ArrayList<>(params);
         if (params.get(0).isEmpty()) {
-            ChatUtil.sendFormatted(String.format("%sUnknown command&r", Leader.clientName).replace("&", "§"));
+            DebugUtil.sendFormatted(String.format("%sUnknown command&r", Leader.clientName).replace("&", "§"));
         } else {
             for (Command command : Leader.commandManager.commands) {
                 for (String name : command.names) {
@@ -33,7 +33,7 @@ public class CommandManager {
                     }
                 }
             }
-            ChatUtil.sendFormatted(String.format("%sUnknown command (&o%s&r)&r", Leader.clientName, params.get(0)).replace("&", "§"));
+            DebugUtil.sendFormatted(String.format("%sUnknown command (&o%s&r)&r", Leader.clientName, params.get(0)).replace("&", "§"));
         }
     }
 

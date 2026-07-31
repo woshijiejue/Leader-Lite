@@ -4,13 +4,13 @@ import leader.client.Leader;
 import leader.client.event.EventTarget;
 import leader.client.events.AttackEvent;
 import leader.client.events.Render3DEvent;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
 import leader.client.module.modules.combat.KillAura;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.TeamUtil;
 import net.minecraft.client.Minecraft;
@@ -26,12 +26,12 @@ import java.awt.*;
 
 public class TargetESP extends Module {
 
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Default", "Hud", "Scan"});
-    public final BooleanProperty killAuraOnly = new BooleanProperty("killaura-only", false);
-    public final IntProperty targetTime = new IntProperty("target-time", 1000, 500, 3000, () -> !killAuraOnly.getValue());
-    public final FloatProperty scanThickness = new FloatProperty("scan-thickness", 0.6F, 0.1F, 2.5F, () -> mode.getValue() == 2);
+    public final ListValue mode = new ListValue("mode", new String[]{"Default", "Hud", "Scan"}, "Default", this);
+    public final BoolValue killAuraOnly = new BoolValue("killaura-only", false, this);
+    public final SliderValue targetTime = new SliderValue("target-time", 1000, 500, 3000, () -> !killAuraOnly.getValue(), Representation.INT, this);
+    public final SliderValue scanThickness = new SliderValue("scan-thickness", 0.6, 0.1, 2.5, () -> mode.is("Scan"), Representation.FLOAT, this);
 
     private EntityLivingBase attackTarget;
     private long lastAttackTime;
@@ -42,7 +42,7 @@ public class TargetESP extends Module {
 
     @EventTarget
     public void onAttack(AttackEvent event) {
-        if (!killAuraOnly.getValue() && event.getTarget() instanceof EntityLivingBase) {
+        if (!this.killAuraOnly.getValue() && event.getTarget() instanceof EntityLivingBase) {
             attackTarget = (EntityLivingBase) event.getTarget();
             lastAttackTime = System.currentTimeMillis();
         }
@@ -59,20 +59,19 @@ public class TargetESP extends Module {
         if (killAuraOnly.getValue()) {
             target = killAura != null ? killAura.getTarget() : null;
         } else {
-            if (attackTarget == null || System.currentTimeMillis() - lastAttackTime > targetTime.getValue()) return;
+            if (attackTarget == null || System.currentTimeMillis() - lastAttackTime > targetTime.getValue().intValue()) return;
             target = attackTarget;
         }
         if (!TeamUtil.isEntityLoaded(target)) return;
 
-        int modeVal = this.mode.getValue();
-        if (modeVal == 2) {
+        if (this.mode.is("Scan")) {
             renderScan(event, target);
             return;
         }
         if (killAuraOnly.getValue() && killAura != null && !killAura.isAttackAllowed()) return;
 
         Color color;
-        if (modeVal == 0) {
+        if (this.mode.is("Default")) {
             color = target.hurtTime > 0 ? new Color(16733525) : new Color(5635925);
         } else {
             color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());

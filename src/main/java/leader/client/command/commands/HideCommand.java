@@ -3,7 +3,7 @@ package leader.client.command.commands;
 import leader.client.Leader;
 import leader.client.command.Command;
 import leader.client.module.Module;
-import leader.client.util.ChatUtil;
+import leader.client.util.DebugUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,24 +17,24 @@ public class HideCommand extends Command {
     @Override
     public void runCommand(ArrayList<String> args) {
         if (args.size() < 2) {
-            ChatUtil.sendFormatted(
+            DebugUtil.sendFormatted(
                     String.format("%sUsage: .%s <&omodule&r>&r", Leader.clientName, args.get(0).toLowerCase(Locale.ROOT))
             );
         } else if (!args.get(1).equals("*")) {
             Module module = Leader.moduleManager.getModule(args.get(1));
             if (module == null) {
-                ChatUtil.sendFormatted(String.format("%sModule &o%s&r not found&r", Leader.clientName, args.get(1)));
+                DebugUtil.sendFormatted(String.format("%sModule &o%s&r not found&r", Leader.clientName, args.get(1)));
             } else if (module.isHidden()) {
-                ChatUtil.sendFormatted(String.format("%s&o%s&r is already hidden in HUD&r", Leader.clientName, module.getName()));
+                DebugUtil.sendFormatted(String.format("%s&o%s&r is already hidden in HUD&r", Leader.clientName, module.getName()));
             } else {
                 module.setHidden(true);
-                ChatUtil.sendFormatted(String.format("%s&o%s&r has been hidden in HUD&r", Leader.clientName, module.getName()));
+                DebugUtil.sendFormatted(String.format("%s&o%s&r has been hidden in HUD&r", Leader.clientName, module.getName()));
             }
         } else {
             for (Module module : Leader.moduleManager.modules.values()) {
                 module.setHidden(true);
             }
-            ChatUtil.sendFormatted(String.format("%sAll modules have been hidden in HUD&r", Leader.clientName));
+            DebugUtil.sendFormatted(String.format("%sAll modules have been hidden in HUD&r", Leader.clientName));
         }
     }
 }

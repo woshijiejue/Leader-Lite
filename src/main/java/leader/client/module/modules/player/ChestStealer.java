@@ -1,7 +1,6 @@
 package leader.client.module.modules.player;
 
 import leader.client.Leader;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.inventory.GuiChest;
 import net.minecraft.client.player.inventory.ContainerLocalMenu;
 import net.minecraft.inventory.Container;
@@ -15,26 +14,28 @@ import leader.client.event.types.EventType;
 import leader.client.events.UpdateEvent;
 import leader.client.events.WindowClickEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
-import leader.client.util.ChatUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.util.DebugUtil;
 import leader.client.util.player.ItemUtil;
 
 import java.util.*;
 
 public class ChestStealer extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty mode = new ModeProperty("Mode", 0, new String[]{"Normal", "Instant"});
+    public final ListValue mode = new ListValue("Mode", new String[]{"Normal", "Instant"}, "Normal", this);
 
-    public final IntProperty minDelay = new IntProperty("Min Delay", 1, 0, 20);
-    public final IntProperty maxDelay = new IntProperty("Max Delay", 2, 0, 20);
-    public final IntProperty openDelay = new IntProperty("Open Delay", 1, 0, 20);
-    public final BooleanProperty autoClose = new BooleanProperty("Auto Close", true);
-    public final BooleanProperty nameCheck = new BooleanProperty("Name Check", true);
-    public final BooleanProperty skipTrash = new BooleanProperty("Skip Trash", true);
-    public final BooleanProperty keepProjectiles = new BooleanProperty("Skip Projectiles", true);
+    public final SliderValue minDelay = (SliderValue) new SliderValue("Min Delay", 1, 0, 20, Representation.INT, this)
+            .onChanged(() -> { if (this.minDelay.getValue() > this.maxDelay.getValue()) this.maxDelay.setValue(this.minDelay.getValue().floatValue()); });
+    public final SliderValue maxDelay = (SliderValue) new SliderValue("Max Delay", 2, 0, 20, Representation.INT, this)
+            .onChanged(() -> { if (this.minDelay.getValue() > this.maxDelay.getValue()) this.minDelay.setValue(this.maxDelay.getValue().floatValue()); });
+    public final SliderValue openDelay = new SliderValue("Open Delay", 1, 0, 20, Representation.INT, this);
+    public final BoolValue autoClose = new BoolValue("Auto Close", true, this);
+    public final BoolValue nameCheck = new BoolValue("Name Check", true, this);
+    public final BoolValue skipTrash = new BoolValue("Skip Trash", true, this);
+    public final BoolValue keepProjectiles = new BoolValue("Skip Projectiles", true, this);
 
     private int clickDelay = 0;
     private int oDelay = 0;
@@ -48,7 +49,7 @@ public class ChestStealer extends Module {
 
     @Override
     public String[] getSuffix() {
-        return new String[]{mode.getModeString()};
+        return new String[]{mode.getValue()};
     }
 
     private boolean isProjectileStack(ItemStack stack) {
@@ -70,7 +71,7 @@ public class ChestStealer extends Module {
     public void onUpdate(UpdateEvent event) {
         if (event.getType() == EventType.PRE) {
 
-            if (this.mode.getValue() == 0) {
+            if (this.mode.is("Normal")) {
                 if (this.clickDelay > 0) {
                     this.clickDelay--;
                 }
@@ -91,8 +92,8 @@ public class ChestStealer extends Module {
                     if (!this.inChest) {
                         this.inChest = true;
                         this.warnedFull = false;
-                        if (this.mode.getValue() == 0) {
-                            this.oDelay = this.openDelay.getValue() + 1;
+                        if (this.mode.is("Normal")) {
+                            this.oDelay = this.openDelay.getValue().intValue() + 1;
                         }
                         this.instantExecuted = false;
                     }
@@ -107,10 +108,10 @@ public class ChestStealer extends Module {
                         if ((!(inventory instanceof ContainerLocalMenu)))return;
                     }
 
-                    if (this.mode.getValue() == 1 && !this.instantExecuted) {
+                    if (this.mode.is("Instant") && !this.instantExecuted) {
                         if (mc.thePlayer.inventory.getFirstEmptyStack() == -1) {
                             if (!this.warnedFull) {
-                                ChatUtil.sendFormatted(String.format("%s%s: &cYour inventory is full!&r", Leader.clientName, this.getName()));
+                                DebugUtil.sendFormatted(String.format("%s%s: &cYour inventory is full!&r", Leader.clientName, this.getName()));
                                 this.warnedFull = true;
                             }
                             if (this.autoClose.getValue()) {
@@ -251,7 +252,7 @@ public class ChestStealer extends Module {
 
                             if (inventoryFull) {
                                 if (!this.warnedFull) {
-                                    ChatUtil.sendFormatted(String.format("%s%s: &cYour inventory is full!&r", Leader.clientName, this.getName()));
+                                    DebugUtil.sendFormatted(String.format("%s%s: &cYour inventory is full!&r", Leader.clientName, this.getName()));
                                     this.warnedFull = true;
                                 }
                                 if (this.autoClose.getValue()) {
@@ -274,10 +275,10 @@ public class ChestStealer extends Module {
                             }
                         }
                     }
-                    else if (this.mode.getValue() == 0 && this.oDelay <= 0 && this.clickDelay <= 0) {
+                    else if (this.mode.is("Normal") && this.oDelay <= 0 && this.clickDelay <= 0) {
                         if (mc.thePlayer.inventory.getFirstEmptyStack() == -1) {
                             if (!this.warnedFull) {
-                                ChatUtil.sendFormatted(String.format("%s%s: &cYour inventory is full!&r", Leader.clientName, this.getName()));
+                                DebugUtil.sendFormatted(String.format("%s%s: &cYour inventory is full!&r", Leader.clientName, this.getName()));
                                 this.warnedFull = true;
                             }
                             if (this.autoClose.getValue()) {
@@ -412,27 +413,11 @@ public class ChestStealer extends Module {
 
     @EventTarget
     public void onWindowClick(WindowClickEvent event) {
-        if (this.mode.getValue() == 0) {
-            this.clickDelay = RandomUtils.nextInt(this.minDelay.getValue() + 1, this.maxDelay.getValue() + 2);
+        if (this.mode.is("Normal")) {
+            this.clickDelay = RandomUtils.nextInt(this.minDelay.getValue().intValue() + 1, this.maxDelay.getValue().intValue() + 2);
         }
-        if (this.mode.getValue() == 1) {
+        if (this.mode.is("Instant")) {
             this.clickDelay = 0;
-        }
-    }
-
-    @Override
-    public void verifyValue(String mode) {
-        switch (mode) {
-            case "Min Delay":
-                if (this.minDelay.getValue() > this.maxDelay.getValue()) {
-                    this.maxDelay.setValue(this.minDelay.getValue());
-                }
-                break;
-            case "Max Delay":
-                if (this.minDelay.getValue() > this.maxDelay.getValue()) {
-                    this.minDelay.setValue(this.maxDelay.getValue());
-                }
-                break;
         }
     }
 }

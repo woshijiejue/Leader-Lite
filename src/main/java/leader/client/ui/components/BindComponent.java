@@ -5,7 +5,7 @@ import leader.client.module.modules.render.GuiModule;
 import leader.client.module.modules.render.HUD;
 import leader.client.ui.Component;
 import leader.client.ui.dataset.BindStage;
-import leader.client.util.KeyBindUtil;
+import leader.client.util.misc.KeyBindUtil;
 import leader.client.util.render.RenderUtil;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.opengl.GL11;

@@ -3,7 +3,7 @@ package leader.client.command.commands;
 import leader.client.Leader;
 import leader.client.command.Command;
 import leader.client.module.Module;
-import leader.client.util.ChatUtil;
+import leader.client.util.DebugUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,13 +17,13 @@ public class ToggleCommand extends Command {
     @Override
     public void runCommand(ArrayList<String> args) {
         if (args.size() < 2) {
-            ChatUtil.sendFormatted(
+            DebugUtil.sendFormatted(
                     String.format("%sUsage: .%s <&omodule&r>&r", Leader.clientName, args.get(0).toLowerCase(Locale.ROOT))
             );
         } else {
             Module module = Leader.moduleManager.getModule(args.get(1));
             if (module == null) {
-                ChatUtil.sendFormatted(String.format("%sModule not found (&o%s&r)&r", Leader.clientName, args.get(1)));
+                DebugUtil.sendFormatted(String.format("%sModule not found (&o%s&r)&r", Leader.clientName, args.get(1)));
             } else {
                 boolean changed = true;
                 if (args.size() >= 3) {
@@ -38,7 +38,7 @@ public class ToggleCommand extends Command {
                     }
                 }
                 if (changed && module.toggle()) {
-                    ChatUtil.sendFormatted(String.format("%s%s: %s&r", Leader.clientName, module.getName(), module.isEnabled() ? "&a&lON" : "&c&lOFF"));
+                    DebugUtil.sendFormatted(String.format("%s%s: %s&r", Leader.clientName, module.getName(), module.isEnabled() ? "&a&lON" : "&c&lOFF"));
                 }
             }
         }

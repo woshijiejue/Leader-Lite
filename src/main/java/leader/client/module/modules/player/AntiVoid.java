@@ -2,7 +2,7 @@ package leader.client.module.modules.player;
 
 import com.google.common.base.CaseFormat;
 import leader.client.Leader;
-import leader.client.enums.BlinkModules;
+import leader.client.component.impl.network.blink.BlinkType;
 import leader.client.event.EventTarget;
 import leader.client.event.types.Priority;
 import leader.client.events.KeyEvent;
@@ -10,25 +10,26 @@ import leader.client.events.PlayerUpdateEvent;
 import leader.client.module.Module;
 import leader.client.module.modules.movement.LongJump;
 import leader.client.util.player.PlayerUtil;
-import leader.client.util.RandomUtil;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.ModeProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.util.math.RandomUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
 import net.minecraft.item.ItemEnderPearl;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.client.C03PacketPlayer.C04PacketPlayerPosition;
 import net.minecraft.util.AxisAlignedBB;
 
 public class AntiVoid extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    public final ListValue mode = (ListValue) new ListValue("mode", new String[]{"BLINK"}, "BLINK", this)
+            .onChanged(() -> { if (isEnabled()) onDisabled(); });
+    public final SliderValue distance = (SliderValue) new SliderValue("distance", 5.0, 0.0, 16.0, Representation.FLOAT, this)
+            .onChanged(() -> { if (isEnabled()) onDisabled(); });
     private boolean isInVoid = false;
     private boolean wasInVoid = false;
     private double[] lastSafePosition = null;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"BLINK"});
-    public final FloatProperty distance = new FloatProperty("distance", 5.0F, 0.0F, 16.0F);
 
     private void resetBlink() {
-        Leader.blinkManager.setBlinkState(false, BlinkModules.ANTI_VOID);
+        Leader.blinkComponent.setBlinkState(false, BlinkType.ANTI_VOID);
         this.lastSafePosition = null;
     }
 
@@ -45,7 +46,7 @@ public class AntiVoid extends Module {
     public void onUpdate(PlayerUpdateEvent event) {
         if (this.isEnabled()) {
             this.isInVoid = !mc.thePlayer.capabilities.allowFlying && PlayerUtil.isInWater();
-            if (this.mode.getValue() == 0) {
+            if (this.mode.is("BLINK")) {
                 if (!this.isInVoid) {
                     this.resetBlink();
                 }
@@ -66,15 +67,15 @@ public class AntiVoid extends Module {
                     }
                 }
                 if (!this.wasInVoid && this.isInVoid && this.canUseAntiVoid()) {
-                    Leader.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-                    if (Leader.blinkManager.setBlinkState(true, BlinkModules.ANTI_VOID)) {
+                    Leader.blinkComponent.setBlinkState(false, BlinkType.AUTO_BLOCK);
+                    if (Leader.blinkComponent.setBlinkState(true, BlinkType.ANTI_VOID)) {
                         this.lastSafePosition = new double[]{mc.thePlayer.prevPosX, mc.thePlayer.prevPosY, mc.thePlayer.prevPosZ};
                     }
                 }
-                if (Leader.blinkManager.getBlinkingModule() == BlinkModules.ANTI_VOID
+                if (Leader.blinkComponent.getBlinkingModule() == BlinkType.ANTI_VOID
                         && this.lastSafePosition != null
                         && this.lastSafePosition[1] - (double) this.distance.getValue().floatValue() > mc.thePlayer.posY) {
-                    Leader.blinkManager
+                    Leader.blinkComponent
                             .blinkedPackets
                             .offerFirst(
                                     new C04PacketPlayerPosition(
@@ -107,18 +108,11 @@ public class AntiVoid extends Module {
 
     @Override
     public void onDisabled() {
-        Leader.blinkManager.setBlinkState(false, BlinkModules.ANTI_VOID);
-    }
-
-    @Override
-    public void verifyValue(String mode) {
-        if (this.isEnabled()) {
-            this.onDisabled();
-        }
+        Leader.blinkComponent.setBlinkState(false, BlinkType.ANTI_VOID);
     }
 
     @Override
     public String[] getSuffix() {
-        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
+        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getValue())};
     }
 }

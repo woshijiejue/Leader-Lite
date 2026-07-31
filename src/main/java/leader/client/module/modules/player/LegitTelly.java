@@ -13,17 +13,16 @@ import leader.client.events.Render2DEvent;
 import leader.client.events.Render3DEvent;
 import leader.client.events.SafeWalkEvent;
 import leader.client.events.UpdateEvent;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
+import leader.client.module.values.impl.BoolValue;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.BlockUtil;
 import leader.client.util.player.ItemUtil;
-import leader.client.util.KeyBindUtil;
-import leader.client.util.PacketUtil;
+import leader.client.util.misc.KeyBindUtil;
+import leader.client.util.server.PacketUtil;
 import leader.client.util.player.RotationUtil;
 import net.minecraft.block.Block;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
@@ -56,7 +55,9 @@ import java.util.Map;
  * while placement is verified against the same ray trace before the click is sent.
  */
 public final class LegitTelly extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    public final BoolValue autoSwap = new BoolValue("Auto Swap", true, this);
+    public final BoolValue disableSafeWalk = new BoolValue("Disable SafeWalk", true, this);
+    public final BoolValue showActivationHitbox = new BoolValue("Show Activation Hitbox", false, this);
 
     private static final float[] YAW_CURVE = {91.68F, 98.88F, 78.94F, 37.45F, 1.61F, -21.69F, -33.98F, -35.80F, -34.64F, -33.85F, -33.06F, -31.55F, -29.26F, -26.65F, -24.19F, -21.07F, -18.84F, -17.06F, -8.87F, 2.61F, 41.94F};
     private static final float[] PITCH_CURVE = {64.31F, 59.95F, 60.57F, 61.46F, 60.64F, 58.89F, 56.91F, 56.63F, 58.65F, 61.63F, 64.20F, 66.74F, 68.69F, 70.64F, 73.01F, 75.37F, 77.46F, 78.56F, 78.90F, 77.22F, 72.25F};
@@ -70,10 +71,6 @@ public final class LegitTelly extends Module {
     private static final long BREAK_WINDOW_MS = 300L;
     private static final long ROTATION_MS = 50L;
     private static final float ACTIVATION_TOLERANCE = 2.0F;
-
-    public final BooleanProperty autoSwap = new BooleanProperty("Auto Swap", true);
-    public final BooleanProperty disableSafeWalk = new BooleanProperty("Disable SafeWalk", true);
-    public final BooleanProperty showActivationHitbox = new BooleanProperty("Show Activation Hitbox", false);
 
     private boolean armed;
     private boolean running;

@@ -1,7 +1,7 @@
 package leader.client.module.modules.misc;
 
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
+import leader.client.module.values.impl.BoolValue;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -10,8 +10,7 @@ import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
 public class AntiObbyTrap extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final BooleanProperty setAir = new BooleanProperty("set-air", true);
+    public final BoolValue setAir = new BoolValue("set-air", true, this);
 
     public AntiObbyTrap() {
         super("AntiObbyTrap", false);

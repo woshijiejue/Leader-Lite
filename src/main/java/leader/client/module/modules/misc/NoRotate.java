@@ -5,21 +5,30 @@ import leader.client.event.types.EventType;
 import leader.client.events.LoadWorldEvent;
 import leader.client.events.PacketEvent;
 import leader.client.module.Module;
-import leader.client.util.PacketUtil;
-import leader.client.util.RandomUtil;
+import leader.client.util.server.PacketUtil;
+import leader.client.util.math.RandomUtil;
 import leader.client.util.player.RotationUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.play.client.C03PacketPlayer.C06PacketPlayerPosLook;
 import net.minecraft.network.play.server.S02PacketChat;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook.EnumFlags;
 
 public class NoRotate extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
     private boolean reset = false;
 
     public NoRotate() {
         super("NoRotate", false);
+    }
+
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) {
+        this.reset = false;
+    }
+
+    @Override
+    public void onDisabled() {
+        this.reset = false;
     }
 
     @EventTarget
@@ -81,15 +90,5 @@ public class NoRotate extends Module {
                 }
             }
         }
-    }
-
-    @EventTarget
-    public void onLoadWorld(LoadWorldEvent event) {
-        this.reset = false;
-    }
-
-    @Override
-    public void onDisabled() {
-        this.reset = false;
     }
 }

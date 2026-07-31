@@ -2,13 +2,12 @@ package leader.client.module.modules.player;
 
 import leader.client.Leader;
 import leader.client.module.modules.movement.Stuck;
-import leader.client.util.player.BlockUtil;
-import leader.client.util.player.ItemUtil;
-import leader.client.util.player.PlayerUtil;
-import leader.client.util.player.RotationUtil;
+import leader.client.util.math.RandomUtil;
+import leader.client.util.misc.KeyBindUtil;
+import leader.client.util.player.*;
 import leader.client.util.render.RenderUtil;
+import leader.client.util.server.PacketUtil;
 import net.minecraft.block.Block;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.item.Item;
@@ -22,49 +21,48 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
 import leader.client.events.*;
-import leader.client.management.RotationState;
+import leader.client.component.impl.rotaion.RotationState;
 import leader.client.module.Module;
 import leader.client.module.modules.movement.LongJump;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
-import leader.client.util.*;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
+
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 
 public class Scaffold extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    public final ListValue mode = new ListValue("Mode", new String[]{"Normal", "Telly", "Snap", "Legit"}, "Telly", this);
+    public final ListValue rotationMode = new ListValue("Rotate Mode", new String[]{"None", "Vanilla", "Backwards", "Prediction"}, "Prediction", () -> !mode.is("Legit"), this);
+    public final ListValue moveFix = new ListValue("Move Fix", new String[]{"None", "Silent"}, "Silent", this);
+    public final SliderValue jumpDelay = new SliderValue("Jump Delay", 2, 0, 5, () -> mode.is("Telly"), Representation.INT, this);
+    public final SliderValue placeDelay = new SliderValue("Place Delay", 1, 0, 5, Representation.INT, this);
+    public final SliderValue startRotSpeed = new SliderValue("Start Rotate Speed", 180.0, 1.0, 180.0, () -> mode.is("Telly"), Representation.FLOAT, this);
+    public final SliderValue normalRotSpeed = new SliderValue("Normal Rotate Speed", 180.0, 1.0, 180.0, () -> mode.is("Telly"), Representation.FLOAT, this);
+    public final BoolValue swing = new BoolValue("Swing", true, this);
+    public final BoolValue itemSpoof = new BoolValue("Item Spoof", false, this);
+    public final BoolValue clutch = new BoolValue("Clutch", true, this);
+    public final BoolValue onlyInVoid = new BoolValue("Only Void", false, this.clutch::getValue, this);
+    public final BoolValue bPSRender = new BoolValue("Render BPS", true, this);
+    public final SliderValue edgeThreshold = new SliderValue("Edge Threshold", 0.15, 0.01, 0.5, () -> mode.is("Snap"), Representation.FLOAT, this);
+    public final BoolValue ticksLimit = new BoolValue("Ticks Limit", false, () -> mode.is("Snap"), this);
+    public final SliderValue limitTicks = new SliderValue("Limit Ticks", 10, 1, 40, () -> mode.is("Snap") && ticksLimit.getValue(), Representation.INT, this);
+    public final SliderValue forwardSpeed = new SliderValue("Forward Speed", 180.0, 1.0, 180.0, () -> mode.is("Snap"), Representation.FLOAT, this);
+    public final SliderValue backSpeed = new SliderValue("Back Speed", 180.0, 1.0, 180.0, () -> mode.is("Snap"), Representation.FLOAT, this);
+    public final BoolValue snapRotation = new BoolValue("Snap Rotation", false, () -> mode.is("Snap"), this);
+    public final BoolValue speedLimit = new BoolValue("Speed Limit", false, () -> mode.is("Telly"), this);
+    public final SliderValue speedLimitTicks = new SliderValue("Speed Limit Ticks", 3, 0, 5, () -> mode.is("Telly") && speedLimit.getValue(), Representation.INT, this);
+    public final SliderValue forwardRotationTicks = new SliderValue("Forward Rotation Ticks", 1, 1, 5, () -> mode.is("Telly") && speedLimit.getValue(), Representation.INT, this);
+    public final SliderValue legitSneakDelay = new SliderValue("Legit Sneak Delay", 4, 1, 5, () -> mode.is("Legit"), Representation.INT, this);
+    public final SliderValue legitPlaceDuration = new SliderValue("Legit Place Time", 4, 2, 5, () -> mode.is("Legit"), Representation.INT, this);
+
     private static final double[] placeOffsets = new double[]{
             0.03125, 0.09375, 0.15625, 0.21875, 0.28125, 0.34375,
             0.40625, 0.46875, 0.53125, 0.59375, 0.65625, 0.71875,
             0.78125, 0.84375, 0.90625, 0.96875
     };
-    public final ModeProperty mode = new ModeProperty("Mode", 1, new String[]{"Normal", "Telly", "Snap", "Legit"});
-    public final ModeProperty rotationMode = new ModeProperty("Rotate Mode", 3, new String[]{"None", "Vanilla", "Backwards", "Prediction"}, () -> mode.getValue() != 3);
-    public final ModeProperty moveFix = new ModeProperty("Move Fix", 1, new String[]{"None", "Silent"});
-    public final IntProperty jumpDelay = new IntProperty("Jump Delay", 2, 0, 5, () -> mode.getValue() == 1);
-    public final IntProperty placeDelay = new IntProperty("Place Delay", 1, 0, 5);
-    public final FloatProperty startRotSpeed = new FloatProperty("Start Rotate Speed", 180.0F, 1.0F, 180.0F, () -> mode.getValue() == 1);
-    public final FloatProperty normalRotSpeed = new FloatProperty("Normal Rotate Speed", 180.0F, 1.0F, 180.0F, () -> mode.getValue() == 1);
-    public final BooleanProperty swing = new BooleanProperty("Swing", true);
-    public final BooleanProperty itemSpoof = new BooleanProperty("Item Spoof", false);
-    public final BooleanProperty clutch = new BooleanProperty("Clutch", true);
-    public final BooleanProperty onlyInVoid = new BooleanProperty("Only Void", false, this.clutch::getValue);
-    public final BooleanProperty bPSRender = new BooleanProperty("Render BPS", true);
-    public final FloatProperty edgeThreshold = new FloatProperty("Edge Threshold", 0.15F, 0.01F, 0.5F, () -> mode.getValue() == 2);
-    public final BooleanProperty ticksLimit = new BooleanProperty("Ticks Limit", false, () -> mode.getValue() == 2);
-    public final IntProperty limitTicks = new IntProperty("Limit Ticks", 10, 1, 40, () -> mode.getValue() == 2 && ticksLimit.getValue());
-    public final FloatProperty forwardSpeed = new FloatProperty("Forward Speed", 180.0F, 1.0F, 180.0F, () -> mode.getValue() == 2);
-    public final FloatProperty backSpeed = new FloatProperty("Back Speed", 180.0F, 1.0F, 180.0F, () -> mode.getValue() == 2);
-    public final BooleanProperty snapRotation = new BooleanProperty("Snap Rotation", false, () -> mode.getValue() == 2);
-    public final BooleanProperty speedLimit = new BooleanProperty("Speed Limit", false, () -> mode.getValue() == 1);
-    public final IntProperty speedLimitTicks = new IntProperty("Speed Limit Ticks", 3, 0, 5, () -> mode.getValue() == 1 && speedLimit.getValue());
-    public final IntProperty forwardRotationTicks = new IntProperty("Forward Rotation Ticks", 1, 1, 5, () -> mode.getValue() == 1 && speedLimit.getValue());
-    public final IntProperty legitSneakDelay = new IntProperty("Legit Sneak Delay", 4, 1, 5, () -> mode.getValue() == 3);
-    public final IntProperty legitPlaceDuration = new IntProperty("Legit Place Time", 4, 2, 5, () -> mode.getValue() == 3);
-
 
     private int rotationTick = 0;
     private int lastSlot = -1;
@@ -103,11 +101,11 @@ public class Scaffold extends Module {
 
     @Override
     public String[] getSuffix() {
-        return new String[]{mode.getModeString()};
+        return new String[]{mode.getValue()};
     }
 
     private boolean shouldStopSprint() {
-        return !this.isTowering() && this.stage <= 0 && this.mode.getValue() != 2;
+        return !this.isTowering() && this.stage <= 0 && !this.mode.is("Snap");
     }
 
     private boolean canPlace() {
@@ -263,8 +261,8 @@ public class Scaffold extends Module {
     @EventTarget(Priority.HIGH)
     public void onUpdate(UpdateEvent event) {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
-            boolean tellyMode = this.mode.getValue() == 1;
-            boolean legitMode = this.mode.getValue() == 3;
+            boolean tellyMode = this.mode.is("Telly");
+            boolean legitMode = this.mode.is("Legit");
             boolean bridgeMode = tellyMode;
 
             if (this.rotationTick > 0) this.rotationTick--;
@@ -276,7 +274,7 @@ public class Scaffold extends Module {
                 this.shouldKeepY = false;
                 this.towering = false;
                 if (this.wasInAir) {
-                    this.tellyJumpDelayTimer = tellyMode ? (this.jumpDelayOverride >= 0 ? this.jumpDelayOverride : this.jumpDelay.getValue()) : 0;
+                    this.tellyJumpDelayTimer = tellyMode ? (this.jumpDelayOverride >= 0 ? this.jumpDelayOverride : this.jumpDelay.getValue().intValue()) : 0;
                     this.wasInAir = false;
                 }
                 if (this.tellyJumpDelayTimer > 0) this.tellyJumpDelayTimer--;
@@ -290,7 +288,7 @@ public class Scaffold extends Module {
             else { this.jumpDelayOverride = -1; this.tellyJumpDelayTimer = 0; }
             this.updateClutch();
 
-            if (this.mode.getValue() == 2) {
+            if (this.mode.is("Snap")) {
                 if (ticksLimit.getValue()) {
                     boolean canForward = mc.thePlayer.onGround && !this.isOnEdge();
                     if (!canForward) { snapForward = false; snapForwardTimer = 0; snapLocked = false; }
@@ -298,7 +296,7 @@ public class Scaffold extends Module {
                         if (snapLocked) snapForward = false;
                         else {
                             if (!snapForward) { snapForward = true; snapForwardTimer = 1; }
-                            else { snapForwardTimer++; if (snapForwardTimer >= limitTicks.getValue()) { snapForward = false; snapLocked = true; snapForwardTimer = 0; } }
+                            else { snapForwardTimer++; if (snapForwardTimer >= limitTicks.getValue().intValue()) { snapForward = false; snapLocked = true; snapForwardTimer = 0; } }
                         }
                     }
                 } else snapForward = mc.thePlayer.onGround && !this.isOnEdge();
@@ -312,8 +310,8 @@ public class Scaffold extends Module {
                 if (!onGround) { this.legitEdgeState = 0; this.legitEdgeTimer = 0; }
                 else if (atEdge && holdingBlock) {
                     switch (this.legitEdgeState) {
-                        case 0: if (justReachedEdge || this.legitEdgeTimer == 0) { this.legitEdgeState = 1; this.legitEdgeTimer = this.legitSneakDelay.getValue(); } break;
-                        case 1: this.legitEdgeTimer--; if (this.legitEdgeTimer <= 0) { this.legitEdgeState = 2; this.legitEdgeTimer = this.legitPlaceDuration.getValue(); } break;
+                        case 0: if (justReachedEdge || this.legitEdgeTimer == 0) { this.legitEdgeState = 1; this.legitEdgeTimer = this.legitSneakDelay.getValue().intValue(); } break;
+                        case 1: this.legitEdgeTimer--; if (this.legitEdgeTimer <= 0) { this.legitEdgeState = 2; this.legitEdgeTimer = this.legitPlaceDuration.getValue().intValue(); } break;
                         case 2: this.legitEdgeTimer--; if (this.legitEdgeTimer <= 0) { this.legitEdgeState = 3; this.legitEdgeTimer = 3 + (int)(Math.random() * 4); } break;
                         case 3: this.legitEdgeTimer--; if (this.legitEdgeTimer <= 0) { this.legitEdgeState = 0; this.legitEdgeTimer = 0; } break;
                     }
@@ -350,7 +348,7 @@ public class Scaffold extends Module {
                     }
                 }
 
-                if (this.mode.getValue() == 2) {
+                if (this.mode.is("Snap")) {
                     if (snapForward) { this.yaw = RotationUtil.quantizeAngle(getCurrentYaw()); this.pitch = 80.0F; this.canRotate = true; }
                     else if (!snapRotation.getValue()) { this.yaw = RotationUtil.quantizeAngle(getCurrentYaw() + 180.0F); this.pitch = 85.0F; this.canRotate = true; }
                 }
@@ -361,19 +359,17 @@ public class Scaffold extends Module {
                         : RotationUtil.wrapAngleDiff(currentYaw - 135.0F * ((currentYaw + 180.0F) % 90.0F < 45.0F ? 1.0F : -1.0F), event.getYaw());
 
                 if (!this.canRotate && !legitMode) {
-                    switch (this.rotationMode.getValue()) {
-                        case 1: this.yaw = this.yaw == -180.0F && this.pitch == 0.0F ? RotationUtil.quantizeAngle(diagonalYaw) : RotationUtil.quantizeAngle(diagonalYaw); break;
-                        case 2: if (this.yaw == -180.0F && this.pitch == 0.0F) { this.yaw = RotationUtil.quantizeAngle(yawDiffTo180); this.pitch = RotationUtil.quantizeAngle(85.0F); } else this.yaw = RotationUtil.quantizeAngle(yawDiffTo180); break;
-                        case 3: if (this.yaw == -180.0F && this.pitch == 0.0F) { this.yaw = RotationUtil.quantizeAngle(diagonalYaw); this.pitch = RotationUtil.quantizeAngle(85.0F); } break;
-                    }
+                    if (this.rotationMode.is("Vanilla")) { this.yaw = this.yaw == -180.0F && this.pitch == 0.0F ? RotationUtil.quantizeAngle(diagonalYaw) : RotationUtil.quantizeAngle(diagonalYaw); }
+                    else if (this.rotationMode.is("Backwards")) { if (this.yaw == -180.0F && this.pitch == 0.0F) { this.yaw = RotationUtil.quantizeAngle(yawDiffTo180); this.pitch = RotationUtil.quantizeAngle(85.0F); } else this.yaw = RotationUtil.quantizeAngle(yawDiffTo180); }
+                    else if (this.rotationMode.is("Prediction")) { if (this.yaw == -180.0F && this.pitch == 0.0F) { this.yaw = RotationUtil.quantizeAngle(diagonalYaw); this.pitch = RotationUtil.quantizeAngle(85.0F); } }
                 }
 
                 BlockData blockData = this.getBlockData();
                 Vec3 hitVec = null;
-                if (this.mode.getValue() == 2 && snapForward) blockData = null;
+                if (this.mode.is("Snap") && snapForward) blockData = null;
 
                 if (blockData != null) {
-                    if (blockData != null && this.rotationMode.getValue() == 3 && !legitMode) {
+                    if (blockData != null && this.rotationMode.is("Prediction") && !legitMode) {
                         double[] offsets = {0.1, 0.3, 0.5, 0.7, 0.9};
                         double[] x = offsets, y = offsets, z = offsets;
                         switch (blockData.facing()) {
@@ -443,10 +439,10 @@ public class Scaffold extends Module {
                 }
 
                 if (this.canRotate && MoveUtil.isForwardPressed() && Math.abs(MathHelper.wrapAngleTo180_float(yawDiffTo180 - this.yaw)) < 90.0F) {
-                    if (this.rotationMode.getValue() == 2 && !legitMode) this.yaw = RotationUtil.quantizeAngle(yawDiffTo180);
+                    if (this.rotationMode.is("Backwards") && !legitMode) this.yaw = RotationUtil.quantizeAngle(yawDiffTo180);
                 }
 
-                if (!legitMode && this.rotationMode.getValue() != 0 && this.mode.getValue() != 2) {
+                if (!legitMode && !this.rotationMode.is("None") && !this.mode.is("Snap")) {
                     float targetYaw = this.yaw, targetPitch = this.pitch;
                     if (tellyMode && speedLimit.getValue() && forwardRotateTicksLeft > 0) {
                         float yawDelta = MathHelper.wrapAngleTo180_float(mc.thePlayer.rotationYaw - event.getYaw());
@@ -475,29 +471,29 @@ public class Scaffold extends Module {
                         targetYaw = this.yaw != -180.0F ? this.yaw : RotationUtil.quantizeAngle(MathHelper.wrapAngleTo180_float(mc.thePlayer.rotationYaw - event.getYaw()) + event.getYaw());
                         targetPitch = Math.abs(this.pitch) > 10 ? this.pitch : 60.0F;
                     }
-                    if (speedLimit.getValue() && pendingSpeedLimitRot && !mc.thePlayer.onGround && airTicks >= speedLimitTicks.getValue()) {
+                    if (speedLimit.getValue() && pendingSpeedLimitRot && !mc.thePlayer.onGround && airTicks >= speedLimitTicks.getValue().intValue()) {
                         float yawDelta = MathHelper.wrapAngleTo180_float(mc.thePlayer.rotationYaw - event.getYaw());
                         this.yaw = RotationUtil.quantizeAngle(event.getYaw() + yawDelta * RandomUtil.nextFloat(0.98F, 0.99F));
                         this.pitch = RotationUtil.quantizeAngle(RandomUtil.nextFloat(30.0F, 80.0F));
-                        this.forwardRotateTicksLeft = forwardRotationTicks.getValue(); this.rotationTick = 0; this.towering = true;
+                        this.forwardRotateTicksLeft = forwardRotationTicks.getValue().intValue(); this.rotationTick = 0; this.towering = true;
                         pendingSpeedLimitRot = false; airTicks = 0;
                     }
                     event.setRotation(targetYaw, targetPitch, 3);
-                    if (this.moveFix.getValue() == 1) event.setPervRotation(targetYaw, 3);
-                } else if (this.mode.getValue() == 2 && this.rotationMode.getValue() != 0 && this.canRotate) {
+                    if (this.moveFix.is("Silent")) event.setPervRotation(targetYaw, 3);
+                } else if (this.mode.is("Snap") && !this.rotationMode.is("None") && this.canRotate) {
                     float targetYaw = this.yaw, targetPitch = this.pitch;
                     float yawDiff = MathHelper.wrapAngleTo180_float(targetYaw - event.getYaw());
                     float tolerance = snapForward ? forwardSpeed.getValue() : backSpeed.getValue();
                     if (Math.abs(yawDiff) > tolerance) { float clampedYaw = RotationUtil.clampAngle(yawDiff, tolerance); targetYaw = RotationUtil.quantizeAngle(event.getYaw() + clampedYaw); this.rotationTick = Math.max(this.rotationTick, 1); }
                     event.setRotation(targetYaw, targetPitch, 3);
-                    if (this.moveFix.getValue() == 1) event.setPervRotation(targetYaw, 3);
+                    if (this.moveFix.is("Silent")) event.setPervRotation(targetYaw, 3);
                 } else if (legitMode && this.canRotate) {
                     float targetYaw = this.yaw, targetPitch = this.pitch;
                     float yawDiff = MathHelper.wrapAngleTo180_float(targetYaw - event.getYaw());
                     float tolerance = 180.0F;
                     if (Math.abs(yawDiff) > tolerance) { float clampedYaw = RotationUtil.clampAngle(yawDiff, tolerance); targetYaw = RotationUtil.quantizeAngle(event.getYaw() + clampedYaw); this.rotationTick = Math.max(this.rotationTick, 1); }
                     event.setRotation(targetYaw, targetPitch, 3);
-                    if (this.moveFix.getValue() == 1) event.setPervRotation(targetYaw, 3);
+                    if (this.moveFix.is("Silent")) event.setPervRotation(targetYaw, 3);
                 }
 
                 boolean legitCanPlace = !legitMode || !mc.thePlayer.onGround || this.legitEdgeState == 0 || this.legitEdgeState == 2;
@@ -510,10 +506,10 @@ public class Scaffold extends Module {
                         if (finalCheck != null && finalCheck.typeOfHit == MovingObjectType.BLOCK
                                 && finalCheck.getBlockPos().equals(blockData.blockPos()) && finalCheck.sideHit == blockData.facing()) {
                             this.place(blockData.blockPos(), blockData.facing(), finalCheck.hitVec);
-                            this.placeDelayCounter = this.placeDelay.getValue();
+                            this.placeDelayCounter = this.placeDelay.getValue().intValue();
                         } else if (this.canRotate) {
                             this.place(blockData.blockPos(), blockData.facing(), hitVec);
-                            this.placeDelayCounter = this.placeDelay.getValue();
+                            this.placeDelayCounter = this.placeDelay.getValue().intValue();
                         }
                     }
                 }
@@ -548,13 +544,13 @@ public class Scaffold extends Module {
                 mc.thePlayer.movementInput.sneak = false;
                 return;
             }
-            if (this.moveFix.getValue() == 1 && RotationState.isActived() && RotationState.getPriority() == 3.0F && MoveUtil.isForwardPressed()) {
+            if (this.moveFix.is("Silent") && RotationState.isActived() && RotationState.getPriority() == 3.0F && MoveUtil.isForwardPressed()) {
                 MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
             }
-            if (this.mode.getValue() == 1 && mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed() && this.tellyJumpDelayTimer <= 0) {
+            if (this.mode.is("Telly") && mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed() && this.tellyJumpDelayTimer <= 0) {
                 mc.thePlayer.movementInput.jump = true;
             }
-            if (this.mode.getValue() == 3 && mc.currentScreen == null && !this.clutchActive) {
+            if (this.mode.is("Legit") && mc.currentScreen == null && !this.clutchActive) {
                 if (mc.thePlayer.onGround && (this.legitEdgeState == 1 || this.legitEdgeState == 2)) {
                     mc.thePlayer.movementInput.sneak = true;
                     mc.thePlayer.movementInput.moveStrafe *= 0.3F;

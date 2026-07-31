@@ -1,6 +1,7 @@
 package leader.client.util.player;
 
 import com.google.common.base.Predicate;
+import leader.client.util.InstanceAccess;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -10,8 +11,7 @@ import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import java.util.Iterator;
 import java.util.List;
 
-public final class RayCastUtil {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+public final class RayCastUtil implements InstanceAccess {
 
     private static float wrapAngle(float angle) {
         angle %= 360.0F;

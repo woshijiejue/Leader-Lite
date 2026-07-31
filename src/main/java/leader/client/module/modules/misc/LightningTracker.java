@@ -4,12 +4,14 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.PacketEvent;
 import leader.client.module.Module;
-import leader.client.util.ChatUtil;
-import net.minecraft.client.Minecraft;
+import leader.client.util.DebugUtil;
 import net.minecraft.network.play.server.S2CPacketSpawnGlobalEntity;
 
 public class LightningTracker extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
+    public LightningTracker() {
+        super("LightningTracker", false, true);
+    }
 
     private String getDirection(double playerX, double playerZ, double lightningX, double lightningZ) {
         double threshold = Math.sqrt(2.0) - 1.0;
@@ -36,10 +38,6 @@ public class LightningTracker extends Module {
         }
     }
 
-    public LightningTracker() {
-        super("LightningTracker", false, true);
-    }
-
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (this.isEnabled() && event.getType() == EventType.RECEIVE && event.getPacket() instanceof S2CPacketSpawnGlobalEntity) {
@@ -50,7 +48,7 @@ public class LightningTracker extends Module {
                 double z = (double) packet.func_149049_f() / 32.0;
                 double distance = mc.thePlayer.getDistance(x, y, z);
                 String direction = this.getDirection(mc.thePlayer.posX, mc.thePlayer.posZ, x, z);
-                ChatUtil.sendFormatted(
+                DebugUtil.sendFormatted(
                         String.format(
                                 "&8[&e%s&8] &7X: &f&l%d&r &7Y: &f&l%d&r &7Z: &f&l%d&r &7D: &6&l%d&r &6%s&r",
                                 this.getName(),

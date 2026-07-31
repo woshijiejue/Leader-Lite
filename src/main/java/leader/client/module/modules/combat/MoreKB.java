@@ -4,8 +4,8 @@ import leader.client.event.EventTarget;
 import leader.client.events.AttackEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -14,10 +14,10 @@ import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
 
 public class MoreKB extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"LEGIT", "LEGIT_FAST", "LESS_PACKET", "PACKET", "DOUBLE_PACKET"});
-    public final BooleanProperty intelligent = new BooleanProperty("intelligent", false);
-    public final BooleanProperty onlyGround = new BooleanProperty("only-ground", true);
+
+    public final ListValue mode = new ListValue("mode", new String[]{"LEGIT", "LEGIT_FAST", "LESS_PACKET", "PACKET", "DOUBLE_PACKET"}, "LEGIT", this);
+    public final BoolValue intelligent = new BoolValue("intelligent", false, this);
+    public final BoolValue onlyGround = new BoolValue("only-ground", true, this);
     private boolean shouldSprintReset;
     private EntityLivingBase target;
 
@@ -43,7 +43,7 @@ public class MoreKB extends Module {
         if (!this.isEnabled()) {
             return;
         }
-        if (this.mode.getValue() == 1) {
+        if (this.mode.is("LEGIT_FAST")) {
             if (this.target != null && this.isMoving()) {
                 if ((this.onlyGround.getValue() && mc.thePlayer.onGround) || !this.onlyGround.getValue()) {
                     mc.thePlayer.sprintingTicksLeft = 0;
@@ -67,34 +67,29 @@ public class MoreKB extends Module {
             return;
         }
         if (entity.hurtTime == 10) {
-            switch (this.mode.getValue()) {
-                case 0:
-                    this.shouldSprintReset = true;
-                    if (mc.thePlayer.isSprinting()) {
-                        mc.thePlayer.setSprinting(false);
-                        mc.thePlayer.setSprinting(true);
-                    }
-                    this.shouldSprintReset = false;
-                    break;
-                case 2:
-                    if (mc.thePlayer.isSprinting()) {
-                        mc.thePlayer.setSprinting(false);
-                    }
-                    mc.getNetHandler().addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING));
+            if (this.mode.is("LEGIT")) {
+                this.shouldSprintReset = true;
+                if (mc.thePlayer.isSprinting()) {
+                    mc.thePlayer.setSprinting(false);
                     mc.thePlayer.setSprinting(true);
-                    break;
-                case 3:
-                    mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SPRINTING));
-                    mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING));
-                    mc.thePlayer.setSprinting(true);
-                    break;
-                case 4:
-                    mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SPRINTING));
-                    mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING));
-                    mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SPRINTING));
-                    mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING));
-                    mc.thePlayer.setSprinting(true);
-                    break;
+                }
+                this.shouldSprintReset = false;
+            } else if (this.mode.is("LESS_PACKET")) {
+                if (mc.thePlayer.isSprinting()) {
+                    mc.thePlayer.setSprinting(false);
+                }
+                mc.getNetHandler().addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING));
+                mc.thePlayer.setSprinting(true);
+            } else if (this.mode.is("PACKET")) {
+                mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SPRINTING));
+                mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING));
+                mc.thePlayer.setSprinting(true);
+            } else if (this.mode.is("DOUBLE_PACKET")) {
+                mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SPRINTING));
+                mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING));
+                mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SPRINTING));
+                mc.thePlayer.sendQueue.addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING));
+                mc.thePlayer.setSprinting(true);
             }
         }
     }
@@ -105,6 +100,6 @@ public class MoreKB extends Module {
 
     @Override
     public String[] getSuffix() {
-        return new String[]{this.mode.getValue().toString()};
+        return new String[]{this.mode.getValue()};
     }
 }

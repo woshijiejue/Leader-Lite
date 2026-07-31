@@ -1,16 +1,16 @@
 package leader.client.module.modules.render;
 
-import leader.client.enums.ChatColors;
+import leader.client.util.misc.ChatColors;
 import leader.client.event.EventTarget;
 import leader.client.events.Render3DEvent;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.TeamUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.PercentProperty;
 import net.minecraft.block.Block;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
@@ -27,15 +27,15 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class ItemESP extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final PercentProperty opacity = new PercentProperty("opacity", 25);
-    public final BooleanProperty outline = new BooleanProperty("outline", false);
-    public final BooleanProperty itemCount = new BooleanProperty("item-count", true);
-    public final BooleanProperty autoScale = new BooleanProperty("auto-scale", true);
-    public final BooleanProperty emeralds = new BooleanProperty("emeralds", true);
-    public final BooleanProperty diamonds = new BooleanProperty("diamonds", true);
-    public final BooleanProperty goldd = new BooleanProperty("gold", true);
-    public final BooleanProperty iron = new BooleanProperty("iron", true);
+
+    public final SliderValue opacity = new SliderValue("opacity", 25, 0, 100, Representation.INT, this);
+    public final BoolValue outline = new BoolValue("outline", false, this);
+    public final BoolValue itemCount = new BoolValue("item-count", true, this);
+    public final BoolValue autoScale = new BoolValue("auto-scale", true, this);
+    public final BoolValue emeralds = new BoolValue("emeralds", true, this);
+    public final BoolValue diamonds = new BoolValue("diamonds", true, this);
+    public final BoolValue goldd = new BoolValue("gold", true, this);
+    public final BoolValue iron = new BoolValue("iron", true, this);
 
     private boolean shouldHighlightItem(int itemId) {
         return this.emeralds.getValue() && this.isEmeraldItem(itemId)

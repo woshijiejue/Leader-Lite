@@ -7,8 +7,9 @@ import leader.client.events.LoadWorldEvent;
 import leader.client.events.UpdateEvent;
 import leader.client.module.Module;
 import leader.client.module.modules.combat.KillAura;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.player.RayCastUtil;
 import leader.client.util.player.RotationUtil;
 import net.minecraft.block.Block;
@@ -23,13 +24,11 @@ import net.minecraft.util.EnumFacing;
 import java.util.ArrayList;
 import java.util.List;
 
-import static leader.client.management.BlinkManager.mc;
-
 public class ChestAura extends Module {
 
-    public final FloatProperty range = new FloatProperty("Range", 3.0F, 1.0F, 7.0F);
-    public final FloatProperty openDelay = new FloatProperty("Open Delay", 100.0F, 0.0F, 600.0F);
-    public final BooleanProperty interactOnce = new BooleanProperty("Interact Once", false);
+    public final SliderValue range = new SliderValue("Range", 3.0, 1.0, 7.0, Representation.FLOAT, this);
+    public final SliderValue openDelay = new SliderValue("Open Delay", 100.0, 0.0, 600.0, Representation.FLOAT, this);
+    public final BoolValue interactOnce = new BoolValue("Interact Once", false, this);
 
     private BlockPos targetPos;
     private boolean waitingOpen;

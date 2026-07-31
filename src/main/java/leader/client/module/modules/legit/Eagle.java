@@ -6,27 +6,36 @@ import leader.client.event.types.Priority;
 import leader.client.events.MoveInputEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.player.ItemUtil;
-import leader.client.util.MoveUtil;
+import leader.client.util.player.MoveUtil;
 import leader.client.util.player.PlayerUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.IntProperty;
-import net.minecraft.client.Minecraft;
 import org.apache.commons.lang3.RandomUtils;
 import org.lwjgl.input.Keyboard;
 
 import java.util.Objects;
 
 public class Eagle extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
     private int sneakDelay = 0;
-    public final IntProperty minDelay = new IntProperty("min-delay", 2, 0, 10);
-    public final IntProperty maxDelay = new IntProperty("max-delay", 3, 0, 10);
-    public final BooleanProperty directionCheck = new BooleanProperty("direction-check", true);
-    public final BooleanProperty jumpCheck = new BooleanProperty("jump-check", true);
-    public final BooleanProperty pitchCheck = new BooleanProperty("pitch-check", true);
-    public final BooleanProperty blocksOnly = new BooleanProperty("blocks-only", true);
-    public final BooleanProperty sneakOnly = new BooleanProperty("sneaking-only", false);
+    public final SliderValue minDelay = (SliderValue) new SliderValue("min-delay", 2, 0, 10, Representation.INT, this)
+            .onChanged(() -> {
+                if (this.minDelay.getValue() > this.maxDelay.getValue()) {
+                    this.maxDelay.setValue(this.minDelay.getValue());
+                }
+            });
+    public final SliderValue maxDelay = (SliderValue) new SliderValue("max-delay", 3, 0, 10, Representation.INT, this)
+            .onChanged(() -> {
+                if (this.minDelay.getValue() > this.maxDelay.getValue()) {
+                    this.minDelay.setValue(this.maxDelay.getValue());
+                }
+            });
+    public final BoolValue directionCheck = new BoolValue("direction-check", true, this);
+    public final BoolValue jumpCheck = new BoolValue("jump-check", true, this);
+    public final BoolValue pitchCheck = new BoolValue("pitch-check", true, this);
+    public final BoolValue blocksOnly = new BoolValue("blocks-only", true, this);
+    public final BoolValue sneakOnly = new BoolValue("sneaking-only", false, this);
 
     private boolean canMoveSafely() {
         double[] offset = MoveUtil.predictMovement();
@@ -58,7 +67,7 @@ public class Eagle extends Module {
                 this.sneakDelay--;
             }
             if (this.sneakDelay == 0 && this.canMoveSafely()) {
-                this.sneakDelay = RandomUtils.nextInt(this.minDelay.getValue(), this.maxDelay.getValue() + 1);
+                this.sneakDelay = RandomUtils.nextInt(this.minDelay.getValue().intValue(), this.maxDelay.getValue().intValue() + 1);
             }
         }
     }
@@ -89,24 +98,9 @@ public class Eagle extends Module {
     }
 
     @Override
-    public void verifyValue(String name) {
-        switch (name) {
-            case "min-delay":
-                if (this.minDelay.getValue() > this.maxDelay.getValue()) {
-                    this.maxDelay.setValue(this.minDelay.getValue());
-                }
-                break;
-            case "max-delay":
-                if (this.minDelay.getValue() > this.maxDelay.getValue()) {
-                    this.minDelay.setValue(this.maxDelay.getValue());
-                }
-        }
-    }
-
-    @Override
     public String[] getSuffix() {
         return Objects.equals(this.minDelay.getValue(), this.maxDelay.getValue())
-                ? new String[]{this.minDelay.getValue().toString()}
-                : new String[]{String.format("%d-%d", this.minDelay.getValue(), this.maxDelay.getValue())};
+                ? new String[]{this.minDelay.getValue().intValue() + ""}
+                : new String[]{String.format("%d-%d", this.minDelay.getValue().intValue(), this.maxDelay.getValue().intValue())};
     }
 }

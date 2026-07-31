@@ -1,8 +1,8 @@
 package leader.client.util.player;
 
 import leader.client.Leader;
-import leader.client.util.ServerUtil;
-import net.minecraft.client.Minecraft;
+import leader.client.util.InstanceAccess;
+import leader.client.util.server.ServerUtil;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.network.NetworkPlayerInfo;
 import net.minecraft.entity.Entity;
@@ -15,16 +15,15 @@ import java.awt.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class TeamUtil {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-
+public class TeamUtil implements InstanceAccess {
+    
     public static boolean isEntityLoaded(Entity entity) {
         if (entity == null) return false;
-        return TeamUtil.mc.theWorld.loadedEntityList.contains(entity);
+        return mc.theWorld.loadedEntityList.contains(entity);
     }
 
     public static List<Entity> getLoadedEntitiesSorted() {
-        return TeamUtil.mc.theWorld.loadedEntityList.stream().sorted((entity1, entity2) -> {
+        return mc.theWorld.loadedEntityList.stream().sorted((entity1, entity2) -> {
             double dist1 = mc.getRenderManager().getDistanceToCamera(entity1.posX, entity1.posY, entity1.posZ);
             double dist2 = mc.getRenderManager().getDistanceToCamera(entity2.posX, entity2.posY, entity2.posZ);
             if (dist1 < dist2) {
@@ -51,14 +50,14 @@ public class TeamUtil {
         if (playerTeam != null) {
             String colorPrefix = FontRenderer.getFormatFromString(playerTeam.getColorPrefix());
             if (colorPrefix.length() >= 2) {
-                colorCode = TeamUtil.mc.fontRendererObj.getColorCode(colorPrefix.charAt(1));
+                colorCode = mc.fontRendererObj.getColorCode(colorPrefix.charAt(1));
             }
         }
         return new Color(colorCode & 0xFFFFFF | (int)(alpha * 255) << 24, true);
     }
 
     public static boolean isBot(EntityPlayer player) {
-        if (player == TeamUtil.mc.thePlayer) {
+        if (player == mc.thePlayer) {
             return false;
         }
         NetworkPlayerInfo playerInfo = mc.getNetHandler().getPlayerInfo(player.getName());
@@ -79,10 +78,10 @@ public class TeamUtil {
     }
 
     public static boolean isSameTeam(EntityPlayer player) {
-        if (player == TeamUtil.mc.thePlayer) {
+        if (player == mc.thePlayer) {
             return true;
         }
-        NetworkPlayerInfo selfInfo = mc.getNetHandler().getPlayerInfo(TeamUtil.mc.thePlayer.getUniqueID());
+        NetworkPlayerInfo selfInfo = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
         if (selfInfo == null) {
             return false;
         }
@@ -102,10 +101,10 @@ public class TeamUtil {
     }
 
     public static boolean hasTeamColor(EntityLivingBase entity) {
-        if (entity == TeamUtil.mc.thePlayer) {
+        if (entity == mc.thePlayer) {
             return true;
         }
-        NetworkPlayerInfo selfInfo = mc.getNetHandler().getPlayerInfo(TeamUtil.mc.thePlayer.getUniqueID());
+        NetworkPlayerInfo selfInfo = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
         if (selfInfo == null) {
             return false;
         }
@@ -116,7 +115,7 @@ public class TeamUtil {
         if (selfTeam.getColorPrefix().length() < 2) {
             return false;
         }
-        EntityLivingBase nearestArmorStand = TeamUtil.mc.theWorld.findNearestEntityWithinAABB(EntityArmorStand.class, entity.getEntityBoundingBox(), entity);
+        EntityLivingBase nearestArmorStand = mc.theWorld.findNearestEntityWithinAABB(EntityArmorStand.class, entity.getEntityBoundingBox(), entity);
         if (nearestArmorStand != null) {
             return nearestArmorStand.getName().contains(selfTeam.getColorPrefix().substring(0, 2));
         }
@@ -124,10 +123,10 @@ public class TeamUtil {
     }
 
     public static boolean isShop(EntityLivingBase entity) {
-        if (entity == TeamUtil.mc.thePlayer) {
+        if (entity == mc.thePlayer) {
             return false;
         }
-        EntityLivingBase armorStand = TeamUtil.mc.theWorld.findNearestEntityWithinAABB(EntityArmorStand.class, entity.getEntityBoundingBox(), entity);
+        EntityLivingBase armorStand = mc.theWorld.findNearestEntityWithinAABB(EntityArmorStand.class, entity.getEntityBoundingBox(), entity);
         if (armorStand == null) return false;
         String displayName = armorStand.getName();
         if (displayName.contains("RIGHT CLICK")) return true;
@@ -138,10 +137,10 @@ public class TeamUtil {
     }
 
     public static boolean isFriend(EntityPlayer player) {
-        return Leader.friendManager.isFriend(player.getName());
+        return Leader.friendComponent.isFriend(player.getName());
     }
 
     public static boolean isTarget(EntityPlayer player) {
-        return Leader.targetManager.isFriend(player.getName());
+        return Leader.targetComponent.isFriend(player.getName());
     }
 }

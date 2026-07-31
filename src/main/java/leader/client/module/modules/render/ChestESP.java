@@ -3,11 +3,11 @@ package leader.client.module.modules.render;
 import leader.client.Leader;
 import leader.client.event.EventTarget;
 import leader.client.events.Render3DEvent;
-import leader.mixin.IAccessorMinecraft;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorMinecraft;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ColorProperty;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ColorValue;
 import leader.client.util.render.RenderUtil;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockChest;
@@ -23,11 +23,11 @@ import java.awt.*;
 import java.util.stream.Collectors;
 
 public class ChestESP extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final ColorProperty chest = new ColorProperty("chest", new Color(255, 170, 0).getRGB());
-    public final ColorProperty trappedChest = new ColorProperty("trapped-chest", new Color(255, 43, 0).getRGB());
-    public final ColorProperty enderChest = new ColorProperty("ender-chest", new Color(26, 17, 0).getRGB());
-    public final BooleanProperty tracers = new BooleanProperty("tracers", false);
+
+    public final ColorValue chest = new ColorValue("chest", new Color(255, 170, 0), this);
+    public final ColorValue trappedChest = new ColorValue("trapped-chest", new Color(255, 43, 0), this);
+    public final ColorValue enderChest = new ColorValue("ender-chest", new Color(26, 17, 0), this);
+    public final BoolValue tracers = new BoolValue("tracers", false, this);
 
     public ChestESP() {
         super("ChestESP", false);
@@ -45,9 +45,9 @@ public class ChestESP extends Module {
                 maxX = maxZ = 0.9375;
                 if (block instanceof BlockChest) {
                     if (block.canProvidePower()) {
-                        color = new Color(this.trappedChest.getValue());
+                        color = this.trappedChest.getValue();
                     } else {
-                        color = new Color(this.chest.getValue());
+                        color = this.chest.getValue();
                     }
                     EnumFacing facing = mc.theWorld.getBlockState(chest.getPos()).getValue(BlockChest.FACING);
                     switch (facing) {
@@ -83,7 +83,7 @@ public class ChestESP extends Module {
                             continue;
                     }
                 } else {
-                    color = new Color(this.enderChest.getValue());
+                    color = this.enderChest.getValue();
                 }
                 AxisAlignedBB aabb = new AxisAlignedBB(
                         (double) chest.getPos().getX() + minX,
@@ -149,7 +149,7 @@ public class ChestESP extends Module {
                                 );
                     }
                     vec = new Vec3(vec.xCoord, vec.yCoord + (double) mc.getRenderViewEntity().getEyeHeight(), vec.zCoord);
-                    float opacity = (float) ((Tracers) Leader.moduleManager.modules.get(Tracers.class)).opacity.getValue() / 100.0F;
+                    float opacity = ((Tracers) Leader.moduleManager.modules.get(Tracers.class)).opacity.getValue() / 100.0F;
                     RenderUtil.drawLine3D(
                             vec,
                             (double) chest.getPos().getX() + 0.5,

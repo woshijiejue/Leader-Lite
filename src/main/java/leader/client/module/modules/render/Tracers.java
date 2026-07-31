@@ -1,20 +1,19 @@
 package leader.client.module.modules.render;
 
 import leader.client.Leader;
-import leader.client.enums.ChatColors;
+import leader.client.util.misc.ChatColors;
 import leader.client.event.EventTarget;
 import leader.client.events.Render2DEvent;
 import leader.client.events.Render3DEvent;
-import leader.mixin.IAccessorMinecraft;
+import leader.mixin.accessor.IAccessorMinecraft;
 import leader.client.module.Module;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.RotationUtil;
 import leader.client.util.player.TeamUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.PercentProperty;
-import leader.client.property.properties.ModeProperty;
-import leader.client.property.properties.IntProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.player.EntityPlayer;
@@ -25,21 +24,21 @@ import java.awt.*;
 import java.util.stream.Collectors;
 
 public class Tracers extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final ModeProperty colorMode = new ModeProperty("color", 0, new String[]{"DEFAULT", "TEAMS", "HUD"});
-    public final BooleanProperty drawLines = new BooleanProperty("lines", true);
-    public final BooleanProperty drawArrows = new BooleanProperty("arrows", false);
-    public final PercentProperty opacity = new PercentProperty("opacity", 100);
-    public final IntProperty distance = new IntProperty("distance", 512, 0, 512);
-    public final BooleanProperty showPlayers = new BooleanProperty("players", true);
-    public final BooleanProperty showFriends = new BooleanProperty("friends", true);
-    public final BooleanProperty showEnemies = new BooleanProperty("enemies", true);
-    public final BooleanProperty showBots = new BooleanProperty("bots", false);
+    
+    public final ListValue colorMode = new ListValue("color", new String[]{"DEFAULT", "TEAMS", "HUD"}, "DEFAULT", this);
+    public final BoolValue drawLines = new BoolValue("lines", true, this);
+    public final BoolValue drawArrows = new BoolValue("arrows", false, this);
+    public final SliderValue opacity = new SliderValue("opacity", 100, 0, 100, Representation.INT, this);
+    public final SliderValue distance = new SliderValue("distance", 512, 0, 512, Representation.INT, this);
+    public final BoolValue showPlayers = new BoolValue("players", true, this);
+    public final BoolValue showFriends = new BoolValue("friends", true, this);
+    public final BoolValue showEnemies = new BoolValue("enemies", true, this);
+    public final BoolValue showBots = new BoolValue("bots", false, this);
 
     private boolean shouldRender(EntityPlayer entityPlayer) {
         if (entityPlayer.deathTime > 0) {
             return false;
-        } else if (mc.getRenderViewEntity().getDistanceToEntity(entityPlayer) > (float) this.distance.getValue()) {
+        } else if (mc.getRenderViewEntity().getDistanceToEntity(entityPlayer) > this.distance.getValue().floatValue()) {
             return false;
         } else if (entityPlayer != mc.thePlayer && entityPlayer != mc.getRenderViewEntity()) {
             if (TeamUtil.isBot(entityPlayer)) {
@@ -56,23 +55,22 @@ public class Tracers extends Module {
 
     private Color getEntityColor(EntityPlayer entityPlayer, float alpha) {
         if (TeamUtil.isFriend(entityPlayer)) {
-            Color color = Leader.friendManager.getColor();
+            Color color = Leader.friendComponent.getColor();
             return new Color((float) color.getRed() / 255.0F, (float) color.getGreen() / 255.0F, (float) color.getBlue() / 255.0F, alpha);
         } else if (TeamUtil.isTarget(entityPlayer)) {
-            Color color = Leader.targetManager.getColor();
+            Color color = Leader.targetComponent.getColor();
             return new Color((float) color.getRed() / 255.0F, (float) color.getGreen() / 255.0F, (float) color.getBlue() / 255.0F, alpha);
         } else {
-            switch (this.colorMode.getValue()) {
-                case 0:
-                    return TeamUtil.getTeamColor(entityPlayer, alpha);
-                case 1:
-                    int teamColor = TeamUtil.isSameTeam(entityPlayer) ? ChatColors.BLUE.toAwtColor() : ChatColors.RED.toAwtColor();
-                    return new Color(teamColor & Color.WHITE.getRGB() | (int) (alpha * 255.0F) << 24, true);
-                case 2:
-                    int color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB();
-                    return new Color(color & Color.WHITE.getRGB() | (int) (alpha * 255.0F) << 24, true);
-                default:
-                    return new Color(1.0F, 1.0F, 1.0F, alpha);
+            if (this.colorMode.is("DEFAULT")) {
+                return TeamUtil.getTeamColor(entityPlayer, alpha);
+            } else if (this.colorMode.is("TEAMS")) {
+                int teamColor = TeamUtil.isSameTeam(entityPlayer) ? ChatColors.BLUE.toAwtColor() : ChatColors.RED.toAwtColor();
+                return new Color(teamColor & Color.WHITE.getRGB() | (int) (alpha * 255.0F) << 24, true);
+            } else if (this.colorMode.is("HUD")) {
+                int color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB();
+                return new Color(color & Color.WHITE.getRGB() | (int) (alpha * 255.0F) << 24, true);
+            } else {
+                return new Color(1.0F, 1.0F, 1.0F, alpha);
             }
         }
     }
@@ -131,7 +129,7 @@ public class Tracers extends Module {
             }
             position = new Vec3(position.xCoord, position.yCoord + (double) mc.getRenderViewEntity().getEyeHeight(), position.zCoord);
             for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRender((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
-                Color color = this.getEntityColor(player, (float) this.opacity.getValue() / 100.0F);
+                Color color = this.getEntityColor(player, this.opacity.getValue().floatValue() / 100.0F);
                 double x = RenderUtil.lerpDouble(player.posX, player.lastTickPosX, event.getPartialTicks());
                 double y = RenderUtil.lerpDouble(player.posY, player.lastTickPosY, event.getPartialTicks()) - (player.isSneaking() ? 0.125 : 0.0);
                 double z = RenderUtil.lerpDouble(player.posZ, player.lastTickPosZ, event.getPartialTicks());

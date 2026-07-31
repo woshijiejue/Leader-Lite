@@ -1,11 +1,11 @@
 package leader.client.module.modules.misc;
 
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
+import leader.client.module.values.impl.BoolValue;
 
 public class AntiDebuff extends Module {
-    public final BooleanProperty blindness = new BooleanProperty("blindness", true);
-    public final BooleanProperty nausea = new BooleanProperty("nausea", true);
+    public final BoolValue blindness = new BoolValue("blindness", true, this);
+    public final BoolValue nausea = new BoolValue("nausea", true, this);
 
     public AntiDebuff() {
         super("AntiDebuff", false);

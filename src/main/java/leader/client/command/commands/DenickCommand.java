@@ -5,9 +5,8 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import leader.client.Leader;
 import leader.client.command.Command;
-import leader.client.enums.ChatColors;
-import leader.client.util.ChatUtil;
-import net.minecraft.client.Minecraft;
+import leader.client.util.misc.ChatColors;
+import leader.client.util.DebugUtil;
 import net.minecraft.client.network.NetworkPlayerInfo;
 
 import java.awt.*;
@@ -19,7 +18,6 @@ import java.util.Collections;
 import java.util.Locale;
 
 public class DenickCommand extends Command {
-    private static final Minecraft mc = Minecraft.getMinecraft();
 
     public DenickCommand() {
         super(new ArrayList<>(Collections.singletonList("denick")));
@@ -28,7 +26,7 @@ public class DenickCommand extends Command {
     @Override
     public void runCommand(ArrayList<String> args) {
         if (args.size() < 2) {
-            ChatUtil.sendFormatted(String.format("%sUsage: .%s <&oname&r>&r", Leader.clientName, args.get(0).toLowerCase(Locale.ROOT)));
+            DebugUtil.sendFormatted(String.format("%sUsage: .%s <&oname&r>&r", Leader.clientName, args.get(0).toLowerCase(Locale.ROOT)));
         } else {
             NetworkPlayerInfo playerInfo = mc.getNetHandler().getPlayerInfo(ChatColors.formatColor(args.get(1)));
             if (playerInfo != null) {
@@ -38,7 +36,7 @@ public class DenickCommand extends Command {
                     String code = new String(Base64.getDecoder().decode(property.getValue().getBytes(StandardCharsets.UTF_8)));
                     String name = code.contains("profileName\" : \"") ? code.split("profileName\" : \"")[1].split("\"")[0] : "?";
                     String uuid = code.contains("profileId\" : \"") ? code.split("profileId\" : \"")[1].split("\"")[0] : "?";
-                    ChatUtil.sendRaw(
+                    DebugUtil.sendRaw(
                             String.format(
                                     ChatColors.formatColor("%s%s&r -> %s (&o%s&r)&r"),
                                     ChatColors.formatColor(Leader.clientName),
@@ -51,7 +49,7 @@ public class DenickCommand extends Command {
                         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(uuid), null);
                     }
                 } else {
-                    ChatUtil.sendRaw(
+                    DebugUtil.sendRaw(
                             String.format(
                                     ChatColors.formatColor("%sNo textures for entity with name &o%s&r"),
                                     ChatColors.formatColor(Leader.clientName),
@@ -60,7 +58,7 @@ public class DenickCommand extends Command {
                     );
                 }
             } else {
-                ChatUtil.sendRaw(
+                DebugUtil.sendRaw(
                         String.format(
                                 ChatColors.formatColor("%sNo entity with name &o%s&r"),
                                 ChatColors.formatColor(Leader.clientName),

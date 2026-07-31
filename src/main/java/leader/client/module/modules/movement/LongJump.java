@@ -6,23 +6,29 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
 import leader.client.events.*;
-import leader.client.management.RotationState;
-import leader.mixin.IAccessorPlayerControllerMP;
+import leader.client.component.impl.rotaion.RotationState;
+import leader.client.util.math.RandomUtil;
+import leader.client.util.DebugUtil;
+import leader.client.util.player.MoveUtil;
+import leader.client.util.server.PacketUtil;
+import leader.mixin.accessor.IAccessorPlayerControllerMP;
 import leader.client.module.Module;
-import leader.client.util.*;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.PercentProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.player.RotationUtil;
 import leader.client.util.timer.TimerUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.item.ItemFireball;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 
 public class LongJump extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
+    public final ListValue mode = new ListValue("mode", new String[]{"FIREBALL", "FIREBALL_MANUAL", "FIREBALL_HIGH", "FIREBALL_FLAT"}, "FIREBALL", this);
+    public final SliderValue motion = new SliderValue("motion", 1.0, 1.0, 20.0, Representation.FLOAT, this);
+    public final SliderValue speedMotion = new SliderValue("speed-motion", 1.0, 1.0, 20.0, Representation.FLOAT, this);
+    public final SliderValue strafe = new SliderValue("strafe", 0, 0, 100, Representation.INT, this);
     private final TimerUtil fireballTimer = new TimerUtil();
     private final TimerUtil jumpTimer = new TimerUtil();
     private boolean isJumping = false;
@@ -31,10 +37,6 @@ public class LongJump extends Module {
     private boolean readyToUseFireball = false;
     private boolean fireballLaunched = false;
     private int savedHotbarSlot = -1;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"FIREBALL", "FIREBALL_MANUAL", "FIREBALL_HIGH", "FIREBALL_FLAT"});
-    public final FloatProperty motion = new FloatProperty("motion", 1.0F, 1.0F, 20.0F);
-    public final FloatProperty speedMotion = new FloatProperty("speed-motion", 1.0F, 1.0F, 20.0F);
-    public final PercentProperty strafe = new PercentProperty("strafe", 0);
 
     private int findFireballInHotbar() {
         if (mc.thePlayer == null) {
@@ -61,11 +63,11 @@ public class LongJump extends Module {
     }
 
     public boolean isAutoMode() {
-        return this.mode.getValue() == 0 || this.mode.getValue() == 2 || this.mode.getValue() == 3;
+        return this.mode.is("FIREBALL") || this.mode.is("FIREBALL_HIGH") || this.mode.is("FIREBALL_FLAT");
     }
 
     public boolean isManualMode() {
-        return this.mode.getValue() == 1;
+        return this.mode.is("FIREBALL_MANUAL");
     }
 
     public boolean isLongJumpMode() {
@@ -123,16 +125,12 @@ public class LongJump extends Module {
             if (this.isLongJumpMode() && this.isJumping) {
                 this.tickCounter++;
                 if (this.tickCounter == 1) {
-                    switch (this.mode.getValue()) {
-                        case 0:
-                        case 1:
-                            this.jumpModeStage = 0;
-                            break;
-                        case 2:
-                            this.jumpModeStage = 1;
-                            break;
-                        case 3:
-                            this.jumpModeStage = MoveUtil.isForwardPressed() ? 2 : 1;
+                    if (this.mode.is("FIREBALL") || this.mode.is("FIREBALL_MANUAL")) {
+                        this.jumpModeStage = 0;
+                    } else if (this.mode.is("FIREBALL_HIGH")) {
+                        this.jumpModeStage = 1;
+                    } else if (this.mode.is("FIREBALL_FLAT")) {
+                        this.jumpModeStage = MoveUtil.isForwardPressed() ? 2 : 1;
                     }
                 }
                 if (this.tickCounter == 2 && MoveUtil.isForwardPressed()) {
@@ -240,7 +238,7 @@ public class LongJump extends Module {
         this.jumpTimer.reset();
         if (this.isAutoMode() && this.findFireballInHotbar() == -1) {
             this.setEnabled(false);
-            ChatUtil.sendFormatted(String.format("%s%s: &cNo fireball found in your hotbar!&r", Leader.clientName, this.getName()));
+            DebugUtil.sendFormatted(String.format("%s%s: &cNo fireball found in your hotbar!&r", Leader.clientName, this.getName()));
         }
     }
 
@@ -255,7 +253,7 @@ public class LongJump extends Module {
 
     @Override
     public String[] getSuffix() {
-        String mode = this.mode.getModeString();
+        String mode = this.mode.getValue();
         return mode.contains("FIREBALL") ? new String[]{"Fireball"} : new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, mode)};
     }
 }

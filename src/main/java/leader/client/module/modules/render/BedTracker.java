@@ -1,7 +1,7 @@
 package leader.client.module.modules.render;
 
 import leader.client.Leader;
-import leader.client.enums.ChatColors;
+import leader.client.util.misc.ChatColors;
 import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
@@ -10,12 +10,15 @@ import leader.client.events.PacketEvent;
 import leader.client.events.Render2DEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
-import leader.client.util.ChatUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.StringValue;
+import leader.client.util.DebugUtil;
 import leader.client.util.render.ColorUtil;
 import leader.client.util.render.SoundUtil;
 import leader.client.util.player.TeamUtil;
-import leader.client.property.properties.*;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
@@ -41,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class BedTracker extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private final ScheduledExecutorService executor;
     private final LinkedHashMap<String, Long> alertCooldowns;
     private final LinkedHashSet<EntityEnderPearl> trackedPearls;
@@ -53,31 +56,29 @@ public class BedTracker extends Module {
     private BlockPos bedPos;
     private long lastMarcoTime;
     private boolean waiting;
-    public final BooleanProperty alerts;
-    public final IntProperty alertRange;
-    public final BooleanProperty alertOnPearl;
-    public final ModeProperty alertSound;
-    public final IntProperty alertFrequency;
-    public final BooleanProperty marco;
-    public final IntProperty marcoRange;
-    public final BooleanProperty marcoOnPreal;
-    public final TextProperty marcoText;
-    public final IntProperty marcoDelay;
-    public final BooleanProperty hud;
-    public final ModeProperty hudPosX;
-    public final ModeProperty hudPosY;
-    public final IntProperty hudOffX;
-    public final IntProperty hudOffY;
-    public final FloatProperty hudScale;
-    public final BooleanProperty hudShadow;
+    public final BoolValue alerts;
+    public final SliderValue alertRange;
+    public final BoolValue alertOnPearl;
+    public final ListValue alertSound;
+    public final SliderValue alertFrequency;
+    public final BoolValue marco;
+    public final SliderValue marcoRange;
+    public final BoolValue marcoOnPreal;
+    public final StringValue marcoText;
+    public final SliderValue marcoDelay;
+    public final BoolValue hud;
+    public final ListValue hudPosX;
+    public final ListValue hudPosY;
+    public final SliderValue hudOffX;
+    public final SliderValue hudOffY;
+    public final SliderValue hudScale;
+    public final BoolValue hudShadow;
 
     private void playAlertSound() {
-        switch (this.alertSound.getValue()) {
-            case 1:
-                SoundUtil.playSound("mob.cat.meow");
-                break;
-            case 2:
-                SoundUtil.playSound("random.anvil_land");
+        if (this.alertSound.is("MEOW")) {
+            SoundUtil.playSound("mob.cat.meow");
+        } else if (this.alertSound.is("ANVIL")) {
+            SoundUtil.playSound("random.anvil_land");
         }
     }
 
@@ -110,23 +111,23 @@ public class BedTracker extends Module {
         this.bedPos = null;
         this.lastMarcoTime = -1L;
         this.waiting = false;
-        this.alerts = new BooleanProperty("alerts", true);
-        this.alertRange = new IntProperty("alerts-range", 48, 8, 128, this.alerts::getValue);
-        this.alertOnPearl = new BooleanProperty("alerts-on-pearl", true);
-        this.alertSound = new ModeProperty("alerts-sound", 1, new String[]{"NONE", "MEOW", "ANVIL"}, () -> this.alerts.getValue() || this.alertOnPearl.getValue());
-        this.alertFrequency = new IntProperty("alerts-frequency", 5, 1, 30, () -> this.alerts.getValue() || this.alertOnPearl.getValue());
-        this.marco = new BooleanProperty("macro", false);
-        this.marcoRange = new IntProperty("macro-range", 24, 8, 128, this.marco::getValue);
-        this.marcoOnPreal = new BooleanProperty("macro-on-pearl", false);
-        this.marcoText = new TextProperty("macro-text", "/lobby", () -> this.marco.getValue() || this.marcoOnPreal.getValue());
-        this.marcoDelay = new IntProperty("macro-delay", 1, 1, 10, () -> this.marco.getValue() || this.marcoOnPreal.getValue());
-        this.hud = new BooleanProperty("hud", true);
-        this.hudPosX = new ModeProperty("hud-position-x", 0, new String[]{"LEFT", "MIDDLE", "RIGHT"}, this.hud::getValue);
-        this.hudPosY = new ModeProperty("hud-position-y", 0, new String[]{"TOP", "MIDDLE", "BOTTOM"}, this.hud::getValue);
-        this.hudOffX = new IntProperty("hud-offset-x", 2, 0, 255, this.hud::getValue);
-        this.hudOffY = new IntProperty("hud-offset-y", 2, 0, 255, this.hud::getValue);
-        this.hudScale = new FloatProperty("hud-scale", 1.0F, 0.5F, 1.5F, this.hud::getValue);
-        this.hudShadow = new BooleanProperty("hud-shadow", true, this.hud::getValue);
+        this.alerts = new BoolValue("alerts", true, this);
+        this.alertRange = new SliderValue("alerts-range", 48, 8, 128, () -> this.alerts.getValue(), Representation.INT, this);
+        this.alertOnPearl = new BoolValue("alerts-on-pearl", true, this);
+        this.alertSound = new ListValue("alerts-sound", new String[]{"NONE", "MEOW", "ANVIL"}, "MEOW", () -> this.alerts.getValue() || this.alertOnPearl.getValue(), this);
+        this.alertFrequency = new SliderValue("alerts-frequency", 5, 1, 30, () -> this.alerts.getValue() || this.alertOnPearl.getValue(), Representation.INT, this);
+        this.marco = new BoolValue("macro", false, this);
+        this.marcoRange = new SliderValue("macro-range", 24, 8, 128, () -> this.marco.getValue(), Representation.INT, this);
+        this.marcoOnPreal = new BoolValue("macro-on-pearl", false, this);
+        this.marcoText = new StringValue("macro-text", "/lobby", () -> this.marco.getValue() || this.marcoOnPreal.getValue(), this);
+        this.marcoDelay = new SliderValue("macro-delay", 1, 1, 10, () -> this.marco.getValue() || this.marcoOnPreal.getValue(), Representation.INT, this);
+        this.hud = new BoolValue("hud", true, this);
+        this.hudPosX = new ListValue("hud-position-x", new String[]{"LEFT", "MIDDLE", "RIGHT"}, "LEFT", () -> this.hud.getValue(), this);
+        this.hudPosY = new ListValue("hud-position-y", new String[]{"TOP", "MIDDLE", "BOTTOM"}, "TOP", () -> this.hud.getValue(), this);
+        this.hudOffX = new SliderValue("hud-offset-x", 2, 0, 255, () -> this.hud.getValue(), Representation.INT, this);
+        this.hudOffY = new SliderValue("hud-offset-y", 2, 0, 255, () -> this.hud.getValue(), Representation.INT, this);
+        this.hudScale = new SliderValue("hud-scale", 1.0, 0.5, 1.5, () -> this.hud.getValue(), Representation.FLOAT, this);
+        this.hudShadow = new BoolValue("hud-shadow", true, () -> this.hud.getValue(), this);
     }
 
     @EventTarget
@@ -141,10 +142,10 @@ public class BedTracker extends Module {
                     if (!this.trackedPearls.contains(enderPearl)) {
                         this.trackedPearls.add(enderPearl);
                         if (this.alertOnPearl.getValue()) {
-                            ChatUtil.sendFormatted(String.format("%s%s: &fDetected &5Ender Pearl&r &e&l⚠&r", Leader.clientName, this.getName()));
+                            DebugUtil.sendFormatted(String.format("%s%s: &fDetected &5Ender Pearl&r &e&l⚠&r", Leader.clientName, this.getName()));
                             pearl = true;
                         }
-                        if (this.marcoOnPreal.getValue() && this.lastMarcoTime + (long) this.marcoDelay.getValue() * 1000L <= millis) {
+                        if (this.marcoOnPreal.getValue() && this.lastMarcoTime + (long) this.marcoDelay.getValue().intValue() * 1000L <= millis) {
                             this.lastMarcoTime = millis;
                             marco = true;
                         }
@@ -166,11 +167,11 @@ public class BedTracker extends Module {
                     String text = player.getDisplayName().getFormattedText();
                     ItemStack item = player.getHeldItem();
                     boolean isPearl = item != null && item.getItem() instanceof ItemEnderPearl;
-                    if (this.alerts.getValue() && distance < (double) this.alertRange.getValue()) {
+                    if (this.alerts.getValue() && distance < (double) this.alertRange.getValue().intValue()) {
                         Long cooldown = this.alertCooldowns.get(name);
-                        if (cooldown == null || cooldown + (long) this.alertFrequency.getValue() * 1000L <= millis) {
+                        if (cooldown == null || cooldown + (long) this.alertFrequency.getValue().intValue() * 1000L <= millis) {
                             this.alertCooldowns.put(name, millis);
-                            ChatUtil.sendFormatted(
+                            DebugUtil.sendFormatted(
                                     String.format("%s%s: %s&r &fis %d blocks away from your bed &e&l⚠&r", Leader.clientName, this.getName(), text, (int) distance + 1)
                             );
                             pearl = true;
@@ -178,19 +179,19 @@ public class BedTracker extends Module {
                     }
                     if (this.alertOnPearl.getValue() && isPearl) {
                         Long cooldown = this.alertCooldowns.get(name);
-                        if (cooldown == null || cooldown + (long) this.alertFrequency.getValue() * 1000L <= millis) {
+                        if (cooldown == null || cooldown + (long) this.alertFrequency.getValue().intValue() * 1000L <= millis) {
                             this.alertCooldowns.put(name, millis);
-                            ChatUtil.sendFormatted(
+                            DebugUtil.sendFormatted(
                                     String.format("%s%s: %s&r &fhas &5Ender Pearl&r &e&l⚠&r", Leader.clientName, this.getName(), text)
                             );
                             pearl = true;
                         }
                     }
                     if ((
-                            this.marco.getValue() && distance < (double) this.marcoRange.getValue()
+                            this.marco.getValue() && distance < (double) this.marcoRange.getValue().intValue()
                                     || this.marcoOnPreal.getValue() && isPearl
                     )
-                            && this.lastMarcoTime + (long) this.marcoDelay.getValue() * 1000L <= millis) {
+                            && this.lastMarcoTime + (long) this.marcoDelay.getValue().intValue() * 1000L <= millis) {
                         this.lastMarcoTime = millis;
                         marco = true;
                     }
@@ -200,7 +201,7 @@ public class BedTracker extends Module {
                 this.playAlertSound();
             }
             if (marco) {
-                ChatUtil.sendRaw(
+                DebugUtil.sendRaw(
                         String.format(
                                 ChatColors.formatColor("%s%s: &fRunning &6%s&r"),
                                 ChatColors.formatColor(Leader.clientName),
@@ -208,7 +209,7 @@ public class BedTracker extends Module {
                                 this.marcoText.getValue()
                         )
                 );
-                ChatUtil.sendMessage(this.marcoText.getValue());
+                DebugUtil.sendMessage(this.marcoText.getValue());
             }
         }
     }
@@ -236,29 +237,23 @@ public class BedTracker extends Module {
                     ScaledResolution scaledResolution = new ScaledResolution(mc);
                     float width = (float) FontManager.getStringWidth(text);
                     float height = (float) FontManager.getFontHeight() - 1.0F;
-                    float scale = (float) this.hudOffX.getValue() / this.hudScale.getValue();
-                    switch (this.hudPosX.getValue()) {
-                        case 0:
-                            scale++;
-                            break;
-                        case 1:
-                            scale += (float) scaledResolution.getScaledWidth() / this.hudScale.getValue() / 2.0F - width / 2.0F;
-                            break;
-                        case 2:
-                            scale = (scale + 1.0F) * -1.0F;
-                            scale += (float) scaledResolution.getScaledWidth() / this.hudScale.getValue() - width;
+                    float scale = (float) this.hudOffX.getValue().intValue() / this.hudScale.getValue();
+                    if (this.hudPosX.is("LEFT")) {
+                        scale++;
+                    } else if (this.hudPosX.is("MIDDLE")) {
+                        scale += (float) scaledResolution.getScaledWidth() / this.hudScale.getValue() / 2.0F - width / 2.0F;
+                    } else if (this.hudPosX.is("RIGHT")) {
+                        scale = (scale + 1.0F) * -1.0F;
+                        scale += (float) scaledResolution.getScaledWidth() / this.hudScale.getValue() - width;
                     }
-                    float offset = (float) this.hudOffY.getValue() / this.hudScale.getValue();
-                    switch (this.hudPosY.getValue()) {
-                        case 0:
-                            offset++;
-                            break;
-                        case 1:
-                            offset += (float) scaledResolution.getScaledHeight() / this.hudScale.getValue() / 2.0F - height / 2.0F;
-                            break;
-                        case 2:
-                            offset = (offset + 1.0F) * -1.0F;
-                            offset += (float) scaledResolution.getScaledHeight() / this.hudScale.getValue() - height;
+                    float offset = (float) this.hudOffY.getValue().intValue() / this.hudScale.getValue();
+                    if (this.hudPosY.is("TOP")) {
+                        offset++;
+                    } else if (this.hudPosY.is("MIDDLE")) {
+                        offset += (float) scaledResolution.getScaledHeight() / this.hudScale.getValue() / 2.0F - height / 2.0F;
+                    } else if (this.hudPosY.is("BOTTOM")) {
+                        offset = (offset + 1.0F) * -1.0F;
+                        offset += (float) scaledResolution.getScaledHeight() / this.hudScale.getValue() - height;
                     }
                     GlStateManager.pushMatrix();
                     GlStateManager.scale(this.hudScale.getValue(), this.hudScale.getValue(), 1.0F);
@@ -307,7 +302,7 @@ public class BedTracker extends Module {
                                                 BlockPos blockPos = new BlockPos(i, j, k);
                                                 if (this.isBed(blockPos)) {
                                                     this.bedPos = blockPos;
-                                                    ChatUtil.sendFormatted(
+                                                    DebugUtil.sendFormatted(
                                                             String.format(
                                                                     "%s%s: &fWhitelisted your bed at (%d, %d, %d) &a&l✔&r",
                                                                     Leader.clientName,

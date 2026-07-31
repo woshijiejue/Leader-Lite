@@ -2,7 +2,6 @@ package leader.client.module.modules.legit;
 
 import com.google.common.base.CaseFormat;
 import leader.client.util.player.RotationUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.entity.EntityLivingBase;
 
 import leader.client.event.EventTarget;
@@ -10,35 +9,38 @@ import leader.client.event.types.EventType;
 import leader.client.events.AttackEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.*;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
 import leader.client.util.player.ItemUtil;
-import leader.client.util.KeyBindUtil;
+import leader.client.util.misc.KeyBindUtil;
 import leader.client.util.timer.TimerUtil;
 
 public class BlockHit extends Module {
 
-    private static final Minecraft mc = Minecraft.getMinecraft();
     public BlockHit() {
-        super("BlockHit",false, false);
+        super("BlockHit", false, false);
     }
-    private final ModeProperty mode = new ModeProperty("Mode",0,new String[]{"Helper","Auto"});
 
-    private final IntProperty stopTime = new IntProperty("Stop Ticks",2,1,5, () -> this.mode.getValue() == 0);
-    private final ModeProperty autoMode = new ModeProperty("Auto Mode",0,new String[]{"Spam","Hold"},() -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 0);
-    private final ModeProperty autoBlockTime = new ModeProperty("AutoBlock Time",0, new String[]{"Delay","HurtTime","Sag","Smart"},() -> this.mode.getValue() == 1);
-    private final BooleanProperty onFirstHit = new BooleanProperty("OnFirstHit",true, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 3);
-    private final IntProperty smartBlockTick = new IntProperty("Smart Block Ticks",2,1,5, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 3);
-    private final BooleanProperty releaseAfterHit = new BooleanProperty("Release After Hit",true, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 3);
-    private final IntProperty smartBlockHurtTime = new IntProperty("Smart Block HurtTime",2,0,10, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 3);
-    private final IntProperty blockDelay = new IntProperty("Block Delay",100,0,1000, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 0);
-    private final IntProperty holdTick = new IntProperty("Hold Ticks",2,2,5, () -> this.mode.getValue() == 1 && this.autoMode.getValue() == 1  && this.autoBlockTime.getValue() == 0);
-    private final IntProperty minHurtTime = new IntProperty("Min HurtTime",10,1,10, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 1);
-    private final IntProperty maxHurtTime = new IntProperty("Max HurtTime",10,1,10, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 1);
-    private final PercentProperty chance = new PercentProperty("Block Hit Chance",50,()-> this.mode.getValue() == 1);
-    private final BooleanProperty smart = new BooleanProperty("Smart",true,() -> this.mode.getValue() == 1);
-    private final BooleanProperty autoBlockRange = new BooleanProperty("AutoBlock Range",true,() -> this.mode.getValue() == 1);
-    private final FloatProperty range = new FloatProperty("Range",3.0f,1f,4f,() -> autoBlockRange.getValue() && mode.getValue() == 1);
-    private int holdTicks,stopTick;
+    private final ListValue mode = new ListValue("Mode", new String[]{"Helper", "Auto"}, "Helper", this);
+
+    private final SliderValue stopTime = new SliderValue("Stop Ticks", 2, 1, 5, () -> this.mode.is("Helper"), Representation.INT, this);
+    private final ListValue autoMode = new ListValue("Auto Mode", new String[]{"Spam", "Hold"}, "Spam", () -> this.mode.is("Auto") && this.autoBlockTime.is("Delay"), this);
+    private final ListValue autoBlockTime = new ListValue("AutoBlock Time", new String[]{"Delay", "HurtTime", "Sag", "Smart"}, "Delay", () -> this.mode.is("Auto"), this);
+    private final BoolValue onFirstHit = new BoolValue("OnFirstHit", true, () -> this.mode.is("Auto") && this.autoBlockTime.is("Smart"), this);
+    private final SliderValue smartBlockTick = new SliderValue("Smart Block Ticks", 2, 1, 5, () -> this.mode.is("Auto") && this.autoBlockTime.is("Smart"), Representation.INT, this);
+    private final BoolValue releaseAfterHit = new BoolValue("Release After Hit", true, () -> this.mode.is("Auto") && this.autoBlockTime.is("Smart"), this);
+    private final SliderValue smartBlockHurtTime = new SliderValue("Smart Block HurtTime", 2, 0, 10, () -> this.mode.is("Auto") && this.autoBlockTime.is("Smart"), Representation.INT, this);
+    private final SliderValue blockDelay = new SliderValue("Block Delay", 100, 0, 1000, () -> this.mode.is("Auto") && this.autoBlockTime.is("Delay"), Representation.INT, this);
+    private final SliderValue holdTick = new SliderValue("Hold Ticks", 2, 2, 5, () -> this.mode.is("Auto") && this.autoMode.is("Hold") && this.autoBlockTime.is("Delay"), Representation.INT, this);
+    private final SliderValue minHurtTime = new SliderValue("Min HurtTime", 10, 1, 10, () -> this.mode.is("Auto") && this.autoBlockTime.is("HurtTime"), Representation.INT, this);
+    private final SliderValue maxHurtTime = new SliderValue("Max HurtTime", 10, 1, 10, () -> this.mode.is("Auto") && this.autoBlockTime.is("HurtTime"), Representation.INT, this);
+    private final SliderValue chance = new SliderValue("Block Hit Chance", 50, 0, 100, () -> this.mode.is("Auto"), Representation.INT, this);
+    private final BoolValue smart = new BoolValue("Smart", true, () -> this.mode.is("Auto"), this);
+    private final BoolValue autoBlockRange = new BoolValue("AutoBlock Range", true, () -> this.mode.is("Auto"), this);
+    private final SliderValue range = new SliderValue("Range", 3.0, 1.0, 4.0, () -> autoBlockRange.getValue() && mode.is("Auto"), Representation.FLOAT, this);
+    private int holdTicks, stopTick;
 
     private boolean startBlocking;
     private boolean attacking;
@@ -48,11 +50,12 @@ public class BlockHit extends Module {
     private int getBlockTicks = 0;
     private EntityLivingBase target;
     private TimerUtil timer = new TimerUtil();
+
     @EventTarget
     public void onTick(TickEvent event) {
         if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) return;
         if (event.getType() == EventType.PRE) {
-            if (this.mode.getValue() == 0) {
+            if (this.mode.is("Helper")) {
                 if (mc.gameSettings.keyBindAttack.isKeyDown()) {
                     if (mc.thePlayer.isBlocking()) {
                         startBlocking = true;
@@ -63,13 +66,13 @@ public class BlockHit extends Module {
                 if (stopTick == 2) {
                     KeyBindUtil.pressKeyOnce(mc.gameSettings.keyBindAttack.getKeyCode());
                 }
-                if (stopTick > stopTime.getValue()) {
+                if (stopTick > stopTime.getValue().intValue()) {
                     KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
                     startBlocking = false;
                     stopTick = 0;
                 }
             }
-            if (this.mode.getValue() == 1) {
+            if (this.mode.is("Auto")) {
                 if (target == null) return;
                 if (attacking) {
                     attackTicks++;
@@ -79,34 +82,34 @@ public class BlockHit extends Module {
                     target = null;
                     return;
                 }
-                if (Math.random() > chance.getValue()){
+                if (Math.random() > chance.getValue()) {
                     reset();
                     return;
                 }
-                if (autoBlockRange.getValue() && RotationUtil.distanceToBox(target.getCollisionBoundingBox()) >= range.getValue()){
+                if (autoBlockRange.getValue() && RotationUtil.distanceToBox(target.getCollisionBoundingBox()) >= range.getValue()) {
                     reset();
                     return;
                 }
-                if (smart.getValue() && target.hurtTime == 0){
+                if (smart.getValue() && target.hurtTime == 0) {
                     reset();
                     return;
                 }
                 if (attacking && ItemUtil.isHoldingSword()) {
-                    if (autoBlockTime.getValue() == 0) {
+                    if (autoBlockTime.is("Delay")) {
                         if (timer.hasTimeElapsed(blockDelay.getValue().longValue())) {
-                            if (this.autoMode.getValue() == 0) {
+                            if (this.autoMode.is("Spam")) {
                                 KeyBindUtil.pressKeyOnce(mc.gameSettings.keyBindUseItem.getKeyCode());
                                 timer.reset();
                                 reset();
                             }
-                            if (this.autoMode.getValue() == 1) {
+                            if (this.autoMode.is("Hold")) {
                                 startBlocking = true;
                             }
                             if (startBlocking) {
                                 KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
                                 holdTicks++;
                             }
-                            if (holdTicks > holdTick.getValue()) {
+                            if (holdTicks > holdTick.getValue().intValue()) {
                                 KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
                                 startBlocking = false;
                                 holdTicks = 0;
@@ -114,8 +117,8 @@ public class BlockHit extends Module {
                             }
                         }
                     }
-                    if (autoBlockTime.getValue() == 1) {
-                        if (mc.thePlayer.hurtTime >= minHurtTime.getValue() && mc.thePlayer.hurtTime <= maxHurtTime.getValue()) {
+                    if (autoBlockTime.is("HurtTime")) {
+                        if (mc.thePlayer.hurtTime >= minHurtTime.getValue().intValue() && mc.thePlayer.hurtTime <= maxHurtTime.getValue().intValue()) {
                             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
                             startBlocking = true;
                         } else if (startBlocking) {
@@ -123,30 +126,30 @@ public class BlockHit extends Module {
                             startBlocking = false;
                         }
                     }
-                    if (autoBlockTime.getValue() == 2){
+                    if (autoBlockTime.is("Sag")) {
                         if (sagTicks < 10) {
                             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
                             sagTicks++;
                         }
-                        if (sagTicks >= 10){
+                        if (sagTicks >= 10) {
                             KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
                             sagTicks = 0;
                         }
                     }
-                    if (autoBlockTime.getValue() == 3){
-                        if(mc.thePlayer.hurtTime == smartBlockHurtTime.getValue()){
+                    if (autoBlockTime.is("Smart")) {
+                        if (mc.thePlayer.hurtTime == smartBlockHurtTime.getValue().intValue()) {
                             canBlock = true;
                         }
-                        if (canBlock){
+                        if (canBlock) {
                             getBlockTicks++;
                             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
                         }
-                        if (mc.thePlayer.hurtTime == 9 && releaseAfterHit.getValue()){
+                        if (mc.thePlayer.hurtTime == 9 && releaseAfterHit.getValue()) {
                             canBlock = false;
                             KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
                             getBlockTicks = 0;
                         }
-                        if (getBlockTicks > smartBlockTick.getValue()){
+                        if (getBlockTicks > smartBlockTick.getValue().intValue()) {
                             canBlock = false;
                             KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
                             getBlockTicks = 0;
@@ -156,7 +159,8 @@ public class BlockHit extends Module {
             }
         }
     }
-    private void reset(){
+
+    private void reset() {
         attacking = canBlock = false;
         KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
         holdTicks = sagTicks = getBlockTicks = 0;
@@ -164,18 +168,19 @@ public class BlockHit extends Module {
     }
 
     @EventTarget
-    public void onAttack(AttackEvent event){
-        if (this.isEnabled() && ItemUtil.isHoldingSword()){
+    public void onAttack(AttackEvent event) {
+        if (this.isEnabled() && ItemUtil.isHoldingSword()) {
             attacking = true;
             attackTicks = 0;
             target = (EntityLivingBase) event.getTarget();
-            if (autoBlockTime.getValue() == 3){
-                if (mc.thePlayer.hurtTime == 0 && onFirstHit.getValue())canBlock = true;
+            if (autoBlockTime.is("Smart")) {
+                if (mc.thePlayer.hurtTime == 0 && onFirstHit.getValue()) canBlock = true;
             }
         }
     }
+
     @Override
     public String[] getSuffix() {
-        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
+        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getValue())};
     }
 }

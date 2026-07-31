@@ -5,13 +5,13 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.PacketEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
-import leader.client.util.ChatUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.util.DebugUtil;
 import leader.client.util.player.ItemUtil;
-import leader.client.util.PacketUtil;
-import net.minecraft.client.Minecraft;
+import leader.client.util.server.PacketUtil;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemSword;
 import net.minecraft.network.Packet;
@@ -24,12 +24,10 @@ import java.util.List;
 import java.util.Random;
 
 public class Disabler extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-
-    public final ModeProperty mode = new ModeProperty("Mode", 0, new String[]{"Prediction"});
-    public final BooleanProperty inventory = new BooleanProperty("Inventory", false, () -> mode.getValue() == 0);
-    public final BooleanProperty c09 = new BooleanProperty("C09", false, () -> mode.getValue() == 0);
-    public final IntProperty secondSwordSlot = new IntProperty("SecondSwordSlot", 2, 1, 9, () -> mode.getValue() == 0 && c09.getValue());
+    public final ListValue mode = new ListValue("Mode", new String[]{"Prediction"}, "Prediction", this);
+    public final BoolValue inventory = new BoolValue("Inventory", false, () -> mode.is("Prediction"), this);
+    public final BoolValue c09 = new BoolValue("C09", false, () -> mode.is("Prediction"), this);
+    public final SliderValue secondSwordSlot = new SliderValue("SecondSwordSlot", 2, 1, 9, () -> mode.is("Prediction") && c09.getValue(), Representation.INT, this);
 
     private static final Random random = new Random();
     private final List<Packet<?>> inventoryPackets = new ArrayList<>();
@@ -40,12 +38,12 @@ public class Disabler extends Module {
     }
     @Override
     public String[] getSuffix() {
-        return new String[]{mode.getModeString()};
+        return new String[]{mode.getValue()};
     }
     @Override
     public void onEnabled() {
-        if (mode.getValue() == 0 && inventory.getValue()) {
-            ChatUtil.sendFormatted(String.format("%s%s: You can use Vanilla-InvWalk & Silent-InvManager now",
+        if (mode.is("Prediction") && inventory.getValue()) {
+            DebugUtil.sendFormatted(String.format("%s%s: You can use Vanilla-InvWalk & Silent-InvManager now",
                     Leader.clientName, this.getName()));
         }
         c09Warned = false;
@@ -54,7 +52,7 @@ public class Disabler extends Module {
 
     @Override
     public void onDisabled() {
-        if (mode.getValue() == 0 && inventory.getValue()) {
+        if (mode.is("Prediction") && inventory.getValue()) {
             if (!inventoryPackets.isEmpty()) {
                 for (Packet<?> p : inventoryPackets) {
                     PacketUtil.sendPacketNoEvent(p);
@@ -82,7 +80,7 @@ public class Disabler extends Module {
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (!this.isEnabled()) return;
-        if (mode.getValue() == 0 && inventory.getValue()) {
+        if (mode.is("Prediction") && inventory.getValue()) {
             if (!checkCompass()) {
                 if (event.getType() == EventType.SEND) {
                     handlePredictionInventory(event);
@@ -110,7 +108,7 @@ public class Disabler extends Module {
             return -1;
         }
 
-        int preferredSlot = disabler.secondSwordSlot.getValue() - 1;
+        int preferredSlot = disabler.secondSwordSlot.getValue().intValue() - 1;
         if (preferredSlot < 0 || preferredSlot > 8) return -1;
         if (preferredSlot == mc.thePlayer.inventory.currentItem) return -1;
 
@@ -124,7 +122,7 @@ public class Disabler extends Module {
             int secondSword = findSecondSwordSlot(mainSword);
             if (secondSword == -1) {
                 c09Warned = true;
-                ChatUtil.sendFormatted(String.format("%sDisabler: &cNo second sword in inventory, C09 swaps will use fallback.",
+                DebugUtil.sendFormatted(String.format("%sDisabler: &cNo second sword in inventory, C09 swaps will use fallback.",
                         Leader.clientName));
             }
         }

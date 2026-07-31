@@ -3,12 +3,13 @@ package leader.client.module.modules.legit;
 import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.TickEvent;
-import leader.mixin.IAccessorMinecraft;
+import leader.mixin.accessor.IAccessorMinecraft;
 import leader.client.module.Module;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.player.BlockUtil;
 import leader.client.util.player.RotationUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockObsidian;
 import net.minecraft.client.Minecraft;
@@ -24,14 +25,13 @@ import java.text.DecimalFormatSymbols;
 import java.util.Locale;
 
 public class FastPlace extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    private static final DecimalFormat df = new DecimalFormat("0.0#", new DecimalFormatSymbols(Locale.US));
     private long delayMS = 0L;
-    public final FloatProperty delay = new FloatProperty("delay", 1.0F, 1.0F, 3.0F);
-    public final BooleanProperty blocksOnly = new BooleanProperty("blocks-only", true);
-    public final BooleanProperty placeFix = new BooleanProperty("place-fix", true);
-    public final BooleanProperty skipObsidian = new BooleanProperty("skip-obsidian", true);
-    public final BooleanProperty skipInteractable = new BooleanProperty("skip-interactable", true);
+    public final SliderValue delay = new SliderValue("delay", 1.0, 1.0, 3.0, Representation.FLOAT, this);
+    public final BoolValue blocksOnly = new BoolValue("blocks-only", true, this);
+    public final BoolValue placeFix = new BoolValue("place-fix", true, this);
+    public final BoolValue skipObsidian = new BoolValue("skip-obsidian", true, this);
+    public final BoolValue skipInteractable = new BoolValue("skip-interactable", true, this);
+    private static final DecimalFormat df = new DecimalFormat("0.0#", new DecimalFormatSymbols(Locale.US));
 
     private boolean canPlace() {
         ItemStack stack = mc.thePlayer.getHeldItem();
@@ -48,7 +48,7 @@ public class FastPlace extends Module {
                 if (skipInteractable.getValue() && BlockUtil.isInteractable(block)) {
                     return false;
                 }
-                if (!(Boolean) this.placeFix.getValue()) {
+                if (!this.placeFix.getValue()) {
                     return true;
                 }
                 MovingObjectPosition mop = RotationUtil.rayTrace(
@@ -59,7 +59,7 @@ public class FastPlace extends Module {
                         && ((ItemBlock) item).canPlaceBlockOnSide(mc.theWorld, mop.getBlockPos(), mop.sideHit, mc.thePlayer, stack);
             }
         }
-        return !(Boolean) this.blocksOnly.getValue();
+        return !this.blocksOnly.getValue();
     }
 
     public FastPlace() {

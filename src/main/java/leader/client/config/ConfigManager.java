@@ -6,8 +6,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import leader.client.Leader;
 import leader.client.config.impl.*;
-import leader.client.util.ChatUtil;
-import leader.mixin.IAccessorMinecraft;
+import leader.client.util.DebugUtil;
+import leader.mixin.accessor.IAccessorMinecraft;
 import net.minecraft.client.Minecraft;
 
 import java.io.FileReader;
@@ -37,7 +37,7 @@ public class ConfigManager {
             config.loadConfig(jsonObject);
         } catch (Exception e) {
             ((IAccessorMinecraft) Minecraft.getMinecraft()).getLogger().error("Failed to load config: {}", e.getMessage());
-            ChatUtil.sendFormatted(String.format("%sConfig couldn't be loaded (&c&o%s&r)&r", Leader.clientName, config.getName()));
+            DebugUtil.sendFormatted(String.format("%sConfig couldn't be loaded (&c&o%s&r)&r", Leader.clientName, config.getName()));
         }
     }
 
@@ -54,21 +54,21 @@ public class ConfigManager {
             writer.write(gson.toJson(jsonObject));
         } catch (IOException e) {
             ((IAccessorMinecraft) Minecraft.getMinecraft()).getLogger().error("Failed to save config: {}", e.getMessage());
-            ChatUtil.sendFormatted(String.format("%sConfig couldn't be saved (&c&o%s&r)&r", Leader.clientName, config.getName()));
+            DebugUtil.sendFormatted(String.format("%sConfig couldn't be saved (&c&o%s&r)&r", Leader.clientName, config.getName()));
         }
     }
 
     public void loadConfigs() {
         loadConfig(defaultSettings);
         loadConfig(account);
-        if (Leader.friendManager != null) loadConfig(Leader.friendManager);
-        if (Leader.targetManager != null) loadConfig(Leader.targetManager);
+        if (Leader.friendComponent != null) loadConfig(Leader.friendComponent);
+        if (Leader.targetComponent != null) loadConfig(Leader.targetComponent);
     }
 
     public void saveConfigs() {
         saveConfig(defaultSettings);
         saveConfig(account);
-        if (Leader.friendManager != null) saveConfig(Leader.friendManager);
-        if (Leader.targetManager != null) saveConfig(Leader.targetManager);
+        if (Leader.friendComponent != null) saveConfig(Leader.friendComponent);
+        if (Leader.targetComponent != null) saveConfig(Leader.targetComponent);
     }
 }

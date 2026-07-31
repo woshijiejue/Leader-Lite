@@ -2,18 +2,16 @@ package leader.client.module.modules.movement;
 
 import leader.client.event.EventTarget;
 import leader.client.events.TickEvent;
-import leader.mixin.IAccessorEntityLivingBase;
+import leader.mixin.accessor.IAccessorEntityLivingBase;
 import leader.client.module.Module;
-import leader.client.util.KeyBindUtil;
-import leader.client.property.properties.BooleanProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.util.misc.KeyBindUtil;
+import leader.client.module.values.impl.BoolValue;
 import net.minecraft.entity.ai.attributes.AttributeModifier;
 import net.minecraft.entity.ai.attributes.IAttributeInstance;
 
 public class Sprint extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    public final BoolValue foxFix = new BoolValue("fov-fix", true, this);
     private boolean wasSprinting = false;
-    public final BooleanProperty foxFix = new BooleanProperty("fov-fix", true);
 
     public Sprint() {
         super("Sprint", true, true);

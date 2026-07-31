@@ -3,12 +3,14 @@ package leader.client.module.modules.render;
 import leader.client.Leader;
 import leader.client.event.EventTarget;
 import leader.client.events.Render3DEvent;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ColorValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.RenderUtil;
-import leader.client.property.properties.*;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ModeProperty;
 import net.minecraft.block.BlockBed;
 import net.minecraft.block.BlockBed.EnumPartType;
 import net.minecraft.block.BlockObsidian;
@@ -23,23 +25,22 @@ import java.util.Arrays;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 public class BedESP extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     public final CopyOnWriteArraySet<BlockPos> beds = new CopyOnWriteArraySet<>();
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"DEFAULT", "FULL"});
-    public final ModeProperty color = new ModeProperty("color", 0, new String[]{"CUSTOM", "HUD"});
-    public final ColorProperty customColor;
-    public final PercentProperty opacity;
-    public final BooleanProperty outline;
-    public final BooleanProperty obsidian;
+    public final ListValue mode = new ListValue("mode", new String[]{"DEFAULT", "FULL"}, "DEFAULT", this);
+    public final ListValue color = new ListValue("color", new String[]{"CUSTOM", "HUD"}, "CUSTOM", this);
+    public final ColorValue customColor;
+    public final SliderValue opacity;
+    public final BoolValue outline;
+    public final BoolValue obsidian;
 
     private Color getColor() {
-        switch (this.color.getValue()) {
-            case 0:
-                return new Color(this.customColor.getValue());
-            case 1:
-                return ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());
-            default:
-                return new Color(-1);
+        if (this.color.is("CUSTOM")) {
+            return this.customColor.getValue();
+        } else if (this.color.is("HUD")) {
+            return ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());
+        } else {
+            return new Color(-1);
         }
     }
 
@@ -54,21 +55,19 @@ public class BedESP extends Module {
         if (this.outline.getValue()) {
             RenderUtil.drawBlockBoundingBox(blockPos, 1.0, 170, 0, 170, 255, 1.5F);
         }
-        RenderUtil.drawBlockBox(
-                blockPos, 1.0, 170, 0, 170
-        );
+        RenderUtil.drawBlockBox(blockPos, 1.0, 170, 0, 170);
     }
 
     public BedESP() {
         super("BedESP", false);
-        this.customColor = new ColorProperty("custom-color", (int) 8085714755840333141L, () -> this.color.getValue() == 0);
-        this.opacity = new PercentProperty("opacity", 25);
-        this.outline = new BooleanProperty("outline", false);
-        this.obsidian = new BooleanProperty("obsidian", true);
+        this.customColor = new ColorValue("custom-color", new Color((int) 8085714755840333141L, true), () -> this.color.is("CUSTOM"), this);
+        this.opacity = new SliderValue("opacity", 25, 0, 100, Representation.INT, this);
+        this.outline = new BoolValue("outline", false, this);
+        this.obsidian = new BoolValue("obsidian", true, this);
     }
 
     public double getHeight() {
-        return this.mode.getValue() == 1 ? 1.0 : 0.5625;
+        return this.mode.is("FULL") ? 1.0 : 0.5625;
     }
 
     @EventTarget
@@ -127,12 +126,7 @@ public class BedESP extends Module {
                         if (this.outline.getValue()) {
                             RenderUtil.drawBoundingBox(aabb, color.getRed(), color.getGreen(), color.getBlue(), 255, 1.5F);
                         }
-                        RenderUtil.drawFilledBox(
-                                aabb,
-                                color.getRed(),
-                                color.getGreen(),
-                                color.getBlue()
-                        );
+                        RenderUtil.drawFilledBox(aabb, color.getRed(), color.getGreen(), color.getBlue());
                     }
                 } else {
                     this.beds.remove(blockPos);

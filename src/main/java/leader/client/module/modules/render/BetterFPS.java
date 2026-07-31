@@ -1,13 +1,13 @@
 package leader.client.module.modules.render;
 
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
+import leader.client.module.values.impl.BoolValue;
 
 public class BetterFPS extends Module {
     public BetterFPS() {
         super("BetterFPS", false);
     }
-    public static BooleanProperty fastLoad = new BooleanProperty("FastLoad", true);
+    public static BoolValue fastLoad = new BoolValue("FastLoad", true, null);
     public static boolean using = false;
     @Override
     public void onEnabled() {

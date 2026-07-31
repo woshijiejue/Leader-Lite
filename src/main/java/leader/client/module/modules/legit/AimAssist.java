@@ -7,10 +7,9 @@ import leader.client.events.KeyEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
 import leader.client.module.modules.player.Reach;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.PercentProperty;
-import leader.client.property.properties.IntProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.player.ItemUtil;
 import leader.client.util.player.PlayerUtil;
 import leader.client.util.player.RotationUtil;
@@ -26,17 +25,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class AimAssist extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private final TimerUtil timer = new TimerUtil();
-    public final FloatProperty hSpeed = new FloatProperty("horizontal-speed", 3.0F, 0.0F, 10.0F);
-    public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 0.0F, 0.0F, 10.0F);
-    public final PercentProperty smoothing = new PercentProperty("smoothing", 50);
-    public final FloatProperty range = new FloatProperty("range", 4.5F, 3.0F, 8.0F);
-    public final IntProperty fov = new IntProperty("fov", 90, 30, 360);
-    public final BooleanProperty weaponOnly = new BooleanProperty("weapons-only", true);
-    public final BooleanProperty allowTools = new BooleanProperty("allow-tools", false, this.weaponOnly::getValue);
-    public final BooleanProperty botChecks = new BooleanProperty("bot-check", true);
-    public final BooleanProperty team = new BooleanProperty("teams", true);
+    public final SliderValue hSpeed = new SliderValue("horizontal-speed", 3.0, 0.0, 10.0, Representation.FLOAT, this);
+    public final SliderValue vSpeed = new SliderValue("vertical-speed", 0.0, 0.0, 10.0, Representation.FLOAT, this);
+    public final SliderValue smoothing = new SliderValue("smoothing", 50, 0, 100, Representation.INT, this);
+    public final SliderValue range = new SliderValue("range", 4.5, 3.0, 8.0, Representation.FLOAT, this);
+    public final SliderValue fov = new SliderValue("fov", 90, 30, 360, Representation.INT, this);
+    public final BoolValue weaponOnly = new BoolValue("weapons-only", true, this);
+    public final BoolValue allowTools = new BoolValue("allow-tools", false, this.weaponOnly::getValue, this);
+    public final BoolValue botChecks = new BoolValue("bot-check", true, this);
+    public final BoolValue team = new BoolValue("teams", true, this);
 
     private boolean isValidTarget(EntityPlayer entityPlayer) {
         if (entityPlayer != mc.thePlayer && entityPlayer != mc.thePlayer.ridingEntity) {
@@ -46,7 +45,7 @@ public class AimAssist extends Module {
                 return false;
             } else if (RotationUtil.distanceToEntity(entityPlayer) > (double) this.range.getValue()) {
                 return false;
-            } else if (RotationUtil.angleToEntity(entityPlayer) > (float) this.fov.getValue()) {
+            } else if (RotationUtil.angleToEntity(entityPlayer) > (float) this.fov.getValue().intValue()) {
                 return false;
             } else if (RotationUtil.rayTrace(entityPlayer) != null) {
                 return false;
@@ -77,7 +76,7 @@ public class AimAssist extends Module {
     @EventTarget
     public void onTick(TickEvent event) {
         if (this.isEnabled() && event.getType() == EventType.POST && mc.currentScreen == null) {
-            if (!(Boolean) this.weaponOnly.getValue()
+            if (!this.weaponOnly.getValue()
                     || ItemUtil.hasRawUnbreakingEnchant()
                     || this.allowTools.getValue() && ItemUtil.isHoldingTool()) {
                 boolean attacking = PlayerUtil.isAttacking();
@@ -104,7 +103,7 @@ public class AimAssist extends Module {
                                         mc.thePlayer.rotationYaw,
                                         mc.thePlayer.rotationPitch,
                                         180.0F,
-                                        (float) this.smoothing.getValue() / 100.0F
+                                        (float) this.smoothing.getValue().intValue() / 100.0F
                                 );
                                 float yaw = Math.min(Math.abs(this.hSpeed.getValue()), 10.0F);
                                 float pitch = Math.min(Math.abs(this.vSpeed.getValue()), 10.0F);

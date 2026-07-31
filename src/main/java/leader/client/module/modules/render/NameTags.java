@@ -1,18 +1,18 @@
 package leader.client.module.modules.render;
 
 import leader.client.Leader;
-import leader.client.enums.ChatColors;
+import leader.client.util.misc.ChatColors;
 import leader.client.event.EventTarget;
 import leader.client.events.Render3DEvent;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.ColorUtil;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.TeamUtil;
-import leader.client.property.properties.*;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ModeProperty;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -42,27 +42,27 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 public class NameTags extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private static final DecimalFormat healthFormatter = new DecimalFormat("0.0", new DecimalFormatSymbols(Locale.US));
-    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
-    public final BooleanProperty autoScale = new BooleanProperty("auto-scale", true);
-    public final PercentProperty backgroundOpacity = new PercentProperty("background", 25);
-    public final BooleanProperty shadow = new BooleanProperty("shadow", true);
-    public final ModeProperty distanceMode = new ModeProperty("distance", 0, new String[]{"NONE", "DEFAULT", "VAPE"});
-    public final ModeProperty healthMode = new ModeProperty("health", 2, new String[]{"NONE", "HP", "HEARTS", "TAB"});
-    public final BooleanProperty armor = new BooleanProperty("armor", true);
-    public final BooleanProperty effects = new BooleanProperty("effects", true);
-    public final BooleanProperty players = new BooleanProperty("players", true);
-    public final BooleanProperty friends = new BooleanProperty("friends", true);
-    public final BooleanProperty enemies = new BooleanProperty("enemies", true);
-    public final BooleanProperty bossees = new BooleanProperty("bosses", false);
-    public final BooleanProperty mobs = new BooleanProperty("mobs", false);
-    public final BooleanProperty creepers = new BooleanProperty("creepers", false);
-    public final BooleanProperty endermans = new BooleanProperty("endermen", false);
-    public final BooleanProperty blazes = new BooleanProperty("blazes", false);
-    public final BooleanProperty animals = new BooleanProperty("animals", false);
-    public final BooleanProperty self = new BooleanProperty("self", false);
-    public final BooleanProperty bots = new BooleanProperty("bots", false);
+    public final SliderValue scale = new SliderValue("scale", 1.0, 0.5, 2.0, Representation.FLOAT, this);
+    public final BoolValue autoScale = new BoolValue("auto-scale", true, this);
+    public final SliderValue backgroundOpacity = new SliderValue("background", 25, 0, 100, Representation.INT, this);
+    public final BoolValue shadow = new BoolValue("shadow", true, this);
+    public final ListValue distanceMode = new ListValue("distance", new String[]{"NONE", "DEFAULT", "VAPE"}, "NONE", this);
+    public final ListValue healthMode = new ListValue("health", new String[]{"NONE", "HP", "HEARTS", "TAB"}, "HEARTS", this);
+    public final BoolValue armor = new BoolValue("armor", true, this);
+    public final BoolValue effects = new BoolValue("effects", true, this);
+    public final BoolValue players = new BoolValue("players", true, this);
+    public final BoolValue friends = new BoolValue("friends", true, this);
+    public final BoolValue enemies = new BoolValue("enemies", true, this);
+    public final BoolValue bossees = new BoolValue("bosses", false, this);
+    public final BoolValue mobs = new BoolValue("mobs", false, this);
+    public final BoolValue creepers = new BoolValue("creepers", false, this);
+    public final BoolValue endermans = new BoolValue("endermen", false, this);
+    public final BoolValue blazes = new BoolValue("blazes", false, this);
+    public final BoolValue animals = new BoolValue("animals", false, this);
+    public final BoolValue self = new BoolValue("self", false, this);
+    public final BoolValue bots = new BoolValue("bots", false, this);
 
     public NameTags() {
         super("NameTags", false);
@@ -123,52 +123,47 @@ public class NameTags extends Module {
                         GlStateManager.rotate(mc.getRenderManager().playerViewY * -1.0F, 0.0F, 1.0F, 0.0F);
                         float view = mc.gameSettings.thirdPersonView == 2 ? -1.0F : 1.0F;
                         GlStateManager.rotate(mc.getRenderManager().playerViewX, view, 0.0F, 0.0F);
-                        double scale = Math.pow(Math.min(Math.max(this.autoScale.getValue() ? distance : 0.0, 6.0), 128.0), 0.75) * 0.0075;
-                        GlStateManager.scale(-scale * (double) this.scale.getValue(), -scale * (double) this.scale.getValue(), 1.0);
+                        double scaleFactor = Math.pow(Math.min(Math.max(this.autoScale.getValue() ? distance : 0.0, 6.0), 128.0), 0.75) * 0.0075;
+                        GlStateManager.scale(-scaleFactor * (double) this.scale.getValue(), -scaleFactor * (double) this.scale.getValue(), 1.0);
                         String distanceText = "";
-                        switch (this.distanceMode.getValue()) {
-                            case 1:
-                                distanceText = String.format("&7%dm&r ", (int) distance);
-                                break;
-                            case 2:
-                                distanceText = String.format("&a[&f%d&a]&r ", (int) distance);
+                        if (this.distanceMode.is("DEFAULT")) {
+                            distanceText = String.format("&7%dm&r ", (int) distance);
+                        } else if (this.distanceMode.is("VAPE")) {
+                            distanceText = String.format("&a[&f%d&a]&r ", (int) distance);
                         }
                         float health = ((EntityLivingBase) entity).getHealth();
                         float absorption = ((EntityLivingBase) entity).getAbsorptionAmount();
                         float max = ((EntityLivingBase) entity).getMaxHealth();
                         float percent = Math.min(Math.max((health + absorption) / max, 0.0F), 1.0F);
                         String healText = "";
-                        switch (this.healthMode.getValue()) {
-                            case 1:
-                                healText = String.format(" %d%s", (int) health, absorption > 0.0F ? String.format(" &6%d&r", (int) absorption) : "&r");
-                                break;
-                            case 2:
-                                healText = String.format(
-                                        " %s%s",
-                                        healthFormatter.format((double) health / 2.0),
-                                        absorption > 0.0F ? String.format(" &6%s&r", healthFormatter.format((double) absorption / 2.0)) : "&r"
-                                );
-                                break;
-                            case 3:
-                                if (entity instanceof EntityPlayer) {
-                                    Scoreboard scoreboard = mc.theWorld.getScoreboard();
-                                    if (scoreboard != null) {
-                                        ScoreObjective objective = scoreboard.getObjectiveInDisplaySlot(2);
-                                        if (objective != null) {
-                                            Score score = scoreboard.getValueFromObjective(entity.getName(), objective);
-                                            if (score != null) {
-                                                healText = String.format(" &e%d&r", score.getScorePoints());
-                                            }
+                        if (this.healthMode.is("HP")) {
+                            healText = String.format(" %d%s", (int) health, absorption > 0.0F ? String.format(" &6%d&r", (int) absorption) : "&r");
+                        } else if (this.healthMode.is("HEARTS")) {
+                            healText = String.format(
+                                    " %s%s",
+                                    healthFormatter.format((double) health / 2.0),
+                                    absorption > 0.0F ? String.format(" &6%s&r", healthFormatter.format((double) absorption / 2.0)) : "&r"
+                            );
+                        } else if (this.healthMode.is("TAB")) {
+                            if (entity instanceof EntityPlayer) {
+                                Scoreboard scoreboard = mc.theWorld.getScoreboard();
+                                if (scoreboard != null) {
+                                    ScoreObjective objective = scoreboard.getObjectiveInDisplaySlot(2);
+                                    if (objective != null) {
+                                        Score score = scoreboard.getValueFromObjective(entity.getName(), objective);
+                                        if (score != null) {
+                                            healText = String.format(" &e%d&r", score.getScorePoints());
                                         }
                                     }
                                 }
+                            }
                         }
                         String color = ChatColors.formatColor(String.format("%s&f%s&r%s", distanceText, teamName, healText));
                         int width = FontManager.getStringWidth(color);
                         if (this.backgroundOpacity.getValue() > 0) {
                             Color textColor = !entity.isSneaking() && !entity.isInvisible()
-                                    ? new Color(0.0F, 0.0F, 0.0F, (float) this.backgroundOpacity.getValue() / 100.0F)
-                                    : new Color(0.33F, 0.0F, 0.33F, (float) this.backgroundOpacity.getValue() / 100.0F);
+                                    ? new Color(0.0F, 0.0F, 0.0F, this.backgroundOpacity.getValue().floatValue() / 100.0F)
+                                    : new Color(0.33F, 0.0F, 0.33F, this.backgroundOpacity.getValue().floatValue() / 100.0F);
                             RenderUtil.enableRenderState();
                             RenderUtil.drawRect(
                                     (float) (-width) / 2.0F - 1.0F,
@@ -212,17 +207,17 @@ public class NameTags extends Module {
                                 }
                             }
                             if (this.effects.getValue()) {
-                                List<PotionEffect> effects = ((EntityPlayer) entity)
+                                List<PotionEffect> effectsList = ((EntityPlayer) entity)
                                         .getActivePotionEffects()
                                         .stream()
                                         .filter(potionEffect -> Potion.potionTypes[potionEffect.getPotionID()].hasStatusIcon())
                                         .collect(Collectors.toList());
-                                if (!effects.isEmpty()) {
+                                if (!effectsList.isEmpty()) {
                                     GlStateManager.pushMatrix();
                                     GlStateManager.scale(0.5F, 0.5F, 1.0F);
-                                    int offset = effects.size() * -9;
-                                    for (int i = 0; i < effects.size(); i++) {
-                                        RenderUtil.renderPotionEffect(effects.get(i), offset + i * 18, -(height * 2) - 18);
+                                    int offset = effectsList.size() * -9;
+                                    for (int i = 0; i < effectsList.size(); i++) {
+                                        RenderUtil.renderPotionEffect(effectsList.get(i), offset + i * 18, -(height * 2) - 18);
                                     }
                                     GlStateManager.popMatrix();
                                 }
@@ -233,7 +228,7 @@ public class NameTags extends Module {
                                 view = (float) (-FontManager.getFontHeight()) - 1.0F;
                                 float y1 = (float) width / 2.0F + 1.0F;
                                 float offset = this.shadow.getValue() ? 0.0F : -1.0F;
-                                int friendColor = Leader.friendManager.getColor().getRGB();
+                                int friendColor = Leader.friendComponent.getColor().getRGB();
                                 RenderUtil.drawOutlineRect(x1, view, y1, offset, 1.5F, 0, friendColor);
                                 RenderUtil.disableRenderState();
                             } else if (TeamUtil.isTarget((EntityPlayer) entity)) {
@@ -242,7 +237,7 @@ public class NameTags extends Module {
                                 view = (float) (-FontManager.getFontHeight()) - 1.0F;
                                 float y1 = (float) width / 2.0F + 1.0F;
                                 float offset = this.shadow.getValue() ? 0.0F : -1.0F;
-                                int targetColor = Leader.targetManager.getColor().getRGB();
+                                int targetColor = Leader.targetComponent.getColor().getRGB();
                                 RenderUtil.drawOutlineRect(x1, view, y1, offset, 1.5F, 0, targetColor);
                                 RenderUtil.disableRenderState();
                             }

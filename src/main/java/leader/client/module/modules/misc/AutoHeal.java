@@ -3,14 +3,13 @@ package leader.client.module.modules.misc;
 import leader.client.event.EventTarget;
 import leader.client.event.types.Priority;
 import leader.client.events.*;
-import leader.mixin.IAccessorPlayerControllerMP;
+import leader.mixin.accessor.IAccessorPlayerControllerMP;
 import leader.client.module.Module;
-import leader.client.util.PacketUtil;
+import leader.client.util.server.PacketUtil;
 import leader.client.util.timer.TimerUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.PercentProperty;
-import leader.client.property.properties.IntProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import net.minecraft.item.ItemFood;
 import net.minecraft.item.ItemSkull;
 import net.minecraft.item.ItemSoup;
@@ -19,16 +18,16 @@ import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 import net.minecraft.potion.Potion;
 
 public class AutoHeal extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
+    public final SliderValue health = new SliderValue("health", 35, 0, 100, Representation.INT, this);
+    public final SliderValue delay = new SliderValue("delay", 4000, 0, 5000, Representation.INT, this);
+    public final BoolValue regenCheck = new BoolValue("regen-check", false, this);
+    public final BoolValue hurtCheck = new BoolValue("hurt-check", false, this);
+    public final SliderValue hurtTime = new SliderValue("hurt-time", 20, 1, 100, hurtCheck::getValue, Representation.INT, this);
     private final TimerUtil timer = new TimerUtil();
     private boolean shouldHeal = false;
     private int prevSlot = -1;
     private int hurtTick = 0;
-    public final PercentProperty health = new PercentProperty("health", 35);
-    public final IntProperty delay = new IntProperty("delay", 4000, 0, 5000);
-    public final BooleanProperty regenCheck = new BooleanProperty("regen-check", false);
-    public final BooleanProperty hurtCheck = new BooleanProperty("hurt-check", false);
-    public final IntProperty hurtTime = new IntProperty("hurt-time", 20, 1, 100, hurtCheck::getValue);
 
     private int findHealingItem() {
         for (int i = 0; i < 9; i++) {
@@ -85,7 +84,7 @@ public class AutoHeal extends Module {
             if (hurtCheck.getValue()){
                 if (hurtTick > 0) hurtTick--;
                 if (mc.thePlayer.hurtTime > 0) {
-                    hurtTick = hurtTime.getValue();
+                    hurtTick = hurtTime.getValue().intValue();
                 }
             } else {
                 hurtTick = 1;
@@ -97,7 +96,7 @@ public class AutoHeal extends Module {
                     if (this.shouldHeal
                             && percent
                             && !this.hasRegenEffect()
-                            && this.timer.hasTimeElapsed(this.delay.getValue())
+                            && this.timer.hasTimeElapsed(this.delay.getValue().longValue())
                             && hurtTick > 0) {
                         int slot = this.findHealingItem();
                         if (slot != -1) {

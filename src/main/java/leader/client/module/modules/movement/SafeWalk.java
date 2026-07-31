@@ -8,21 +8,21 @@ import leader.client.events.UpdateEvent;
 import leader.client.module.Module;
 import leader.client.module.modules.player.Scaffold;
 import leader.client.util.player.ItemUtil;
-import leader.client.util.MoveUtil;
+import leader.client.util.player.MoveUtil;
 import leader.client.util.player.PlayerUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 
 public class SafeWalk extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final FloatProperty motion = new FloatProperty("motion", 1.0F, 0.5F, 1.0F);
-    public final FloatProperty speedMotion = new FloatProperty("speed-motion", 1.0F, 0.5F, 1.5F);
-    public final BooleanProperty air = new BooleanProperty("air", false);
-    public final BooleanProperty directionCheck = new BooleanProperty("direction-check", true);
-    public final BooleanProperty pitCheck = new BooleanProperty("pitch-check", true);
-    public final BooleanProperty requirePress = new BooleanProperty("require-press", false);
-    public final BooleanProperty blocksOnly = new BooleanProperty("blocks-only", true);
+    
+    public final SliderValue motion = new SliderValue("motion", 1.0, 0.5, 1.0, Representation.FLOAT, this);
+    public final SliderValue speedMotion = new SliderValue("speed-motion", 1.0, 0.5, 1.5, Representation.FLOAT, this);
+    public final BoolValue air = new BoolValue("air", false, this);
+    public final BoolValue directionCheck = new BoolValue("direction-check", true, this);
+    public final BoolValue pitCheck = new BoolValue("pitch-check", true, this);
+    public final BoolValue requirePress = new BoolValue("require-press", false, this);
+    public final BoolValue blocksOnly = new BoolValue("blocks-only", true, this);
 
     private boolean canSafeWalk() {
         Scaffold scaffold = (Scaffold) Leader.moduleManager.modules.get(Scaffold.class);

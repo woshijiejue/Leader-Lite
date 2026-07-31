@@ -4,18 +4,18 @@ import leader.client.event.EventTarget;
 import leader.client.events.Render2DEvent;
 import leader.client.module.Module;
 import leader.client.util.timer.TimerUtil;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.TextProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.StringValue;
 import net.minecraft.client.Minecraft;
 
 public class Spammer extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private final TimerUtil timer = new TimerUtil();
     private int charOffset = 19968;
-    public final TextProperty text = new TextProperty("text", "meow");
-    public final FloatProperty delay = new FloatProperty("delay", 3.5F, 0.0F, 3600.0F);
-    public final IntProperty random = new IntProperty("random", 0, 0, 10);
+    public final StringValue text = new StringValue("text", "meow", this);
+    public final SliderValue delay = new SliderValue("delay", 3.5, 0.0, 3600.0, Representation.FLOAT, this);
+    public final SliderValue random = new SliderValue("random", 0, 0, 10, Representation.INT, this);
 
     public Spammer() {
         super("Spammer", false);

@@ -1,17 +1,18 @@
 package leader.client.module.modules.player;
 
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
 
 public class BlinkSettings extends Module {
 
-    public BlinkSettings(){super("BlinkSettings",true,false);}
+    public final BoolValue slowRelease = new BoolValue("SlowRelease", false, this);
+    public final ListValue slowReleaseTime = new ListValue("SlowReleaseTime", new String[]{"Start Blink", "Stop Blink"}, "Start Blink", slowRelease::getValue, this);
+    public final SliderValue slowReleaseDelay = new SliderValue("DelayBetweenSlowRelease", 0, 0, 10, slowRelease::getValue, Representation.INT, this);
+    public final SliderValue maxPacketsPerTick = new SliderValue("MaxPacketPerTick", 5, 1, 30, slowRelease::getValue, Representation.INT, this);
+    public final SliderValue maxC03PacketsPerTick = new SliderValue("MaxC03PacketPerTick", 1, 1, 5, slowRelease::getValue, Representation.INT, this);
 
-    public final BooleanProperty slowRelease = new BooleanProperty("SlowRelease",false);
-    public final ModeProperty slowReleaseTime = new ModeProperty("SlowReleaseTime",0,new String[]{"Start Blink","Stop Blink"},slowRelease::getValue);
-    public final IntProperty slowReleaseDelay = new IntProperty("DelayBetweenSlowRelease",0,0,10,slowRelease::getValue);
-    public final IntProperty maxPacketsPerTick = new IntProperty("MaxPacketPerTick",5,1,30,slowRelease::getValue);
-    public final IntProperty maxC03PacketsPerTick = new IntProperty("MaxC03PacketPerTick",1,1,5,slowRelease::getValue);
+    public BlinkSettings(){super("BlinkSettings",true,false);}
 }

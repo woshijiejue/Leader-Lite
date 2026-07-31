@@ -9,7 +9,7 @@ import lombok.Setter;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.Session;
 
-import leader.mixin.IMinecraftMixin;
+import leader.mixin.accessor.IMinecraftMixin;
 
 public final class AltLoginThread extends Thread implements InstanceAccess {
     private final String password;

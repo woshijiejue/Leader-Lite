@@ -5,11 +5,12 @@ import com.google.gson.JsonObject;
 import leader.client.Leader;
 import leader.client.config.Config;
 import leader.client.module.Module;
-import leader.client.property.Property;
-import leader.mixin.IAccessorMinecraft;
+import leader.client.module.values.Value;
+import leader.client.module.values.ValueSerializer;
+import leader.mixin.accessor.IAccessorMinecraft;
 import net.minecraft.client.Minecraft;
 
-import java.util.ArrayList;
+import java.util.List;
 
 public class ModuleConfig extends Config {
 
@@ -37,17 +38,15 @@ public class ModuleConfig extends Config {
                         module.setHidden(moduleObject.get("hidden").getAsBoolean());
                     }
 
-                    // Load generic Properties
-                    ArrayList<Property<?>> list = Leader.propertyManager.properties.get(module.getClass());
-                    if (list != null) {
-                        for (Property<?> property : list) {
-                            if (moduleObject.has(property.getName())) {
-                                try {
-                                    property.read(moduleObject);
-                                } catch (Exception e) {
-                                    ((IAccessorMinecraft) Minecraft.getMinecraft()).getLogger().warn(
-                                            String.format("Failed to load property %s for module %s", property.getName(), module.getName()));
-                                }
+                    // Load Sayori-style Values
+                    List<Value<?>> valueList = module.getValues();
+                    if (valueList != null) {
+                        for (Value<?> value : valueList) {
+                            try {
+                                ValueSerializer.read(moduleObject, value);
+                            } catch (Exception e) {
+                                ((IAccessorMinecraft) Minecraft.getMinecraft()).getLogger().warn(
+                                        String.format("Failed to load value %s for module %s", value.getInternalName(), module.getName()));
                             }
                         }
                     }
@@ -68,19 +67,19 @@ public class ModuleConfig extends Config {
             moduleObject.addProperty("key", module.getKey());
             moduleObject.addProperty("hidden", module.isHidden());
 
-            // Save generic Properties
-            ArrayList<Property<?>> list = Leader.propertyManager.properties.get(module.getClass());
-            if (list != null) {
-                for (Property<?> property : list) {
+            // Save Sayori-style Values
+            List<Value<?>> valueList = module.getValues();
+            if (valueList != null) {
+                for (Value<?> value : valueList) {
                     try {
-                        property.write(moduleObject);
+                        ValueSerializer.write(moduleObject, value);
                     } catch (Exception e) {
                         ((IAccessorMinecraft) Minecraft.getMinecraft()).getLogger().warn(
-                                String.format("Failed to save property %s for module %s", property.getName(), module.getName()));
+                                String.format("Failed to save value %s for module %s", value.getInternalName(), module.getName()));
                     }
                 }
             }
-            
+
             object.add(module.getName(), moduleObject);
         }
         

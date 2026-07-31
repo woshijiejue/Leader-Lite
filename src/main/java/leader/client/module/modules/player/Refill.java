@@ -5,8 +5,9 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
 import leader.client.util.timer.TimerUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.inventory.GuiInventory;
@@ -16,9 +17,9 @@ import net.minecraft.item.ItemPotion;
 import net.minecraft.item.ItemStack;
 
 public class Refill extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final IntProperty delay = new IntProperty("delay", 1, 0, 20);
-    public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"SOUP","POT"});
+    
+    public final SliderValue delay = new SliderValue("delay", 1, 0, 20, Representation.INT, this);
+    public final ListValue mode = new ListValue("mode", new String[]{"SOUP", "POT"}, "POT", this);
     private final TimerUtil time = new TimerUtil();
 
     public Refill() {
@@ -28,9 +29,9 @@ public class Refill extends Module {
     @EventTarget
     public void onUpdate(TickEvent event) {
         if (this.isEnabled() && mc.thePlayer != null && event.getType() == EventType.PRE) {
-            if (mode.getValue() == 0) {
+            if (mode.is("SOUP")) {
                 this.refill(Items.mushroom_stew);
-            } else if (mode.getValue() == 1) {
+            } else if (mode.is("POT")) {
                 this.refill(ItemPotion.getItemById(373));
             }
         }
@@ -38,7 +39,7 @@ public class Refill extends Module {
 
     private void refill(Item targetItem) {
         if (mc.currentScreen instanceof GuiInventory) {
-            if (!isHotbarFull() && this.time.hasTimeElapsed(delay.getValue() * 50)) {
+            if (!isHotbarFull() && this.time.hasTimeElapsed(delay.getValue().longValue() * 50)) {
                 for (int i = 9; i < 36; ++i) {
                     ItemStack itemstack = mc.thePlayer.inventoryContainer.getSlot(i).getStack();
                     if (itemstack != null && itemstack.getItem() == targetItem) {
@@ -63,6 +64,6 @@ public class Refill extends Module {
 
     @Override
     public String[] getSuffix() {
-        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
+        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getValue())};
     }
 }

@@ -4,9 +4,14 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import leader.client.command.CommandManager;
 import leader.client.command.commands.*;
+import leader.client.component.impl.*;
+import leader.client.component.impl.floater.FloatComponent;
+import leader.client.component.impl.network.blink.BlinkComponent;
+import leader.client.component.impl.network.delay.DelayComponent;
+import leader.client.component.impl.network.lag.LagComponent;
+import leader.client.component.impl.rotaion.RotationManager;
 import leader.client.config.ConfigManager;
 import leader.client.event.EventManager;
-import leader.client.management.*;
 import leader.client.module.Module;
 import leader.client.module.ModuleManager;
 import leader.client.module.modules.combat.*;
@@ -15,8 +20,6 @@ import leader.client.module.modules.misc.*;
 import leader.client.module.modules.movement.*;
 import leader.client.module.modules.player.*;
 import leader.client.module.modules.render.*;
-import leader.client.property.Property;
-import leader.client.property.PropertyManager;
 import leader.client.util.InstanceAccess;
 import lombok.Getter;
 import net.minecraft.client.Minecraft;
@@ -27,11 +30,9 @@ import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 
 @Getter
 public class Leader implements InstanceAccess {
@@ -46,14 +47,13 @@ public class Leader implements InstanceAccess {
     private Path dataFolder;
 
     public static RotationManager rotationManager;
-    public static FloatManager floatManager;
-    public static BlinkManager blinkManager;
-    public static DelayManager delayManager;
-    public static LagManager lagManager;
-    public static PlayerStateManager playerStateManager;
-    public static FriendManager friendManager;
-    public static TargetManager targetManager;
-    public static PropertyManager propertyManager;
+    public static FloatComponent floatComponent;
+    public static BlinkComponent blinkComponent;
+    public static DelayComponent delayComponent;
+    public static LagComponent lagComponent;
+    public static PlayerStateComponent playerStateComponent;
+    public static FriendComponent friendComponent;
+    public static TargetComponent targetComponent;
     public static ModuleManager moduleManager;
     public static CommandManager commandManager;
     public static ConfigManager configManager;
@@ -66,22 +66,21 @@ public class Leader implements InstanceAccess {
         setupMainDirectory();
 
         rotationManager = new RotationManager();
-        floatManager = new FloatManager();
-        blinkManager = new BlinkManager();
-        delayManager = new DelayManager();
-        lagManager = new LagManager();
-        playerStateManager = new PlayerStateManager();
-        friendManager = new FriendManager();
-        targetManager = new TargetManager();
-        propertyManager = new PropertyManager();
+        floatComponent = new FloatComponent();
+        blinkComponent = new BlinkComponent();
+        delayComponent = new DelayComponent();
+        lagComponent = new LagComponent();
+        playerStateComponent = new PlayerStateComponent();
+        friendComponent = new FriendComponent();
+        targetComponent = new TargetComponent();
         moduleManager = new ModuleManager();
         commandManager = new CommandManager();
 
         EventManager.register(rotationManager);
-        EventManager.register(floatManager);
-        EventManager.register(blinkManager);
-        EventManager.register(delayManager);
-        EventManager.register(lagManager);
+        EventManager.register(floatComponent);
+        EventManager.register(blinkComponent);
+        EventManager.register(delayComponent);
+        EventManager.register(lagComponent);
         EventManager.register(moduleManager);
         EventManager.register(commandManager);
 
@@ -184,26 +183,11 @@ public class Leader implements InstanceAccess {
         commandManager.commands.add(new VclipCommand());
 
         for (Module module : moduleManager.modules.values()) {
-            ArrayList<Property<?>> properties = new ArrayList<>();
-            for (final Field field : module.getClass().getDeclaredFields()) {
-                field.setAccessible(true);
-                final Object obj;
-                try {
-                    obj = field.get(module);
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
-                if (obj instanceof Property<?>) {
-                    ((Property<?>) obj).setOwner(module);
-                    properties.add((Property<?>) obj);
-                }
-            }
-            propertyManager.properties.put(module.getClass(), properties);
             EventManager.register(module);
         }
 
         configManager = new ConfigManager();
-        dataFolder = Paths.get(mc.mcDataDir.getAbsolutePath()).resolve(clientName);
+        dataFolder = Paths.get(mc.mcDataDir.getAbsolutePath()).resolve(folderName);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> configManager.saveConfigs()));
 
@@ -236,6 +220,6 @@ public class Leader implements InstanceAccess {
             LOGGER.info("Main directory already exists at {}", mainDir.getAbsolutePath());
         }
 
-        this.dataFolder = Paths.get(Minecraft.getMinecraft().mcDataDir.getAbsolutePath()).resolve(clientName);
+        this.dataFolder = Paths.get(Minecraft.getMinecraft().mcDataDir.getAbsolutePath()).resolve(folderName);
     }
 }

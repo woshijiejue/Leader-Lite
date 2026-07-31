@@ -3,7 +3,7 @@ package leader.client.ui.alt.gui;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import leader.client.config.impl.AccountConfig;
-import leader.mixin.IMinecraftMixin;
+import leader.mixin.accessor.IMinecraftMixin;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;

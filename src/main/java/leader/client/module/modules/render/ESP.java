@@ -1,23 +1,22 @@
 package leader.client.module.modules.render;
 
 import leader.client.Leader;
-import leader.client.enums.ChatColors;
+import leader.client.util.misc.ChatColors;
 import leader.client.event.EventTarget;
 import leader.client.event.types.Priority;
 import leader.client.events.Render2DEvent;
 import leader.client.events.Render3DEvent;
 import leader.client.events.ResizeEvent;
-import leader.mixin.IAccessorEntityRenderer;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorEntityRenderer;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
 import leader.client.util.render.ColorUtil;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.TeamUtil;
 import leader.client.util.render.shader.GlowShader;
 import leader.client.util.render.shader.OutlineShader;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ModeProperty;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.shader.Framebuffer;
@@ -29,20 +28,20 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class ESP extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private final OutlineShader outlineRenderer = new OutlineShader();
     private final GlowShader glowShader = new GlowShader();
     private Framebuffer framebuffer = null;
     private boolean outline = true;
     private boolean glow = true;
-    public final ModeProperty mode = new ModeProperty("mode", 2, new String[]{"NONE", "2D", "3D", "OUTLINE", "FAKECORNER", "FAKE2D"});
-    public final ModeProperty color = new ModeProperty("color", 0, new String[]{"DEFAULT", "TEAMS", "HUD"});
-    public final ModeProperty healthBar = new ModeProperty("health-bar", 0, new String[]{"NONE", "2D", "RAVEN"});
-    public final BooleanProperty players = new BooleanProperty("players", true);
-    public final BooleanProperty friends = new BooleanProperty("friends", true);
-    public final BooleanProperty enemies = new BooleanProperty("enemies", true);
-    public final BooleanProperty self = new BooleanProperty("self", false);
-    public final BooleanProperty bots = new BooleanProperty("bots", false);
+    public final ListValue mode = new ListValue("mode", new String[]{"NONE", "2D", "3D", "OUTLINE", "FAKECORNER", "FAKE2D"}, "3D", this);
+    public final ListValue color = new ListValue("color", new String[]{"DEFAULT", "TEAMS", "HUD"}, "DEFAULT", this);
+    public final ListValue healthBar = new ListValue("health-bar", new String[]{"NONE", "2D", "RAVEN"}, "NONE", this);
+    public final BoolValue players = new BoolValue("players", true, this);
+    public final BoolValue friends = new BoolValue("friends", true, this);
+    public final BoolValue enemies = new BoolValue("enemies", true, this);
+    public final BoolValue self = new BoolValue("self", false, this);
+    public final BoolValue bots = new BoolValue("bots", false, this);
 
     private boolean shouldRenderPlayer(EntityPlayer entityPlayer) {
         if (entityPlayer.deathTime > 0) {
@@ -66,21 +65,20 @@ public class ESP extends Module {
 
     private Color getEntityColor(EntityPlayer entityPlayer) {
         if (TeamUtil.isFriend(entityPlayer)) {
-            return Leader.friendManager.getColor();
+            return Leader.friendComponent.getColor();
         } else if (TeamUtil.isTarget(entityPlayer)) {
-            return Leader.targetManager.getColor();
+            return Leader.targetComponent.getColor();
         } else {
-            switch (this.color.getValue()) {
-                case 0:
-                    return TeamUtil.getTeamColor(entityPlayer, 1.0F);
-                case 1:
-                    int teamColor = TeamUtil.isSameTeam(entityPlayer) ? ChatColors.BLUE.toAwtColor() : ChatColors.RED.toAwtColor();
-                    return new Color(teamColor);
-                case 2:
-                    int hudColor = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB();
-                    return new Color(hudColor);
-                default:
-                    return new Color(-1);
+            if (this.color.is("DEFAULT")) {
+                return TeamUtil.getTeamColor(entityPlayer, 1.0F);
+            } else if (this.color.is("TEAMS")) {
+                int teamColor = TeamUtil.isSameTeam(entityPlayer) ? ChatColors.BLUE.toAwtColor() : ChatColors.RED.toAwtColor();
+                return new Color(teamColor);
+            } else if (this.color.is("HUD")) {
+                int hudColor = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB();
+                return new Color(hudColor);
+            } else {
+                return new Color(-1);
             }
         }
     }
@@ -107,10 +105,10 @@ public class ESP extends Module {
 
     @EventTarget(Priority.HIGH)
     public void onRender(Render2DEvent event) {
-        if (this.isEnabled() && (this.mode.getValue() == 1 || this.mode.getValue() == 3 || this.healthBar.getValue() == 1)) {
+        if (this.isEnabled() && (this.mode.is("2D") || this.mode.is("OUTLINE") || this.healthBar.is("2D"))) {
             List<EntityPlayer> renderedEntities = TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRenderPlayer((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList());
             if (!renderedEntities.isEmpty()) {
-                if (this.mode.getValue() == 3) {
+                if (this.mode.is("OUTLINE")) {
                     GlStateManager.pushMatrix();
                     GlStateManager.pushAttrib();
                     if (this.framebuffer == null) {
@@ -146,7 +144,7 @@ public class ESP extends Module {
                     GlStateManager.popAttrib();
                     GlStateManager.popMatrix();
                 }
-                if (this.mode.getValue() == 1 || this.healthBar.getValue() == 1) {
+                if (this.mode.is("2D") || this.healthBar.is("2D")) {
                     RenderUtil.enableRenderState();
                     double scaleFactor = new ScaledResolution(mc).getScaleFactor();
                     double scale = scaleFactor / Math.pow(scaleFactor, 2.0);
@@ -161,12 +159,12 @@ public class ESP extends Module {
                             float y = (float) screenPosition.y;
                             float z = (float) screenPosition.z;
                             float w = (float) screenPosition.w;
-                            if (this.mode.getValue() == 1) {
+                            if (this.mode.is("2D")) {
                                 int color = this.getEntityColor(player).getRGB();
                                 RenderUtil.drawOutlineRect(x, y, z, w, 3.0F, 0, (color & 16579836) >> 2 | color & 0xFF000000);
                                 RenderUtil.drawOutlineRect(x, y, z, w, 1.5F, 0, color);
                             }
-                            if (this.healthBar.getValue() == 1) {
+                            if (this.healthBar.is("2D")) {
                                 float heal = player.getHealth() + player.getAbsorptionAmount();
                                 float percent = Math.min(Math.max(heal / player.getMaxHealth(), 0.0F), 1.0F);
                                 float box = (z - x) * 0.08F;
@@ -185,24 +183,24 @@ public class ESP extends Module {
 
     @EventTarget
     public void onRender(Render3DEvent event) {
-        if (this.isEnabled() && (this.mode.getValue() == 2 || this.mode.getValue() == 4 || this.mode.getValue() == 5 || this.healthBar.getValue() == 2)) {
+        if (this.isEnabled() && (this.mode.is("3D") || this.mode.is("FAKECORNER") || this.mode.is("FAKE2D") || this.healthBar.is("RAVEN"))) {
             RenderUtil.enableRenderState();
             for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRenderPlayer((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
                 if (player.ignoreFrustumCheck || RenderUtil.isInViewFrustum(player.getEntityBoundingBox(), 0.1F)) {
-                    if (this.mode.getValue() == 2) {
+                    if (this.mode.is("3D")) {
                         Color color = this.getEntityColor(player);
                         RenderUtil.drawEntityBoundingBox(player, color.getRed(), color.getGreen(), color.getBlue(), color.getAlpha(), 1.5F, 0.1F);
                         GlStateManager.resetColor();
                     }
-                    if (this.mode.getValue() == 4) {
+                    if (this.mode.is("FAKECORNER")) {
                         Color color = this.getEntityColor(player);
                         RenderUtil.drawCornerESP(player, color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F);
                     }
-                    if (this.mode.getValue() == 5) {
+                    if (this.mode.is("FAKE2D")) {
                         Color color = this.getEntityColor(player);
                         RenderUtil.drawFake2DESP(player, color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F);
                     }
-                    if (this.healthBar.getValue() == 2) {
+                    if (this.healthBar.is("RAVEN")) {
                         double x = RenderUtil.lerpDouble(player.posX, player.lastTickPosX, event.getPartialTicks())
                                 - ((IAccessorRenderManager) mc.getRenderManager()).getRenderPosX();
                         double y = RenderUtil.lerpDouble(player.posY, player.lastTickPosY, event.getPartialTicks())

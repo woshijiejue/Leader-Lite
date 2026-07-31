@@ -1,15 +1,17 @@
 package leader.client.module.modules.render;
 
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.CustomFontRenderer;
-import net.minecraft.client.Minecraft;
+
+import java.util.List;
 
 public class FontManager extends Module {
 
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private static final String[] FONT_PATHS = {
             "/leader/font/xylitol_font.ttf",
             "/leader/font/xylitol_bold.ttf",
@@ -26,16 +28,16 @@ public class FontManager extends Module {
             "/leader/font/SF-Pro-Rounded-Regular.otf"
     };
 
-    public static BooleanProperty customFont = new BooleanProperty("CustomFont", false);
-    public static ModeProperty font = new ModeProperty("Font", 0, new String[]{
+    public static BoolValue customFont = new BoolValue("CustomFont", false, null);
+    public static ListValue font = new ListValue("Font", new String[]{
             "Xylitol", "Xylitol Bold", "HarmonyOS", "HarmonyOS Med",
             "Inter", "NotoSans", "NotoSansSC", "Nursultan",
             "ProductSans", "SF Display", "SF Rounded B", "SF Rounded M", "SF Rounded R"
-    });
-    public static FloatProperty fontSize = new FloatProperty("FontSize", 18.0F, 10.0F, 30.0F);
+    }, "Xylitol", null);
+    public static SliderValue fontSize = new SliderValue("FontSize", 18.0, 10.0, 30.0, Representation.FLOAT, null);
 
     public static CustomFontRenderer customFontRenderer;
-    private static int lastFontMode = -1;
+    private static String lastFontMode = null;
     private static float lastFontSize = -1.0F;
 
     public FontManager() {
@@ -52,15 +54,23 @@ public class FontManager extends Module {
     }
 
     private static void checkAndRebuild() {
-        int currentMode = font.getValue();
+        String currentMode = font.getValue();
         float currentSize = fontSize.getValue();
-        if (customFontRenderer == null || currentMode != lastFontMode || currentSize != lastFontSize) {
+        if (customFontRenderer == null || !currentMode.equals(lastFontMode) || currentSize != lastFontSize) {
             if (customFontRenderer != null) {
                 customFontRenderer.dispose();
             }
             lastFontMode = currentMode;
             lastFontSize = currentSize;
-            customFontRenderer = new CustomFontRenderer(FONT_PATHS[currentMode], currentSize, true);
+            int fontIndex = 0;
+            List<String> options = font.getModes();
+            for (int i = 0; i < options.size(); i++) {
+                if (options.get(i).equals(currentMode)) {
+                    fontIndex = i;
+                    break;
+                }
+            }
+            customFontRenderer = new CustomFontRenderer(FONT_PATHS[fontIndex], currentSize, true);
         }
     }
 

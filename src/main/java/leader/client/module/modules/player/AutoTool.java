@@ -7,21 +7,20 @@ import leader.client.events.TickEvent;
 import leader.client.module.Module;
 import leader.client.module.modules.combat.KillAura;
 import leader.client.util.player.ItemUtil;
-import leader.client.util.KeyBindUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.IntProperty;
+import leader.client.util.misc.KeyBindUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.player.TeamUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 
 public class AutoTool extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    public final SliderValue switchDelay = new SliderValue("delay", 0, 0, 5, Representation.INT, this);
+    public final BoolValue switchBack = new BoolValue("switch-back", true, this);
+    public final BoolValue sneakOnly = new BoolValue("sneak-only", true, this);
     private int currentToolSlot = -1;
     private int previousSlot = -1;
     private int tickDelayCounter = 0;
-    public final IntProperty switchDelay = new IntProperty("delay", 0, 0, 5);
-    public final BooleanProperty switchBack = new BooleanProperty("switch-back", true);
-    public final BooleanProperty sneakOnly = new BooleanProperty("sneak-only", true);
 
     public AutoTool() {
         super("AutoTool", false);

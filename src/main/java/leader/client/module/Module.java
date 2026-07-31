@@ -3,12 +3,17 @@ package leader.client.module;
 import leader.client.Leader;
 import leader.client.module.modules.render.HUD;
 import leader.client.module.modules.render.Notification;
+import leader.client.module.values.Value;
+import leader.client.module.values.ValueHolder;
 import leader.client.util.InstanceAccess;
-import leader.client.util.KeyBindUtil;
+import leader.client.util.misc.KeyBindUtil;
 import lombok.Getter;
 import lombok.Setter;
 
-public abstract class Module implements InstanceAccess {
+import java.util.ArrayList;
+import java.util.List;
+
+public abstract class Module implements InstanceAccess, ValueHolder {
     @Getter
     protected final String name;
     protected final boolean defaultEnabled;
@@ -22,6 +27,9 @@ public abstract class Module implements InstanceAccess {
     @Setter
     @Getter
     protected boolean hidden;
+
+    /** Sayori-style setting values. Values self-register here on construction. */
+    protected final List<Value<?>> values = new ArrayList<>();
 
     public Module(String name, boolean enabled) {
         this(name, enabled, false);
@@ -79,5 +87,10 @@ public abstract class Module implements InstanceAccess {
     }
 
     public void verifyValue(String string) {
+    }
+
+    @Override
+    public List<Value<?>> getValues() {
+        return this.values;
     }
 }

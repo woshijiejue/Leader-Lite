@@ -4,10 +4,10 @@ import leader.client.Leader;
 import leader.client.event.EventTarget;
 import leader.client.events.Render2DEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.render.shader.ShaderElement;
 import net.minecraft.client.Minecraft;
@@ -30,19 +30,19 @@ import java.util.stream.Collectors;
 
 public class Potion extends Module {
 
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
     private final Map<Integer, Integer> potionMaxDurations = new HashMap<>();
     private List<PotionEffect> currentEffects = new ArrayList<>();
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"RIGHT", "LEFT"});
-    public final ModeProperty displayMode = new ModeProperty("display-mode", 0, new String[]{"Bar", "Circle", "Modern"});
-    public final IntProperty offsetX = new IntProperty("offset-x", 2, 0, 255);
-    public final IntProperty offsetY = new IntProperty("offset-y", 2, 0, 255);
-    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
-    public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
-    public final BooleanProperty blur = new BooleanProperty("blur", false);
-    public final IntProperty blurIterations = new IntProperty("blur-iterations", 2, 1, 8, blur::getValue);
-    public final IntProperty blurOffset = new IntProperty("blur-offset", 3, 1, 10, blur::getValue);
+    public final ListValue mode = new ListValue("mode", new String[]{"RIGHT", "LEFT"}, "RIGHT", this);
+    public final ListValue displayMode = new ListValue("display-mode", new String[]{"Bar", "Circle", "Modern"}, "Bar", this);
+    public final SliderValue offsetX = new SliderValue("offset-x", 2, 0, 255, Representation.INT, this);
+    public final SliderValue offsetY = new SliderValue("offset-y", 2, 0, 255, Representation.INT, this);
+    public final SliderValue scale = new SliderValue("scale", 1.0, 0.5, 1.5, Representation.FLOAT, this);
+    public final SliderValue fontScale = new SliderValue("font-scale", 1.0, 0.7, 1.5, Representation.FLOAT, this);
+    public final BoolValue blur = new BoolValue("blur", false, this);
+    public final SliderValue blurIterations = new SliderValue("blur-iterations", 2, 1, 8, () -> this.blur.getValue(), Representation.INT, this);
+    public final SliderValue blurOffset = new SliderValue("blur-offset", 3, 1, 10, () -> this.blur.getValue(), Representation.INT, this);
     private Framebuffer stencilBlur;
 
     public Potion() {
@@ -118,11 +118,11 @@ public class Potion extends Module {
         int index = 0;
         boolean doBlur = this.blur.getValue();
         float invScale = 1.0F / this.scale.getValue();
-        boolean isRight = this.mode.getValue() == 0;
+        boolean isRight = this.mode.is("RIGHT");
 
-        if (this.displayMode.getValue() == 2) {
+        if (this.displayMode.is("Modern")) {
             renderModern(index, doBlur, invScale, isRight);
-        } else if (this.displayMode.getValue() == 1) {
+        } else if (this.displayMode.is("Circle")) {
             renderCircle(index, doBlur, invScale, isRight);
         } else {
             renderBar(index, doBlur, invScale, isRight);
@@ -461,6 +461,6 @@ public class Potion extends Module {
         }
         ShaderElement.getTasks().clear();
         stencilBlur.unbindFramebuffer();
-        leader.client.util.render.shader.KawaseBlur.renderBlur(stencilBlur.framebufferTexture, blurIterations.getValue(), blurOffset.getValue());
+        leader.client.util.render.shader.KawaseBlur.renderBlur(stencilBlur.framebufferTexture, blurIterations.getValue().intValue(), blurOffset.getValue().intValue());
     }
 }

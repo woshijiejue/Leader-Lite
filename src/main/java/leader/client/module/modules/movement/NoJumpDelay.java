@@ -5,15 +5,16 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
 import leader.client.events.TickEvent;
-import leader.mixin.IAccessorEntityLivingBase;
+import leader.mixin.accessor.IAccessorEntityLivingBase;
 import leader.client.module.Module;
 import leader.client.module.modules.player.Scaffold;
-import leader.client.property.properties.IntProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.SliderValue;
 import net.minecraft.client.Minecraft;
 
 public class NoJumpDelay extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final IntProperty delay = new IntProperty("delay", 3, 0, 8);
+    
+    public final SliderValue delay = new SliderValue("delay", 3, 0, 8, Representation.INT, this);
 
     public NoJumpDelay() {
         super("NoJumpDelay", false);
@@ -23,7 +24,7 @@ public class NoJumpDelay extends Module {
     public void onTick(TickEvent event) {
         if (this.isEnabled() && event.getType() == EventType.PRE && !Leader.moduleManager.getModule(Scaffold.class).isEnabled()) {
             ((IAccessorEntityLivingBase) mc.thePlayer)
-                    .setJumpTicks(Math.min(((IAccessorEntityLivingBase) mc.thePlayer).getJumpTicks(), this.delay.getValue() + 1));
+                    .setJumpTicks(Math.min(((IAccessorEntityLivingBase) mc.thePlayer).getJumpTicks(), this.delay.getValue().intValue() + 1));
         }
     }
 

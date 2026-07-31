@@ -1,7 +1,9 @@
 package leader.client.util.timer;
 
+import lombok.Getter;
 import net.minecraft.network.Packet;
 
+@Getter
 public class TimedPacket {
 
     private final Packet<?> packet;
@@ -21,20 +23,7 @@ public class TimedPacket {
     }
 
 
-    public Packet<?> getPacket() {
-        return packet;
-    }
-
     public TimerUtil getCold() {
         return getTime();
     }
-
-    public TimerUtil getTime() {
-        return time;
-    }
-
-    public long getMillis() {
-        return millis;
-    }
-
 }

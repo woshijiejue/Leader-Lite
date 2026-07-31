@@ -2,10 +2,10 @@ package leader.client.util.player;
 
 import leader.client.Leader;
 import leader.client.module.modules.player.KeepSprint;
-import leader.client.util.KeyBindUtil;
+import leader.client.util.InstanceAccess;
+import leader.client.util.misc.KeyBindUtil;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockAir;
-import net.minecraft.client.Minecraft;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -23,8 +23,7 @@ import net.minecraft.util.DamageSource;
 import net.minecraft.util.MathHelper;
 import net.minecraftforge.common.ForgeHooks;
 
-public class PlayerUtil {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+public class PlayerUtil implements InstanceAccess {
 
     public static boolean isJumping() {
         return mc.currentScreen == null && KeyBindUtil.isKeyDown(mc.gameSettings.keyBindJump.getKeyCode());

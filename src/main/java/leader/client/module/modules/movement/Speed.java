@@ -5,19 +5,18 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.Priority;
 import leader.client.events.LivingUpdateEvent;
 import leader.client.events.StrafeEvent;
-import leader.mixin.IAccessorEntity;
+import leader.mixin.accessor.IAccessorEntity;
 import leader.client.module.Module;
 import leader.client.module.modules.player.Scaffold;
-import leader.client.util.MoveUtil;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.PercentProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.util.player.MoveUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.SliderValue;
 
 public class Speed extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final FloatProperty multiplier = new FloatProperty("multiplier", 1.0F, 0.0F, 10.0F);
-    public final FloatProperty friction = new FloatProperty("friction", 1.0F, 0.0F, 10.0F);
-    public final PercentProperty strafe = new PercentProperty("strafe", 0);
+    
+    public final SliderValue multiplier = new SliderValue("multiplier", 1.0, 0.0, 10.0, Representation.FLOAT, this);
+    public final SliderValue friction = new SliderValue("friction", 1.0, 0.0, 10.0, Representation.FLOAT, this);
+    public final SliderValue strafe = new SliderValue("strafe", 0, 0, 100, Representation.INT, this);
 
     private boolean canBoost() {
         Scaffold scaffold = (Scaffold) Leader.moduleManager.modules.get(Scaffold.class);

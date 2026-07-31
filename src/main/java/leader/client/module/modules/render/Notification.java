@@ -4,10 +4,10 @@ import leader.client.Leader;
 import leader.client.event.EventTarget;
 import leader.client.events.Render2DEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.render.shader.ShaderElement;
 import net.minecraft.client.Minecraft;
@@ -22,20 +22,20 @@ import java.util.List;
 
 public class Notification extends Module {
 
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
     private static final List<NotificationEntry> entries = new ArrayList<>();
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"RIGHT", "LEFT"});
-    public final ModeProperty style = new ModeProperty("style", 1, new String[]{"CLASSIC", "MODERN"});
-    public final IntProperty duration = new IntProperty("duration", 1500, 500, 5000);
-    public final IntProperty maxAlerts = new IntProperty("max-alerts", 5, 1, 10);
-    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
-    public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
-    public final IntProperty offsetX = new IntProperty("offset-x", 2, 0, 255);
-    public final IntProperty offsetY = new IntProperty("offset-y", 20, 0, 255);
-    public final BooleanProperty blur = new BooleanProperty("blur", false);
-    public final IntProperty blurIterations = new IntProperty("blur-iterations", 2, 1, 8, blur::getValue);
-    public final IntProperty blurOffset = new IntProperty("blur-offset", 3, 1, 10, blur::getValue);
+    public final ListValue mode = new ListValue("mode", new String[]{"RIGHT", "LEFT"}, "RIGHT", this);
+    public final ListValue style = new ListValue("style", new String[]{"CLASSIC", "MODERN"}, "MODERN", this);
+    public final SliderValue duration = new SliderValue("duration", 1500, 500, 5000, Representation.INT, this);
+    public final SliderValue maxAlerts = new SliderValue("max-alerts", 5, 1, 10, Representation.INT, this);
+    public final SliderValue scale = new SliderValue("scale", 1.0, 0.5, 1.5, Representation.FLOAT, this);
+    public final SliderValue fontScale = new SliderValue("font-scale", 1.0, 0.7, 1.5, Representation.FLOAT, this);
+    public final SliderValue offsetX = new SliderValue("offset-x", 2, 0, 255, Representation.INT, this);
+    public final SliderValue offsetY = new SliderValue("offset-y", 20, 0, 255, Representation.INT, this);
+    public final BoolValue blur = new BoolValue("blur", false, this);
+    public final SliderValue blurIterations = new SliderValue("blur-iterations", 2, 1, 8, () -> this.blur.getValue(), Representation.INT, this);
+    public final SliderValue blurOffset = new SliderValue("blur-offset", 3, 1, 10, () -> this.blur.getValue(), Representation.INT, this);
     private Framebuffer stencilBlur;
 
     public Notification() {
@@ -46,7 +46,7 @@ public class Notification extends Module {
         entries.add(new NotificationEntry(moduleName, enabled, System.currentTimeMillis()));
         Notification notification = (Notification) Leader.moduleManager.modules.get(Notification.class);
         if (notification != null) {
-            int max = notification.maxAlerts.getValue();
+            int max = notification.maxAlerts.getValue().intValue();
             while (entries.size() > max) {
                 entries.remove(0);
             }
@@ -73,11 +73,11 @@ public class Notification extends Module {
         float screenWidth = sr.getScaledWidth();
         float screenHeight = sr.getScaledHeight();
         long now = System.currentTimeMillis();
-        long dur = this.duration.getValue();
+        long dur = this.duration.getValue().longValue();
         entries.removeIf(entry -> now - entry.startTime > dur);
         if (entries.isEmpty()) return;
 
-        if (this.style.getValue() == 1) {
+        if (this.style.is("MODERN")) {
             renderModern(sr, now, dur);
             return;
         }
@@ -91,10 +91,10 @@ public class Notification extends Module {
 
         float offX = this.offsetX.getValue() + 4.0F;
         float offY = this.offsetY.getValue() + 4.0F;
-        boolean isRight = this.mode.getValue() == 0;
+        boolean isRight = this.mode.is("RIGHT");
         boolean doBlur = this.blur.getValue();
         float invScale = 1.0F / this.scale.getValue();
-        int max = Math.min(entries.size(), this.maxAlerts.getValue());
+        int max = Math.min(entries.size(), this.maxAlerts.getValue().intValue());
         float step = cardHeight + gap;
 
         float baseX = isRight ? screenWidth - cardWidth - offX : offX;
@@ -196,10 +196,10 @@ public class Notification extends Module {
         float textScale = this.fontScale.getValue();
         float offX = this.offsetX.getValue() + 6.0F;
         float offY = this.offsetY.getValue() + 8.0F;
-        boolean isRight = this.mode.getValue() == 0;
+        boolean isRight = this.mode.is("RIGHT");
         boolean doBlur = this.blur.getValue();
         float invScale = 1.0F / this.scale.getValue();
-        int max = Math.min(entries.size(), this.maxAlerts.getValue());
+        int max = Math.min(entries.size(), this.maxAlerts.getValue().intValue());
         float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
         float baseY = sr.getScaledHeight() - offY - cardHeight;
         float step = cardHeight + gap;
@@ -300,7 +300,7 @@ public class Notification extends Module {
         }
         ShaderElement.getTasks().clear();
         stencilBlur.unbindFramebuffer();
-        leader.client.util.render.shader.KawaseBlur.renderBlur(stencilBlur.framebufferTexture, blurIterations.getValue(), blurOffset.getValue());
+        leader.client.util.render.shader.KawaseBlur.renderBlur(stencilBlur.framebufferTexture, blurIterations.getValue().intValue(), blurOffset.getValue().intValue());
     }
 
     private static class NotificationEntry {

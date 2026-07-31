@@ -6,8 +6,8 @@ import leader.client.events.PickEvent;
 import leader.client.events.RaytraceEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.PercentProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.SliderValue;
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -18,8 +18,8 @@ public class Reach extends Module {
     private static final DecimalFormat df = new DecimalFormat("0.0#", new DecimalFormatSymbols(Locale.US));
     private final Random theRandom = new Random();
     private boolean expanding = true;
-    public final FloatProperty range = new FloatProperty("range", 3.1F, 3.0F, 6.0F);
-    public final PercentProperty chance = new PercentProperty("chance", 100);
+    public final SliderValue range = new SliderValue("range", 3.1, 3.0, 6.0, Representation.FLOAT, this);
+    public final SliderValue chance = new SliderValue("chance", 100, 0, 100, Representation.INT, this);
 
     public Reach() {
         super("Reach", false);

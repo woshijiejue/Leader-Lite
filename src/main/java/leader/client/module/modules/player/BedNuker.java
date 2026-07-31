@@ -2,23 +2,23 @@ package leader.client.module.modules.player;
 
 import com.google.common.base.CaseFormat;
 import leader.client.Leader;
-import leader.client.enums.ChatColors;
-import leader.client.enums.DelayModules;
+import leader.client.util.misc.ChatColors;
+import leader.client.component.impl.network.delay.DelayType;
 import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
 import leader.client.events.*;
-import leader.client.management.RotationState;
-import leader.mixin.IAccessorPlayerControllerMP;
+import leader.client.component.impl.rotaion.RotationState;
+import leader.client.util.player.*;
+import leader.client.util.server.PacketUtil;
+import leader.mixin.accessor.IAccessorPlayerControllerMP;
 import leader.client.module.Module;
 import leader.client.module.modules.render.HUD;
 import leader.client.module.modules.render.BedESP;
-import leader.client.property.properties.*;
-import leader.client.util.*;
-import leader.client.util.player.BlockUtil;
-import leader.client.util.player.ItemUtil;
-import leader.client.util.player.PlayerUtil;
-import leader.client.util.player.RotationUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
 import leader.client.util.render.ColorUtil;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.timer.TimerUtil;
@@ -27,7 +27,6 @@ import net.minecraft.block.BlockBed;
 import net.minecraft.block.BlockBed.EnumPartType;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.enchantment.Enchantment;
@@ -59,7 +58,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class BedNuker extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    public final ListValue mode = new ListValue("mode", new String[]{"LEGIT", "SWAP"}, "LEGIT", this);
+    public final SliderValue range = new SliderValue("range", 4.5, 3.0, 6.0, Representation.FLOAT, this);
+    public final SliderValue speed = new SliderValue("speed", 0, 0, 100, Representation.INT, this);
+    public final BoolValue groundSpeed = new BoolValue("ground-spoof", false, this);
+    public final ListValue ignoreVelocity = new ListValue("ignore-velocity", new String[]{"NONE", "CANCEL", "DELAY"}, "NONE", this);
+    public final BoolValue surroundings = new BoolValue("surroundings", true, this);
+    public final BoolValue toolCheck = new BoolValue("tool-check", true, this);
+    public final BoolValue whiteList = new BoolValue("whitelist", true, this);
+    public final BoolValue swing = new BoolValue("swing", true, this);
+    public final ListValue moveFix = new ListValue("move-fix", new String[]{"NONE", "SILENT", "STRICT"}, "SILENT", this);
+    public final ListValue showTarget = new ListValue("show-target", new String[]{"NONE", "DEFAULT", "HUD"}, "DEFAULT", this);
+    public final ListValue showProgress = new ListValue("show-progress", new String[]{"NONE", "DEFAULT", "HUD"}, "DEFAULT", this);
+
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final TimerUtil timer = new TimerUtil();
     private final ArrayList<BlockPos> bedWhitelist = new ArrayList<BlockPos>();
@@ -75,18 +86,6 @@ public class BedNuker extends Module {
     private boolean readyToBreak = false;
     private boolean breaking = false;
     private boolean waitingForStart = false;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"LEGIT", "SWAP"});
-    public final FloatProperty range = new FloatProperty("range", 4.5F, 3.0F, 6.0F);
-    public final PercentProperty speed = new PercentProperty("speed", 0);
-    public final BooleanProperty groundSpeed = new BooleanProperty("ground-spoof", false);
-    public final ModeProperty ignoreVelocity = new ModeProperty("ignore-velocity", 0, new String[]{"NONE", "CANCEL", "DELAY"});
-    public final BooleanProperty surroundings = new BooleanProperty("surroundings", true);
-    public final BooleanProperty toolCheck = new BooleanProperty("tool-check", true);
-    public final BooleanProperty whiteList = new BooleanProperty("whitelist", true);
-    public final BooleanProperty swing = new BooleanProperty("swing", true);
-    public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT", "STRICT"});
-    public final ModeProperty showTarget = new ModeProperty("show-target", 1, new String[]{"NONE", "DEFAULT", "HUD"});
-    public final ModeProperty showProgress = new ModeProperty("show-progress", 1, new String[]{"NONE", "DEFAULT", "HUD"});
 
     private void resetBreaking() {
         if (this.targetBed != null) {
@@ -306,18 +305,17 @@ public class BedNuker extends Module {
         }
     }
 
-    private Color getProgressColor(int mode) {
-        switch (mode) {
-            case 1:
-                float progress = this.calcProgress();
-                if (progress <= 0.5F) {
-                    return ColorUtil.interpolate(progress / 0.5F, this.colorRed, this.colorYellow);
-                }
-                return ColorUtil.interpolate((progress - 0.5F) / 0.5F, this.colorYellow, this.colorGreen);
-            case 2:
-                return ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());
-            default:
-                return new Color(-1);
+    private Color getProgressColor(String displayMode) {
+        if (displayMode.equals("DEFAULT")) {
+            float progress = this.calcProgress();
+            if (progress <= 0.5F) {
+                return ColorUtil.interpolate(progress / 0.5F, this.colorRed, this.colorYellow);
+            }
+            return ColorUtil.interpolate((progress - 0.5F) / 0.5F, this.colorYellow, this.colorGreen);
+        } else if (displayMode.equals("HUD")) {
+            return ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());
+        } else {
+            return new Color(-1);
         }
     }
 
@@ -351,7 +349,7 @@ public class BedNuker extends Module {
             }
             if (this.targetBed != null) {
                 int slot = ItemUtil.findInventorySlot(mc.thePlayer.inventory.currentItem, mc.theWorld.getBlockState(this.targetBed).getBlock());
-                if (this.mode.getValue() == 0 && this.savedSlot == -1) {
+                if (this.mode.is("LEGIT") && this.savedSlot == -1) {
                     this.savedSlot = mc.thePlayer.inventory.currentItem;
                     mc.thePlayer.inventory.currentItem = slot;
                     this.syncHeldItem();
@@ -369,7 +367,7 @@ public class BedNuker extends Module {
                         }
                         break;
                     case 1:
-                        if (this.mode.getValue() == 1) {
+                        if (this.mode.is("SWAP")) {
                             this.readyToBreak = false;
                         }
                         this.breaking = true;
@@ -384,7 +382,7 @@ public class BedNuker extends Module {
                         mc.effectRenderer.addBlockHitEffects(this.targetBed, this.getHitFacing(this.targetBed));
                         if (this.breakProgress >= 1.0F - 0.3F * ((float) this.speed.getValue().intValue() / 100.0F)
                                 || delta >= 1.0F - 0.3F * ((float) this.speed.getValue().intValue() / 100.0F)) {
-                            if (this.mode.getValue() == 1) {
+                            if (this.mode.is("SWAP")) {
                                 this.readyToBreak = true;
                                 this.savedSlot = mc.thePlayer.inventory.currentItem;
                                 mc.thePlayer.inventory.currentItem = slot;
@@ -432,7 +430,7 @@ public class BedNuker extends Module {
                 }
             }
             if (this.targetBed == null) {
-                Leader.delayManager.setDelayState(false, DelayModules.BED_NUKER);
+                Leader.delayComponent.setDelayState(false, DelayType.BED_NUKER);
             }
         }
     }
@@ -448,7 +446,7 @@ public class BedNuker extends Module {
                 double z = (double) this.targetBed.getZ() + 0.5 - mc.thePlayer.posZ;
                 float[] rotations = RotationUtil.getRotationsTo(x, y, z, event.getYaw(), event.getPitch());
                 event.setRotation(rotations[0], rotations[1], 5);
-                event.setPervRotation(this.moveFix.getValue() != 0 ? rotations[0] : mc.thePlayer.rotationYaw, 5);
+                event.setPervRotation(this.moveFix.is("NONE") ? mc.thePlayer.rotationYaw : rotations[0], 5);
             }
         }
     }
@@ -457,10 +455,10 @@ public class BedNuker extends Module {
     public void onPlayerUpdate(PlayerUpdateEvent event) {
         if (this.isEnabled()) {
             if (this.isBreaking()
-                    && !Leader.playerStateManager.attacking
-                    && !Leader.playerStateManager.digging
-                    && !Leader.playerStateManager.placing
-                    && !Leader.playerStateManager.swinging) {
+                    && !Leader.playerStateComponent.attacking
+                    && !Leader.playerStateComponent.digging
+                    && !Leader.playerStateComponent.placing
+                    && !Leader.playerStateComponent.swinging) {
                 this.doSwing();
             }
         }
@@ -469,7 +467,7 @@ public class BedNuker extends Module {
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (this.isEnabled()) {
-            if (this.moveFix.getValue() == 1
+            if (this.moveFix.is("SILENT")
                     && RotationState.isActived()
                     && RotationState.getPriority() == 5.0F
                     && MoveUtil.isForwardPressed()) {
@@ -481,7 +479,7 @@ public class BedNuker extends Module {
     @EventTarget(Priority.HIGH)
     public void onKnockback(KnockbackEvent event) {
         if (this.isEnabled() && !event.isCancelled() && !(event.getY() <= 0.0)) {
-            if (this.ignoreVelocity.getValue() == 1 && this.targetBed != null) {
+            if (this.ignoreVelocity.is("CANCEL") && this.targetBed != null) {
                 event.setCancelled(true);
                 event.setX(mc.thePlayer.motionX);
                 event.setY(mc.thePlayer.motionY);
@@ -494,7 +492,7 @@ public class BedNuker extends Module {
     public void onRender2D(Render2DEvent event) {
         if (this.isEnabled()) {
             if (this.targetBed != null && (!this.isBed || !this.surroundings.getValue())) {
-                if (this.showProgress.getValue() != 0) {
+                if (!this.showProgress.is("NONE")) {
                     HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
                     float scale = hud.scale.getValue();
                     String text = String.format("%d%%", (int) (this.calcProgress() * 100.0F));
@@ -524,7 +522,7 @@ public class BedNuker extends Module {
     public void onRender3D(Render3DEvent event) {
         if (this.isEnabled() && this.targetBed != null && !mc.theWorld.isAirBlock(this.targetBed)) {
             mc.theWorld.sendBlockBreakProgress(mc.thePlayer.getEntityId(), this.targetBed, (int) (this.calcProgress() * 10.0F) - 1);
-            if (this.showTarget.getValue() != 0) {
+            if (!this.showTarget.is("NONE")) {
                 BedESP bedESP = (BedESP) Leader.moduleManager.modules.get(BedESP.class);
                 Color color = this.getProgressColor(this.showTarget.getValue());
                 RenderUtil.enableRenderState();
@@ -573,20 +571,20 @@ public class BedNuker extends Module {
                     }
                 }, 1L, TimeUnit.SECONDS);
             }
-            if (this.isEnabled() && this.targetBed != null && this.ignoreVelocity.getValue() == 2 && Leader.delayManager.getDelayModule() != DelayModules.BED_NUKER) {
+            if (this.isEnabled() && this.targetBed != null && this.ignoreVelocity.is("DELAY") && Leader.delayComponent.getDelayModule() != DelayType.BED_NUKER) {
                 if (event.getPacket() instanceof S12PacketEntityVelocity) {
                     S12PacketEntityVelocity packet = (S12PacketEntityVelocity) event.getPacket();
                     if (packet.getEntityID() == mc.thePlayer.getEntityId() && packet.getMotionY() > 0) {
-                        Leader.delayManager.delay(DelayModules.BED_NUKER);
-                        Leader.delayManager.delayedPacket.offer(packet);
+                        Leader.delayComponent.delay(DelayType.BED_NUKER);
+                        Leader.delayComponent.delayedPacket.offer(packet);
                         event.setCancelled(true);
                     }
                 }
                 if (event.getPacket() instanceof S27PacketExplosion) {
                     S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
                     if (explosion.func_149149_c() != 0.0F || explosion.func_149144_d() != 0.0F || explosion.func_149147_e() != 0.0F) {
-                        Leader.delayManager.delay(DelayModules.BED_NUKER);
-                        Leader.delayManager.delayedPacket.offer(explosion);
+                        Leader.delayComponent.delay(DelayType.BED_NUKER);
+                        Leader.delayComponent.delayedPacket.offer(explosion);
                         event.setCancelled(true);
                     }
                 }
@@ -634,11 +632,11 @@ public class BedNuker extends Module {
     public void onDisabled() {
         this.resetBreaking();
         this.savedSlot = -1;
-        Leader.delayManager.setDelayState(false, DelayModules.BED_NUKER);
+        Leader.delayComponent.setDelayState(false, DelayType.BED_NUKER);
     }
 
     @Override
     public String[] getSuffix() {
-        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
+        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getValue())};
     }
 }

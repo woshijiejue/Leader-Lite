@@ -10,16 +10,16 @@ import leader.client.events.UpdateEvent;
 import leader.client.module.Module;
 import leader.client.module.modules.combat.KillAura;
 import leader.client.module.modules.render.HUD;
-import leader.client.util.*;
-import leader.client.property.properties.*;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.util.player.MoveUtil;
 import leader.client.util.player.PlayerUtil;
 import leader.client.util.player.RotationUtil;
 import leader.client.util.player.TeamUtil;
 import leader.client.util.render.ColorUtil;
 import leader.client.util.render.RenderUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.AxisAlignedBB;
@@ -28,15 +28,14 @@ import java.awt.*;
 import java.util.ArrayList;
 
 public class TargetStrafe extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    public final SliderValue radius = new SliderValue("radius", 1.0, 0.0, 6.0, Representation.FLOAT, this);
+    public final SliderValue points = new SliderValue("points", 6, 3, 24, Representation.INT, this);
+    public final BoolValue requirePress = new BoolValue("require-press", true, this);
+    public final BoolValue speedOnly = new BoolValue("speed-only", true, this);
+    public final ListValue showTarget = new ListValue("show-target", new String[]{"NONE", "DEFAULT", "HUD"}, "DEFAULT", this);
     private EntityLivingBase target = null;
     private float targetYaw = Float.NaN;
     private int direction = 1;
-    public final FloatProperty radius = new FloatProperty("radius", 1.0F, 0.0F, 6.0F);
-    public final IntProperty points = new IntProperty("points", 6, 3, 24);
-    public final BooleanProperty requirePress = new BooleanProperty("require-press", true);
-    public final BooleanProperty speedOnly = new BooleanProperty("speed-only", true);
-    public final ModeProperty showTarget = new ModeProperty("show-target", 1, new String[]{"NONE", "DEFAULT", "HUD"});
 
     private boolean canStrafe() {
         if (this.speedOnly.getValue()) {
@@ -63,23 +62,22 @@ public class TargetStrafe extends Module {
     private Color getTargetColor(EntityLivingBase entityLivingBase) {
         if (entityLivingBase instanceof EntityPlayer) {
             if (TeamUtil.isFriend((EntityPlayer) entityLivingBase)) {
-                return Leader.friendManager.getColor();
+                return Leader.friendComponent.getColor();
             }
             if (TeamUtil.isTarget((EntityPlayer) entityLivingBase)) {
-                return Leader.targetManager.getColor();
+                return Leader.targetComponent.getColor();
             }
         }
-        switch (this.showTarget.getValue()) {
-            case 1:
-                if (!(entityLivingBase instanceof EntityPlayer)) {
-                    return Color.WHITE;
-                }
-                return TeamUtil.getTeamColor((EntityPlayer) entityLivingBase, 1.0F);
-            case 2:
-                int color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB();
-                return new Color(color);
-            default:
-                return new Color(-1);
+        if (this.showTarget.is("DEFAULT")) {
+            if (!(entityLivingBase instanceof EntityPlayer)) {
+                return Color.WHITE;
+            }
+            return TeamUtil.getTeamColor((EntityPlayer) entityLivingBase, 1.0F);
+        } else if (this.showTarget.is("HUD")) {
+            int color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB();
+            return new Color(color);
+        } else {
+            return new Color(-1);
         }
     }
 
@@ -188,13 +186,13 @@ public class TargetStrafe extends Module {
     @EventTarget
     public void onRender(Render3DEvent event) {
         if (this.isEnabled() && TeamUtil.isEntityLoaded(this.target)) {
-            if (this.showTarget.getValue() != 0) {
+            if (!this.showTarget.is("NONE")) {
                 Color color = this.getTargetColor(this.target);
                 RenderUtil.enableRenderState();
                 RenderUtil.drawEntityCircle(
-                        this.target, this.radius.getValue(), this.points.getValue(), ColorUtil.darker(color, 0.2F).getRGB()
+                        this.target, this.radius.getValue(), this.points.getValue().intValue(), ColorUtil.darker(color, 0.2F).getRGB()
                 );
-                RenderUtil.drawEntityCircle(this.target, this.radius.getValue(), this.points.getValue(), color.getRGB());
+                RenderUtil.drawEntityCircle(this.target, this.radius.getValue(), this.points.getValue().intValue(), color.getRGB());
                 RenderUtil.disableRenderState();
             }
         }

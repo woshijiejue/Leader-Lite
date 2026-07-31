@@ -1,25 +1,25 @@
 package leader.client.module.modules.combat;
 
 import leader.client.Leader;
-import leader.client.enums.BlinkModules;
+import leader.client.component.impl.network.blink.BlinkType;
 import leader.client.event.EventTarget;
 import leader.client.event.types.Priority;
 import leader.client.events.PacketEvent;
 import leader.client.events.Render3DEvent;
 import leader.client.events.TickEvent;
-import leader.mixin.IAccessorPlayerControllerMP;
-import leader.mixin.IAccessorRenderManager;
+import leader.mixin.accessor.IAccessorPlayerControllerMP;
+import leader.mixin.accessor.IAccessorRenderManager;
 import leader.client.module.Module;
 import leader.client.module.modules.player.BedNuker;
 import leader.client.module.modules.render.HUD;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
 import leader.client.util.player.ItemUtil;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.RotationUtil;
 import leader.client.util.player.TeamUtil;
-import leader.client.property.properties.*;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ModeProperty;
-import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemSword;
@@ -36,16 +36,15 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class LagRange extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final ModeProperty mode = new ModeProperty("Mode", 0, new String[]{"Delay Blink", "Lag"});
-    public final IntProperty blinkTick = new IntProperty("Blink Tick", 3, 0, 10, () -> mode.getValue() == 0);
-    public final IntProperty delay = new IntProperty("Delay", 150, 0, 1000, () -> mode.getValue() == 1);
-    public final FloatProperty range = new FloatProperty("Range", 10.0F, 3.0F, 100.0F);
-    public final BooleanProperty weaponsOnly = new BooleanProperty("Weapons Only", true);
-    public final BooleanProperty allowTools = new BooleanProperty("Allow Tools", false, this.weaponsOnly::getValue);
-    public final BooleanProperty botCheck = new BooleanProperty("Bot Check", true);
-    public final BooleanProperty teams = new BooleanProperty("Teams", true);
-    public final ModeProperty showPosition = new ModeProperty("Show Position", 0, new String[]{"None", "Default", "Hud"});
+    public final ListValue mode = new ListValue("Mode", new String[]{"Delay Blink", "Lag"}, "Delay Blink", this);
+    public final SliderValue blinkTick = new SliderValue("Blink Tick", 3, 0, 10, () -> mode.is("Delay Blink"), Representation.INT, this);
+    public final SliderValue delay = new SliderValue("Delay", 150, 0, 1000, () -> mode.is("Lag"), Representation.INT, this);
+    public final SliderValue range = new SliderValue("Range", 10.0, 3.0, 100.0, Representation.FLOAT, this);
+    public final BoolValue weaponsOnly = new BoolValue("Weapons Only", true, this);
+    public final BoolValue allowTools = new BoolValue("Allow Tools", false, this.weaponsOnly::getValue, this);
+    public final BoolValue botCheck = new BoolValue("Bot Check", true, this);
+    public final BoolValue teams = new BoolValue("Teams", true, this);
+    public final ListValue showPosition = new ListValue("Show Position", new String[]{"None", "Default", "Hud"}, "None", this);
     private int tickIndex = -1;
     private long delayCounter = 0L;
     private boolean hasTarget = false;
@@ -91,18 +90,18 @@ public class LagRange extends Module {
             switch (event.getType()) {
                 case PRE:
                     KillAura killAura = (KillAura) Leader.moduleManager.getModule(KillAura.class);
-                    if ((killAura.shouldAutoBlock() || killAura.isBlocking() && killAura.isEnabled() && killAura.getTarget() != null) && mode.getValue() == 0){
-                        Leader.blinkManager.setBlinkState(false, BlinkModules.LAG_RANGE);
+                    if ((killAura.shouldAutoBlock() || killAura.isBlocking() && killAura.isEnabled() && killAura.getTarget() != null) && mode.is("Delay Blink")) {
+                        Leader.blinkComponent.setBlinkState(false, BlinkType.LAG_RANGE);
                         return;
                     }
-                    Leader.lagManager.setDelay(0);
+                    Leader.lagComponent.setDelay(0);
                     this.hasTarget = false;
                     BedNuker bedNuker = (BedNuker) Leader.moduleManager.modules.get(BedNuker.class);
                     if ((!bedNuker.isEnabled() || !bedNuker.isReady())
                             && !((IAccessorPlayerControllerMP) mc.playerController).getIsHittingBlock()
                             && (!mc.thePlayer.isUsingItem() || mc.thePlayer.isBlocking())
                             && (
-                            !(Boolean) this.weaponsOnly.getValue()
+                            !this.weaponsOnly.getValue()
                                     || ItemUtil.hasRawUnbreakingEnchant()
                                     || this.allowTools.getValue() && ItemUtil.isHoldingTool()
                     )) {
@@ -114,11 +113,11 @@ public class LagRange extends Module {
                                 .filter(this::isValidTarget)
                                 .collect(Collectors.toList());
                         if (players.isEmpty()) {
-                            Leader.blinkManager.setBlinkState(false, BlinkModules.LAG_RANGE);
+                            Leader.blinkComponent.setBlinkState(false, BlinkType.LAG_RANGE);
                             this.tickIndex = -1;
                         } else {
                             double height = mc.thePlayer.getEyeHeight();
-                            Vec3 eyePosition = Leader.lagManager.getLastPosition().addVector(0.0, height, 0.0);
+                            Vec3 eyePosition = Leader.lagComponent.getLastPosition().addVector(0.0, height, 0.0);
                             Vec3 targetEyePosition = new Vec3(mc.thePlayer.lastTickPosX, mc.thePlayer.lastTickPosY + height, mc.thePlayer.lastTickPosZ);
                             Vec3 playerEyePosition = new Vec3(mc.thePlayer.posX, mc.thePlayer.posY + height, mc.thePlayer.posZ);
                             for (EntityPlayer player : players) {
@@ -129,20 +128,20 @@ public class LagRange extends Module {
                                     if (distance < targetDist || distance < eyeDist) {
                                         if (this.tickIndex < 0) {
                                             this.tickIndex = 0;
-                                            for (this.delayCounter = this.delayCounter + (long) this.delay.getValue();
+                                            for (this.delayCounter = this.delayCounter + (long) this.delay.getValue().intValue();
                                                  this.delayCounter > 0L;
                                                  this.delayCounter = this.delayCounter - 50
                                             ) {
                                                 this.tickIndex++;
                                             }
                                         }
-                                        if (mode.getValue() == 1) {
-                                            Leader.lagManager.setDelay(this.tickIndex);
+                                        if (mode.is("Lag")) {
+                                            Leader.lagComponent.setDelay(this.tickIndex);
                                         }
-                                        if (mode.getValue() == 0){
-                                            Leader.blinkManager.setBlinkState(true, BlinkModules.LAG_RANGE);
-                                            if (Leader.blinkManager.countMovement() > blinkTick.getValue().longValue()) {
-                                                Leader.blinkManager.setBlinkState(false, BlinkModules.LAG_RANGE);
+                                        if (mode.is("Delay Blink")) {
+                                            Leader.blinkComponent.setBlinkState(true, BlinkType.LAG_RANGE);
+                                            if (Leader.blinkComponent.countMovement() > blinkTick.getValue().longValue()) {
+                                                Leader.blinkComponent.setBlinkState(false, BlinkType.LAG_RANGE);
                                             }
                                         }
                                         this.hasTarget = true;
@@ -153,14 +152,14 @@ public class LagRange extends Module {
                         }
                     } else {
                         this.tickIndex = -1;
-                        Leader.blinkManager.setBlinkState(false, BlinkModules.LAG_RANGE);
+                        Leader.blinkComponent.setBlinkState(false, BlinkType.LAG_RANGE);
                     }
-                    if (!hasTarget){
-                        Leader.blinkManager.setBlinkState(false, BlinkModules.LAG_RANGE);
+                    if (!hasTarget) {
+                        Leader.blinkComponent.setBlinkState(false, BlinkType.LAG_RANGE);
                     }
                     break;
                 case POST:
-                    Vec3 savedPosition = Leader.lagManager.getLastPosition();
+                    Vec3 savedPosition = Leader.lagComponent.getLastPosition();
                     if (this.currentPosition == null) {
                         this.lastPosition = savedPosition;
                     } else {
@@ -175,7 +174,7 @@ public class LagRange extends Module {
     public void onPacket(PacketEvent event) {
         if (this.isEnabled()) {
             if (this.shouldResetOnPacket(event.getPacket())) {
-                Leader.lagManager.setDelay(0);
+                Leader.lagComponent.setDelay(0);
                 this.tickIndex = -1;
             }
         }
@@ -184,18 +183,16 @@ public class LagRange extends Module {
     @EventTarget(Priority.HIGH)
     public void onRender3D(Render3DEvent event) {
         if (this.isEnabled()) {
-            if (this.showPosition.getValue() != 0
+            if (!this.showPosition.is("None")
                     && mc.gameSettings.thirdPersonView != 0
                     && this.hasTarget
                     && this.lastPosition != null
                     && this.currentPosition != null) {
                 Color color = new Color(-1);
-                switch (this.showPosition.getValue()) {
-                    case 1:
-                        color = TeamUtil.getTeamColor(mc.thePlayer, 1.0F);
-                        break;
-                    case 2:
-                        color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());
+                if (this.showPosition.is("Default")) {
+                    color = TeamUtil.getTeamColor(mc.thePlayer, 1.0F);
+                } else if (this.showPosition.is("Hud")) {
+                    color = ((HUD) Leader.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis());
                 }
                 double x = RenderUtil.lerpDouble(this.currentPosition.xCoord, this.lastPosition.xCoord, event.getPartialTicks());
                 double y = RenderUtil.lerpDouble(this.currentPosition.yCoord, this.lastPosition.yCoord, event.getPartialTicks());
@@ -224,7 +221,7 @@ public class LagRange extends Module {
 
     @Override
     public void onDisabled() {
-        Leader.lagManager.setDelay(0);
+        Leader.lagComponent.setDelay(0);
         this.tickIndex = -1;
         this.delayCounter = 0L;
         this.hasTarget = false;
@@ -234,9 +231,10 @@ public class LagRange extends Module {
 
     @Override
     public String[] getSuffix() {
-        if (this.mode.getValue() == 1) {
-            return new String[]{String.format("%dms", this.delay.getValue())};
+        if (this.mode.is("Lag")) {
+            return new String[]{String.format("%dms", this.delay.getValue().intValue())};
+        } else {
+            return new String[]{blinkTick.getValue().toString()};
         }
-        else return new String[]{blinkTick.getValue().toString()};
     }
 }

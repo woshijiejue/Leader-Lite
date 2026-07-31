@@ -1,8 +1,8 @@
 package leader.client.util.player;
 
 import com.google.common.collect.Multimap;
+import leader.client.util.InstanceAccess;
 import net.minecraft.block.Block;
-import net.minecraft.client.Minecraft;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.ai.attributes.AttributeModifier;
@@ -15,12 +15,12 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Objects;
 
-public class ItemUtil {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+public class ItemUtil implements InstanceAccess {
     private static final ArrayList<Integer> specialItems = new SpecialItems();
     public static boolean isBow(ItemStack stack) {
         return stack != null && stack.getItem() instanceof ItemBow;
     }
+
     public static int getBowScore(ItemStack stack) {
         if (stack == null || !(stack.getItem() instanceof ItemBow)) return -1;
         int power = EnchantmentHelper.getEnchantmentLevel(Enchantment.power.effectId, stack);

@@ -1,8 +1,9 @@
 package leader.client.module.modules.movement;
 
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -10,9 +11,9 @@ import java.util.Locale;
 
 public class Jesus extends Module {
     private static final DecimalFormat df = new DecimalFormat("#.##", new DecimalFormatSymbols(Locale.US));
-    public final FloatProperty speed = new FloatProperty("speed", 2.5F, 0.0F, 3.0F);
-    public final BooleanProperty noPush = new BooleanProperty("no-push", true);
-    public final BooleanProperty groundOnly = new BooleanProperty("ground-only", true);
+    public final SliderValue speed = new SliderValue("speed", 2.5, 0.0, 3.0, Representation.FLOAT, this);
+    public final BoolValue noPush = new BoolValue("no-push", true, this);
+    public final BoolValue groundOnly = new BoolValue("ground-only", true, this);
 
     public Jesus() {
         super("Jesus", false);

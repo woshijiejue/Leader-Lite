@@ -4,16 +4,21 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.ModeProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.module.values.impl.ListValue;
 import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
 
 public class FullBright extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private float prevGamma = Float.NaN;
     private boolean appliedNightVision = false;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"GAMMA", "EFFECT"});
+    public final ListValue mode = (ListValue) new ListValue("mode", new String[]{"GAMMA", "EFFECT"}, "GAMMA", this)
+            .onChanged(() -> {
+                if (this.isEnabled()) {
+                    this.onDisabled();
+                    this.onEnabled();
+                }
+            });
 
     public FullBright() {
         super("Fullbright", true, true);
@@ -22,24 +27,20 @@ public class FullBright extends Module {
     @EventTarget
     public void onTick(TickEvent event) {
         if (this.isEnabled() && event.getType() == EventType.POST) {
-            switch (this.mode.getValue()) {
-                case 0:
-                    mc.gameSettings.gammaSetting = 1000.0F;
-                    break;
-                case 1:
-                    mc.thePlayer.addPotionEffect(new PotionEffect(Potion.nightVision.id, 25940, 0));
+            if (this.mode.is("GAMMA")) {
+                mc.gameSettings.gammaSetting = 1000.0F;
+            } else if (this.mode.is("EFFECT")) {
+                mc.thePlayer.addPotionEffect(new PotionEffect(Potion.nightVision.id, 25940, 0));
             }
         }
     }
 
     @Override
     public void onEnabled() {
-        switch (this.mode.getValue()) {
-            case 0:
-                this.prevGamma = mc.gameSettings.gammaSetting;
-                break;
-            case 1:
-                this.appliedNightVision = true;
+        if (this.mode.is("GAMMA")) {
+            this.prevGamma = mc.gameSettings.gammaSetting;
+        } else if (this.mode.is("EFFECT")) {
+            this.appliedNightVision = true;
         }
     }
 
@@ -54,14 +55,6 @@ public class FullBright extends Module {
                 mc.thePlayer.removePotionEffectClient(Potion.nightVision.id);
             }
             this.appliedNightVision = false;
-        }
-    }
-
-    @Override
-    public void verifyValue(String mode) {
-        if (this.isEnabled()) {
-            this.onDisabled();
-            this.onEnabled();
         }
     }
 }

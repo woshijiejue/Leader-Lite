@@ -1,15 +1,15 @@
 package leader.client.module.modules.render;
 
-import leader.client.enums.ChatColors;
+import leader.client.util.misc.ChatColors;
 import leader.client.event.EventTarget;
 import leader.client.events.Render2DEvent;
 import leader.client.module.Module;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.render.RenderUtil;
 import leader.client.util.player.RotationUtil;
 import leader.client.util.player.TeamUtil;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
@@ -26,15 +26,15 @@ import java.awt.*;
 import java.util.stream.Collectors;
 
 public class Indicators extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final FloatProperty scale = new FloatProperty("scale", 1.0f, 0.5f, 1.5f);
-    public final FloatProperty offset = new FloatProperty("offset", 50.0f, 0.0f, 255.0f);
-    public final BooleanProperty directionCheck = new BooleanProperty("direction-check", true);
-    public final BooleanProperty fireballs = new BooleanProperty("fireballs", true);
-    public final BooleanProperty pearls = new BooleanProperty("pearls", true);
-    public final BooleanProperty arrows = new BooleanProperty("arrows", true);
-    public final BooleanProperty egg = new BooleanProperty("egg", true);
-    public final BooleanProperty snowball = new BooleanProperty("snowball", true);
+
+    public final SliderValue scale = new SliderValue("scale", 1.0, 0.5, 1.5, Representation.FLOAT, this);
+    public final SliderValue offset = new SliderValue("offset", 50.0, 0.0, 255.0, Representation.FLOAT, this);
+    public final BoolValue directionCheck = new BoolValue("direction-check", true, this);
+    public final BoolValue fireballs = new BoolValue("fireballs", true, this);
+    public final BoolValue pearls = new BoolValue("pearls", true, this);
+    public final BoolValue arrows = new BoolValue("arrows", true, this);
+    public final BoolValue egg = new BoolValue("egg", true, this);
+    public final BoolValue snowball = new BoolValue("snowball", true, this);
 
     private boolean shouldRender(Entity entity) {
         double d = (entity.posX - entity.lastTickPosX) * (Indicators.mc.thePlayer.posX - entity.posX) + (entity.posY - entity.lastTickPosY) * (Indicators.mc.thePlayer.posY + (double) Indicators.mc.thePlayer.getEyeHeight() - entity.posY - (double) entity.height / 2.0) + (entity.posZ - entity.lastTickPosZ) * (Indicators.mc.thePlayer.posZ - entity.posZ);
@@ -96,7 +96,7 @@ public class Indicators extends Module {
             return;
         }
         for (Entity entity : TeamUtil.getLoadedEntitiesSorted().stream().filter(this::shouldRender).collect(Collectors.toList())) {
-            float offset = 10.0f + this.offset.getValue();
+            float offsetVal = 10.0f + this.offset.getValue();
             float yawBetween = RotationUtil.getYawBetween(RenderUtil.lerpDouble(Indicators.mc.thePlayer.posX, Indicators.mc.thePlayer.prevPosX, render2DEvent.getPartialTicks()), RenderUtil.lerpDouble(Indicators.mc.thePlayer.posZ, Indicators.mc.thePlayer.prevPosZ, render2DEvent.getPartialTicks()), RenderUtil.lerpDouble(entity.posX, entity.prevPosX, render2DEvent.getPartialTicks()), RenderUtil.lerpDouble(entity.posZ, entity.prevPosZ, render2DEvent.getPartialTicks()));
             if (Indicators.mc.gameSettings.thirdPersonView == 2) {
                 yawBetween += 180.0f;
@@ -108,16 +108,16 @@ public class Indicators extends Module {
             GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 0.0f);
             GlStateManager.translate((float) new ScaledResolution(mc).getScaledWidth() / 2.0f / this.scale.getValue(), (float) new ScaledResolution(mc).getScaledHeight() / 2.0f / this.scale.getValue(), 0.0f);
             GlStateManager.pushMatrix();
-            GlStateManager.translate((offset + 0.0f) * x - 8.0f, (offset + 0.0f) * z - 8.0f, -300.0f);
+            GlStateManager.translate((offsetVal + 0.0f) * x - 8.0f, (offsetVal + 0.0f) * z - 8.0f, -300.0f);
             mc.getRenderItem().renderItemAndEffectIntoGUI(new ItemStack(this.getIndicatorItem(entity)), 0, 0);
             GlStateManager.popMatrix();
             String string = String.format("%dm", (int) Indicators.mc.thePlayer.getDistanceToEntity(entity));
             GlStateManager.pushMatrix();
-            GlStateManager.translate((offset + 0.0f) * x - (float) FontManager.getStringWidth(string) / 2.0f + 1.0f, (offset + 0.0f) * z + 1.0f, -100.0f);
+            GlStateManager.translate((offsetVal + 0.0f) * x - (float) FontManager.getStringWidth(string) / 2.0f + 1.0f, (offsetVal + 0.0f) * z + 1.0f, -100.0f);
             FontManager.drawStringWithShadow(string, 0.0f, 0.0f, ChatColors.GRAY.toAwtColor() & 0xFFFFFF | 0xBF000000);
             GlStateManager.popMatrix();
             GlStateManager.pushMatrix();
-            GlStateManager.translate((offset + 15.0f) * x + 1.0f, (offset + 15.0f) * z + 1.0f, -100.0f);
+            GlStateManager.translate((offsetVal + 15.0f) * x + 1.0f, (offsetVal + 15.0f) * z + 1.0f, -100.0f);
             RenderUtil.enableRenderState();
             RenderUtil.drawArrow(0.0f, 0.0f, (float) (Math.atan2(z, x) + Math.PI), 7.5f, 1.5f, this.getIndicatorColor(entity).getRGB());
             RenderUtil.disableRenderState();

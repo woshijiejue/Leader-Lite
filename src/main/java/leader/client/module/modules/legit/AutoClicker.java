@@ -6,13 +6,13 @@ import leader.client.event.types.Priority;
 import leader.client.events.LeftClickMouseEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.Module;
-import leader.client.util.*;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.util.math.RandomUtil;
+import leader.client.util.misc.KeyBindUtil;
 import leader.client.util.player.ItemUtil;
 import leader.client.util.player.RotationUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.world.WorldSettings.GameType;
@@ -20,24 +20,34 @@ import net.minecraft.world.WorldSettings.GameType;
 import java.util.Objects;
 
 public class AutoClicker extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private boolean clickPending = false;
     private long clickDelay = 0L;
     private boolean blockHitPending = false;
     private long blockHitDelay = 0L;
-    public final IntProperty minCPS = new IntProperty("min-cps", 8, 1, 20);
-    public final IntProperty maxCPS = new IntProperty("max-cps", 12, 1, 20);
-    public final BooleanProperty blockHit = new BooleanProperty("block-hit", false);
-    public final FloatProperty blockHitTicks = new FloatProperty("block-hit-ticks", 1.5F, 1.0F, 20.0F, this.blockHit::getValue);
-    public final BooleanProperty weaponsOnly = new BooleanProperty("weapons-only", true);
-    public final BooleanProperty allowTools = new BooleanProperty("allow-tools", false, this.weaponsOnly::getValue);
-    public final BooleanProperty breakBlocks = new BooleanProperty("break-blocks", true);
-    public final FloatProperty range = new FloatProperty("range", 3.0F, 3.0F, 8.0F, this.breakBlocks::getValue);
-    public final FloatProperty hitBoxVertical = new FloatProperty("hit-box-vertical", 0.1F, 0.0F, 1.0F, this.breakBlocks::getValue);
-    public final FloatProperty hitBoxHorizontal = new FloatProperty("hit-box-horizontal", 0.2F, 0.0F, 1.0F, this.breakBlocks::getValue);
+    public final SliderValue minCPS = (SliderValue) new SliderValue("min-cps", 8, 1, 20, Representation.INT, this)
+            .onChanged(() -> {
+                if (this.minCPS.getValue() > this.maxCPS.getValue()) {
+                    this.maxCPS.setValue(this.minCPS.getValue());
+                }
+            });
+    public final SliderValue maxCPS = (SliderValue) new SliderValue("max-cps", 12, 1, 20, Representation.INT, this)
+            .onChanged(() -> {
+                if (this.minCPS.getValue() > this.maxCPS.getValue()) {
+                    this.minCPS.setValue(this.maxCPS.getValue());
+                }
+            });
+    public final BoolValue blockHit = new BoolValue("block-hit", false, this);
+    public final SliderValue blockHitTicks = new SliderValue("block-hit-ticks", 1.5, 1.0, 20.0, () -> this.blockHit.getValue(), Representation.FLOAT, this);
+    public final BoolValue weaponsOnly = new BoolValue("weapons-only", true, this);
+    public final BoolValue allowTools = new BoolValue("allow-tools", false, this.weaponsOnly::getValue, this);
+    public final BoolValue breakBlocks = new BoolValue("break-blocks", true, this);
+    public final SliderValue range = new SliderValue("range", 3.0, 3.0, 8.0, () -> this.breakBlocks.getValue(), Representation.FLOAT, this);
+    public final SliderValue hitBoxVertical = new SliderValue("hit-box-vertical", 0.1, 0.0, 1.0, () -> this.breakBlocks.getValue(), Representation.FLOAT, this);
+    public final SliderValue hitBoxHorizontal = new SliderValue("hit-box-horizontal", 0.2, 0.0, 1.0, () -> this.breakBlocks.getValue(), Representation.FLOAT, this);
 
     private long getNextClickDelay() {
-        return 1000L / RandomUtil.nextLong(this.minCPS.getValue(), this.maxCPS.getValue());
+        return 1000L / RandomUtil.nextLong(this.minCPS.getValue().intValue(), this.maxCPS.getValue().intValue());
     }
 
     private long getBlockHitDelay() {
@@ -157,22 +167,9 @@ public class AutoClicker extends Module {
     }
 
     @Override
-    public void verifyValue(String mode) {
-        if (this.minCPS.getName().equals(mode)) {
-            if (this.minCPS.getValue() > this.maxCPS.getValue()) {
-                this.maxCPS.setValue(this.minCPS.getValue());
-            }
-        } else {
-            if (this.maxCPS.getName().equals(mode) && this.minCPS.getValue() > this.maxCPS.getValue()) {
-                this.minCPS.setValue(this.maxCPS.getValue());
-            }
-        }
-    }
-
-    @Override
     public String[] getSuffix() {
         return Objects.equals(this.minCPS.getValue(), this.maxCPS.getValue())
-                ? new String[]{this.minCPS.getValue().toString()}
-                : new String[]{String.format("%d-%d", this.minCPS.getValue(), this.maxCPS.getValue())};
+                ? new String[]{this.minCPS.getValue().intValue() + ""}
+                : new String[]{String.format("%d-%d", this.minCPS.getValue().intValue(), this.maxCPS.getValue().intValue())};
     }
 }

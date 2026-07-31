@@ -2,8 +2,7 @@ package leader.client.command.commands;
 
 import leader.client.Leader;
 import leader.client.command.Command;
-import leader.client.util.ChatUtil;
-import net.minecraft.client.Minecraft;
+import leader.client.util.DebugUtil;
 import net.minecraft.util.Session;
 import net.minecraft.util.StringUtils;
 
@@ -13,8 +12,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class IgnCommand extends Command {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-
     public IgnCommand() {
         super(new ArrayList<String>(Arrays.asList("username", "name", "ign")));
     }
@@ -27,9 +24,9 @@ public class IgnCommand extends Command {
             if (!StringUtils.isNullOrEmpty(username)) {
                 try {
                     Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(username), null);
-                    ChatUtil.sendFormatted(String.format("%sYour username has been copied to the clipboard (&o%s&r)&r", Leader.clientName, username));
+                    DebugUtil.sendFormatted(String.format("%sYour username has been copied to the clipboard (&o%s&r)&r", Leader.clientName, username));
                 } catch (Exception e) {
-                    ChatUtil.sendFormatted(String.format("%sFailed to copy&r", Leader.clientName));
+                    DebugUtil.sendFormatted(String.format("%sFailed to copy&r", Leader.clientName));
                 }
             }
         }

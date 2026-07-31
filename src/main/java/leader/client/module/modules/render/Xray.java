@@ -5,12 +5,13 @@ import leader.client.event.types.EventType;
 import leader.client.events.LoadWorldEvent;
 import leader.client.events.PacketEvent;
 import leader.client.events.Render3DEvent;
-import leader.mixin.IAccessorMinecraft;
+import leader.mixin.accessor.IAccessorMinecraft;
 import leader.client.module.Module;
 import leader.client.util.render.RenderUtil;
-import leader.client.property.properties.*;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockMobSpawner;
 import net.minecraft.client.Minecraft;
@@ -28,37 +29,46 @@ import java.util.LinkedHashSet;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 public class Xray extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+
     private static final LinkedHashSet<Integer> xrayBlocks;
     private static final LinkedHashSet<Vec3i> caveOffsetsSmall;
     private static final LinkedHashSet<Vec3i> caveOffsetsLarge;
     public final CopyOnWriteArraySet<BlockPos> trackedBlocks = new CopyOnWriteArraySet<>();
     public final CopyOnWriteArraySet<BlockPos> pendingBlocks = new CopyOnWriteArraySet<>();
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"SOFT", "FULL"});
-    public final PercentProperty opacity = new PercentProperty("opacity", 50);
-    public final IntProperty range = new IntProperty("range", 64, 16, 512);
-    public final BooleanProperty cavesOnly = new BooleanProperty("caves-only", true);
-    public final IntProperty caveRadius = new IntProperty("caves-radius", 2, 1, 2);
-    public final BooleanProperty diamonds = new BooleanProperty("diamonds", true);
-    public final BooleanProperty diamondTracers = new BooleanProperty("diamonds-tracers", true);
-    public final BooleanProperty gold = new BooleanProperty("gold", true);
-    public final BooleanProperty goldTracers = new BooleanProperty("gold-tracers", true);
-    public final BooleanProperty iron = new BooleanProperty("iron", false);
-    public final BooleanProperty ironTracers = new BooleanProperty("iron-tracers", false);
-    public final BooleanProperty coal = new BooleanProperty("coal", false);
-    public final BooleanProperty coalTracers = new BooleanProperty("coal-tracers", false);
-    public final BooleanProperty redstone = new BooleanProperty("redstone", false);
-    public final BooleanProperty redStoneTracers = new BooleanProperty("redstone-tracers", false);
-    public final BooleanProperty lapis = new BooleanProperty("lapis", false);
-    public final BooleanProperty lapisTracers = new BooleanProperty("lapis-tracers", false);
-    public final BooleanProperty emeralds = new BooleanProperty("emeralds", false);
-    public final BooleanProperty emeraldsTracers = new BooleanProperty("emeralds-tracers", false);
-    public final BooleanProperty spawners = new BooleanProperty("spawners", false);
-    public final BooleanProperty spawnerTracers = new BooleanProperty("spawners-tracers", false);
-    public final BooleanProperty canes = new BooleanProperty("canes", false);
-    public final BooleanProperty canesTracers = new BooleanProperty("canes-tracers", false);
-    public final BooleanProperty warts = new BooleanProperty("warts", false);
-    public final BooleanProperty wartsTracers = new BooleanProperty("warts-tracers", false);
+
+    public final ListValue mode = new ListValue("mode", new String[]{"SOFT", "FULL"}, "SOFT", this);
+    public final SliderValue opacity = new SliderValue("opacity", 50, 0, 100, Representation.INT, this);
+    public final SliderValue range = new SliderValue("range", 64, 16, 512, Representation.INT, this);
+    public final BoolValue cavesOnly = new BoolValue("caves-only", true, this);
+    public final SliderValue caveRadius = new SliderValue("caves-radius", 2, 1, 2, Representation.INT, this);
+    public final BoolValue diamonds = new BoolValue("diamonds", true, this);
+    public final BoolValue diamondTracers = new BoolValue("diamonds-tracers", true, this);
+    public final BoolValue gold = new BoolValue("gold", true, this);
+    public final BoolValue goldTracers = new BoolValue("gold-tracers", true, this);
+    public final BoolValue iron = new BoolValue("iron", false, this);
+    public final BoolValue ironTracers = new BoolValue("iron-tracers", false, this);
+    public final BoolValue coal = new BoolValue("coal", false, this);
+    public final BoolValue coalTracers = new BoolValue("coal-tracers", false, this);
+    public final BoolValue redstone = new BoolValue("redstone", false, this);
+    public final BoolValue redStoneTracers = new BoolValue("redstone-tracers", false, this);
+    public final BoolValue lapis = new BoolValue("lapis", false, this);
+    public final BoolValue lapisTracers = new BoolValue("lapis-tracers", false, this);
+    public final BoolValue emeralds = new BoolValue("emeralds", false, this);
+    public final BoolValue emeraldsTracers = new BoolValue("emeralds-tracers", false, this);
+    public final BoolValue spawners = new BoolValue("spawners", false, this);
+    public final BoolValue spawnerTracers = new BoolValue("spawners-tracers", false, this);
+    public final BoolValue canes = new BoolValue("canes", false, this);
+    public final BoolValue canesTracers = new BoolValue("canes-tracers", false, this);
+    public final BoolValue warts = new BoolValue("warts", false, this);
+    public final BoolValue wartsTracers = new BoolValue("warts-tracers", false, this);
+
+    private void clearAndReload() {
+        this.trackedBlocks.clear();
+        this.pendingBlocks.clear();
+        if (this.isEnabled() && mc.renderGlobal != null) {
+            mc.renderGlobal.loadRenderers();
+        }
+    }
 
     private void renderOreHighlight(BlockPos blockPos, int blockId, Vec3 viewVector) {
         if (mc.thePlayer.getDistance(blockPos.getX(), blockPos.getY(), blockPos.getZ()) <= this.range.getValue().doubleValue()) {
@@ -147,6 +157,21 @@ public class Xray extends Module {
 
     public Xray() {
         super("Xray", false);
+        // Reload renderers when any ore-toggle or relevant setting changes
+        Runnable reload = this::clearAndReload;
+        this.mode.onChanged(reload);
+        this.cavesOnly.onChanged(reload);
+        this.caveRadius.onChanged(reload);
+        this.diamonds.onChanged(reload);
+        this.gold.onChanged(reload);
+        this.iron.onChanged(reload);
+        this.coal.onChanged(reload);
+        this.redstone.onChanged(reload);
+        this.lapis.onChanged(reload);
+        this.emeralds.onChanged(reload);
+        this.spawners.onChanged(reload);
+        this.canes.onChanged(reload);
+        this.warts.onChanged(reload);
     }
 
     public boolean shouldRenderSide(int blockId) {
@@ -185,7 +210,7 @@ public class Xray extends Module {
         if (!this.cavesOnly.getValue()) {
             return true;
         } else {
-            if (this.caveRadius.getValue() >= 2) {
+            if (this.caveRadius.getValue().intValue() >= 2) {
                 for (Vec3i vec3i : caveOffsetsLarge) {
                     if (this.isValidCaveBlock(blockPos.add(vec3i))) {
                         return true;
@@ -311,15 +336,6 @@ public class Xray extends Module {
     public void onDisabled() {
         ForgeModContainer.forgeLightPipelineEnabled = true;
         if (mc.renderGlobal != null) {
-            mc.renderGlobal.loadRenderers();
-        }
-    }
-
-    @Override
-    public void verifyValue(String mode) {
-        this.trackedBlocks.clear();
-        this.pendingBlocks.clear();
-        if (this.isEnabled() && mc.renderGlobal != null) {
             mc.renderGlobal.loadRenderers();
         }
     }

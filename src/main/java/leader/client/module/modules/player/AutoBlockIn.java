@@ -4,15 +4,14 @@ import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.event.types.Priority;
 import leader.client.events.*;
-import leader.client.management.RotationState;
+import leader.client.component.impl.rotaion.RotationState;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
-import leader.client.util.MoveUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.util.player.MoveUtil;
 import net.minecraft.block.Block;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.init.Blocks;
@@ -27,17 +26,14 @@ import java.util.List;
 import java.util.Queue;
 
 public class AutoBlockIn extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    private final Map<String, Integer> BLOCK_SCORE = new HashMap<>();
-    private long lastPlaceTime = 0;
-    
-    public final FloatProperty range = new FloatProperty("range", 4.5f, 3.0f, 6.0f);
-    public final IntProperty speed = new IntProperty("speed", 20, 5, 100);
-    public final IntProperty placeDelay = new IntProperty("place-delay", 50, 0, 200);
-    public final IntProperty rotationTolerance = new IntProperty("rotation-tolerance", 25, 5, 100);
-    public final BooleanProperty itemSpoof = new BooleanProperty("item-spoof", true);
-    public final BooleanProperty showProgress = new BooleanProperty("show-progress", true);
-    public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT", "STRICT"});
+
+    public final SliderValue range = new SliderValue("range", 4.5, 3.0, 6.0, Representation.FLOAT, this);
+    public final SliderValue speed = new SliderValue("speed", 20, 5, 100, Representation.INT, this);
+    public final SliderValue placeDelay = new SliderValue("place-delay", 50, 0, 200, Representation.INT, this);
+    public final SliderValue rotationTolerance = new SliderValue("rotation-tolerance", 25, 5, 100, Representation.INT, this);
+    public final BoolValue itemSpoof = new BoolValue("item-spoof", true, this);
+    public final BoolValue showProgress = new BoolValue("show-progress", true, this);
+    public final ListValue moveFix = new ListValue("move-fix", new String[]{"NONE", "SILENT", "STRICT"}, "SILENT", this);
     
     private float serverYaw;
     private float serverPitch;
@@ -48,7 +44,10 @@ public class AutoBlockIn extends Module {
     private EnumFacing targetFacing;
     private Vec3 targetHitVec;
     private int lastSlot = -1;
-    
+
+    private final Map<String, Integer> BLOCK_SCORE = new HashMap<>();
+    private long lastPlaceTime = 0;
+
     private static final int[][] DIRS = {{1,0,0}, {0,0,1}, {-1,0,0}, {0,0,-1}};
     private static final double INSET = 0.05;
     private static final double STEP = 0.2;
@@ -152,14 +151,14 @@ public class AutoBlockIn extends Module {
             aimPitch = MathHelper.clamp_float(serverPitch + pitchStep, -90.0f, 90.0f);
             
             event.setRotation(aimYaw, aimPitch, 6);
-            event.setPervRotation(this.moveFix.getValue() != 0 ? aimYaw : mc.thePlayer.rotationYaw, 6);
+            event.setPervRotation(this.moveFix.is("NONE") ? mc.thePlayer.rotationYaw : aimYaw, 6);
         }
     }
 
     @EventTarget
     public void onMove(MoveInputEvent event) {
         if (this.isEnabled()) {
-            if (this.moveFix.getValue() == 1
+            if (this.moveFix.is("SILENT")
                     && RotationState.isActived()
                     && RotationState.getPriority() == 6
                     && MoveUtil.isForwardPressed()) {
@@ -184,7 +183,7 @@ public class AutoBlockIn extends Module {
             }
             
             long currentTime = System.currentTimeMillis();
-            if (currentTime - lastPlaceTime >= placeDelay.getValue()) {
+            if (currentTime - lastPlaceTime >= placeDelay.getValue().longValue()) {
                 lastPlaceTime = currentTime;
                 
                 MovingObjectPosition mop = rayTraceBlock(aimYaw, aimPitch, range.getValue());

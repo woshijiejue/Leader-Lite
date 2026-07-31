@@ -13,9 +13,10 @@ import leader.client.event.types.EventType;
 import leader.client.events.UpdateEvent;
 import leader.client.events.WindowClickEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.IntProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.SliderValue;
+import leader.client.module.values.impl.ListValue;
 import leader.client.util.player.ItemUtil;
 
 import java.util.ArrayList;
@@ -23,27 +24,29 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 
 public class InvManager extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    public final IntProperty minDelay = new IntProperty("Min Delay", 0, 0, 20);
-    public final IntProperty maxDelay = new IntProperty("Max Delay", 0, 0, 20);
-    public final IntProperty openDelay = new IntProperty("Open Delay", 0, 0, 20);
-    public final ModeProperty mode = new ModeProperty("Mode", 1, new String[]{"Normal", "Instant"});
-    public final BooleanProperty autoClose = new BooleanProperty("Auto Close", false);
-    public final BooleanProperty autoArmor = new BooleanProperty("Auto Armor", true);
-    public final BooleanProperty dropTrash = new BooleanProperty("Drop Trash", true);
-    public final IntProperty swordSlot = new IntProperty("Sword Slot", 1, 0, 9);
-    public final IntProperty pickaxeSlot = new IntProperty("Pickaxe Slot", 8, 0, 9);
-    public final IntProperty shovelSlot = new IntProperty("Shovel Slot", 7, 0, 9);
-    public final IntProperty axeSlot = new IntProperty("Axe Slot", 9, 0, 9);
-    public final IntProperty blocksSlot = new IntProperty("Blocks Slot", 2, 0, 9);
-    public final IntProperty blocks = new IntProperty("Blocks", 128, 64, 2304);
-    public final IntProperty throwsSlot = new IntProperty("Throws Slot", 4, 0, 9);
-    public final IntProperty throwsAmount = new IntProperty("Throws Amount", 64, 16, 320);
-    public final IntProperty gappleSlot = new IntProperty("Gapple Slot", 3, 0, 9);
-    public final BooleanProperty keepOre = new BooleanProperty("Keep Ore", true);
-    public final BooleanProperty keepWaterBucket = new BooleanProperty("Keep Water Bucket", true);
-    public final BooleanProperty keepBowAndArrows = new BooleanProperty("Keep Bow And Arrows", true);
-    public final IntProperty bowSlot = new IntProperty("Bow Slot", 5, 0, 9, keepBowAndArrows::getValue);
+    
+    public final SliderValue minDelay = (SliderValue) new SliderValue("Min Delay", 0, 0, 20, Representation.INT, this)
+            .onChanged(() -> { if (this.minDelay.getValue() > this.maxDelay.getValue()) this.maxDelay.setValue(this.minDelay.getValue().floatValue()); });
+    public final SliderValue maxDelay = (SliderValue) new SliderValue("Max Delay", 0, 0, 20, Representation.INT, this)
+            .onChanged(() -> { if (this.minDelay.getValue() > this.maxDelay.getValue()) this.minDelay.setValue(this.maxDelay.getValue().floatValue()); });
+    public final SliderValue openDelay = new SliderValue("Open Delay", 0, 0, 20, Representation.INT, this);
+    public final ListValue mode = new ListValue("Mode", new String[]{"Normal", "Instant"}, "Instant", this);
+    public final BoolValue autoClose = new BoolValue("Auto Close", false, this);
+    public final BoolValue autoArmor = new BoolValue("Auto Armor", true, this);
+    public final BoolValue dropTrash = new BoolValue("Drop Trash", true, this);
+    public final SliderValue swordSlot = new SliderValue("Sword Slot", 1, 0, 9, Representation.INT, this);
+    public final SliderValue pickaxeSlot = new SliderValue("Pickaxe Slot", 8, 0, 9, Representation.INT, this);
+    public final SliderValue shovelSlot = new SliderValue("Shovel Slot", 7, 0, 9, Representation.INT, this);
+    public final SliderValue axeSlot = new SliderValue("Axe Slot", 9, 0, 9, Representation.INT, this);
+    public final SliderValue blocksSlot = new SliderValue("Blocks Slot", 2, 0, 9, Representation.INT, this);
+    public final SliderValue blocks = new SliderValue("Blocks", 128, 64, 2304, Representation.INT, this);
+    public final SliderValue throwsSlot = new SliderValue("Throws Slot", 4, 0, 9, Representation.INT, this);
+    public final SliderValue throwsAmount = new SliderValue("Throws Amount", 64, 16, 320, Representation.INT, this);
+    public final SliderValue gappleSlot = new SliderValue("Gapple Slot", 3, 0, 9, Representation.INT, this);
+    public final BoolValue keepOre = new BoolValue("Keep Ore", true, this);
+    public final BoolValue keepWaterBucket = new BoolValue("Keep Water Bucket", true, this);
+    public final BoolValue keepBowAndArrows = new BoolValue("Keep Bow And Arrows", true, this);
+    public final SliderValue bowSlot = new SliderValue("Bow Slot", 5, 0, 9, keepBowAndArrows::getValue, Representation.INT, this);
 
     private int actionDelay = 0;
     private int oDelay = 0;
@@ -55,7 +58,7 @@ public class InvManager extends Module {
 
     @Override
     public String[] getSuffix() {
-        return new String[]{mode.getModeString()};
+        return new String[]{mode.getValue()};
     }
 
     private boolean isValidGameMode() {
@@ -189,7 +192,7 @@ public class InvManager extends Module {
     private boolean isInventorySorted() {
         if (!isValidGameMode()) return true;
 
-        int preferredSwordHotbarSlot = this.swordSlot.getValue() - 1;
+        int preferredSwordHotbarSlot = this.swordSlot.getValue().intValue() - 1;
         int equippedSwordSlot = ItemUtil.findSwordInInventorySlot(preferredSwordHotbarSlot, true);
         int inventorySwordSlot = ItemUtil.findSwordInInventorySlot(preferredSwordHotbarSlot, false);
 
@@ -201,34 +204,34 @@ public class InvManager extends Module {
             int mainSword = equippedSwordSlot != -1 ? equippedSwordSlot : inventorySwordSlot;
             if (mainSword != -1) {
                 secondSwordSlot = Disabler.findSecondSwordSlot(mainSword);
-                prefSecondSwordSlot = disabler.secondSwordSlot.getValue() - 1;
+                prefSecondSwordSlot = disabler.secondSwordSlot.getValue().intValue() - 1;
             }
         }
 
-        int preferredPickaxeHotbarSlot = this.pickaxeSlot.getValue() - 1;
+        int preferredPickaxeHotbarSlot = this.pickaxeSlot.getValue().intValue() - 1;
         int equippedPickaxeSlot = ItemUtil.findInventorySlot("pickaxe", preferredPickaxeHotbarSlot, true);
         int inventoryPickaxeSlot = ItemUtil.findInventorySlot("pickaxe", preferredPickaxeHotbarSlot, false);
 
-        int preferredShovelHotbarSlot = this.shovelSlot.getValue() - 1;
+        int preferredShovelHotbarSlot = this.shovelSlot.getValue().intValue() - 1;
         int equippedShovelSlot = ItemUtil.findInventorySlot("shovel", preferredShovelHotbarSlot, true);
         int inventoryShovelSlot = ItemUtil.findInventorySlot("shovel", preferredShovelHotbarSlot, false);
 
-        int preferredAxeHotbarSlot = this.axeSlot.getValue() - 1;
+        int preferredAxeHotbarSlot = this.axeSlot.getValue().intValue() - 1;
         int equippedAxeSlot = ItemUtil.findInventorySlot("axe", preferredAxeHotbarSlot, true);
         int inventoryAxeSlot = ItemUtil.findInventorySlot("axe", preferredAxeHotbarSlot, false);
 
-        int preferredBlocksHotbarSlot = this.blocksSlot.getValue() - 1;
+        int preferredBlocksHotbarSlot = this.blocksSlot.getValue().intValue() - 1;
         int inventoryBlocksSlot = ItemUtil.findInventorySlot(preferredBlocksHotbarSlot);
 
-        int preferredThrowsHotbarSlot = this.throwsSlot.getValue() - 1;
+        int preferredThrowsHotbarSlot = this.throwsSlot.getValue().intValue() - 1;
         int equippedThrowsSlot = this.findThrowableSlot(preferredThrowsHotbarSlot, true);
         int inventoryThrowsSlot = this.findThrowableSlot(preferredThrowsHotbarSlot, false);
 
-        int preferredGappleHotbarSlot = this.gappleSlot.getValue() - 1;
+        int preferredGappleHotbarSlot = this.gappleSlot.getValue().intValue() - 1;
         int equippedGappleSlot = this.findGappleSlot(preferredGappleHotbarSlot, true);
         int inventoryGappleSlot = this.findGappleSlot(preferredGappleHotbarSlot, false);
 
-        int preferredBowHotbarSlot = this.bowSlot.getValue() - 1;
+        int preferredBowHotbarSlot = this.bowSlot.getValue().intValue() - 1;
         int equippedBowSlot = -1;
         int inventoryBowSlot = -1;
         if (keepBowAndArrows.getValue()) {
@@ -368,9 +371,9 @@ public class InvManager extends Module {
             } else {
                 if (!this.inventoryOpen) {
                     this.inventoryOpen = true;
-                    this.oDelay = this.openDelay.getValue() + 1;
+                    this.oDelay = this.openDelay.getValue().intValue() + 1;
                 }
-                if (this.oDelay <= 0 && (this.mode.getValue() == 1 || this.actionDelay <= 0)) {
+                if (this.oDelay <= 0 && (this.mode.is("Instant") || this.actionDelay <= 0)) {
                     if (this.isEnabled() && this.isValidGameMode()) {
                         ArrayList<Integer> equippedArmorSlots = new ArrayList<>(Arrays.asList(-1, -1, -1, -1));
                         ArrayList<Integer> inventoryArmorSlots = new ArrayList<>(Arrays.asList(-1, -1, -1, -1));
@@ -378,28 +381,28 @@ public class InvManager extends Module {
                             equippedArmorSlots.set(i, ItemUtil.findArmorInventorySlot(i, true));
                             inventoryArmorSlots.set(i, ItemUtil.findArmorInventorySlot(i, false));
                         }
-                        int preferredSwordHotbarSlot = this.swordSlot.getValue() - 1;
+                        int preferredSwordHotbarSlot = this.swordSlot.getValue().intValue() - 1;
                         int equippedSwordSlot = ItemUtil.findSwordInInventorySlot(preferredSwordHotbarSlot, true);
                         int inventorySwordSlot = ItemUtil.findSwordInInventorySlot(preferredSwordHotbarSlot, false);
                         int secondSwordSlot = -1;
-                        int preferredPickaxeHotbarSlot = this.pickaxeSlot.getValue() - 1;
+                        int preferredPickaxeHotbarSlot = this.pickaxeSlot.getValue().intValue() - 1;
                         int equippedPickaxeSlot = ItemUtil.findInventorySlot("pickaxe", preferredPickaxeHotbarSlot, true);
                         int inventoryPickaxeSlot = ItemUtil.findInventorySlot("pickaxe", preferredPickaxeHotbarSlot, false);
-                        int preferredShovelHotbarSlot = this.shovelSlot.getValue() - 1;
+                        int preferredShovelHotbarSlot = this.shovelSlot.getValue().intValue() - 1;
                         int equippedShovelSlot = ItemUtil.findInventorySlot("shovel", preferredShovelHotbarSlot, true);
                         int inventoryShovelSlot = ItemUtil.findInventorySlot("shovel", preferredShovelHotbarSlot, false);
-                        int preferredAxeHotbarSlot = this.axeSlot.getValue() - 1;
+                        int preferredAxeHotbarSlot = this.axeSlot.getValue().intValue() - 1;
                         int equippedAxeSlot = ItemUtil.findInventorySlot("axe", preferredAxeHotbarSlot, true);
                         int inventoryAxeSlot = ItemUtil.findInventorySlot("axe", preferredAxeHotbarSlot, false);
-                        int preferredBlocksHotbarSlot = this.blocksSlot.getValue() - 1;
+                        int preferredBlocksHotbarSlot = this.blocksSlot.getValue().intValue() - 1;
                         int inventoryBlocksSlot = ItemUtil.findInventorySlot(preferredBlocksHotbarSlot);
-                        int preferredThrowsHotbarSlot = this.throwsSlot.getValue() - 1;
+                        int preferredThrowsHotbarSlot = this.throwsSlot.getValue().intValue() - 1;
                         int equippedThrowsSlot = this.findThrowableSlot(preferredThrowsHotbarSlot, true);
                         int inventoryThrowsSlot = this.findThrowableSlot(preferredThrowsHotbarSlot, false);
-                        int preferredGappleHotbarSlot = this.gappleSlot.getValue() - 1;
+                        int preferredGappleHotbarSlot = this.gappleSlot.getValue().intValue() - 1;
                         int equippedGappleSlot = this.findGappleSlot(preferredGappleHotbarSlot, true);
                         int inventoryGappleSlot = this.findGappleSlot(preferredGappleHotbarSlot, false);
-                        int preferredBowHotbarSlot = this.bowSlot.getValue() - 1;
+                        int preferredBowHotbarSlot = this.bowSlot.getValue().intValue() - 1;
                         int equippedBowSlot = -1;
                         int inventoryBowSlot = -1;
                         if (keepBowAndArrows.getValue()) {
@@ -417,11 +420,11 @@ public class InvManager extends Module {
                             int mainSword = equippedSwordSlot != -1 ? equippedSwordSlot : inventorySwordSlot;
                             if (mainSword != -1) {
                                 secondSwordSlot = Disabler.findSecondSwordSlot(mainSword);
-                                prefSecondSwordSlot = disabler.secondSwordSlot.getValue() - 1;
+                                prefSecondSwordSlot = disabler.secondSwordSlot.getValue().intValue() - 1;
                             }
                         }
 
-                        if (this.mode.getValue() == 0) {
+                        if (this.mode.is("Normal")) {
                             if (this.autoArmor.getValue()) {
                             for (int i = 0; i < 4; i++) {
                                 int equippedSlot = equippedArmorSlots.get(i);
@@ -580,7 +583,7 @@ public class InvManager extends Module {
                                     }
                                 }
                             }
-                        } else if (this.mode.getValue() == 1) {
+                        } else if (this.mode.is("Instant")) {
                             if (this.autoArmor.getValue()) {
                                 for (int i = 0; i < 4; i++) {
                                     int equippedSlot = ItemUtil.findArmorInventorySlot(i, true);
@@ -603,7 +606,7 @@ public class InvManager extends Module {
                                 }
                             }
                             LinkedHashSet<Integer> usedHotbarSlots = new LinkedHashSet<>();
-                            int prefSword = swordSlot.getValue() - 1;
+                            int prefSword = swordSlot.getValue().intValue() - 1;
                             if (prefSword >= 0 && prefSword <= 8) {
                                 int eqSword = ItemUtil.findSwordInInventorySlot(prefSword, true);
                                 int invSword = ItemUtil.findSwordInInventorySlot(prefSword, false);
@@ -623,7 +626,7 @@ public class InvManager extends Module {
                                     }
                                 }
                             }
-                            int prefPick = pickaxeSlot.getValue() - 1;
+                            int prefPick = pickaxeSlot.getValue().intValue() - 1;
                             if (prefPick >= 0 && prefPick <= 8 && !usedHotbarSlots.contains(prefPick)) {
                                 int eqPick = ItemUtil.findInventorySlot("pickaxe", prefPick, true);
                                 int invPick = ItemUtil.findInventorySlot("pickaxe", prefPick, false);
@@ -635,7 +638,7 @@ public class InvManager extends Module {
                                     }
                                 }
                             }
-                            int prefShovel = shovelSlot.getValue() - 1;
+                            int prefShovel = shovelSlot.getValue().intValue() - 1;
                             if (prefShovel >= 0 && prefShovel <= 8 && !usedHotbarSlots.contains(prefShovel)) {
                                 int eqShovel = ItemUtil.findInventorySlot("shovel", prefShovel, true);
                                 int invShovel = ItemUtil.findInventorySlot("shovel", prefShovel, false);
@@ -647,7 +650,7 @@ public class InvManager extends Module {
                                     }
                                 }
                             }
-                            int prefAxe = axeSlot.getValue() - 1;
+                            int prefAxe = axeSlot.getValue().intValue() - 1;
                             if (prefAxe >= 0 && prefAxe <= 8 && !usedHotbarSlots.contains(prefAxe)) {
                                 int eqAxe = ItemUtil.findInventorySlot("axe", prefAxe, true);
                                 int invAxe = ItemUtil.findInventorySlot("axe", prefAxe, false);
@@ -659,7 +662,7 @@ public class InvManager extends Module {
                                     }
                                 }
                             }
-                            int prefBlocks = blocksSlot.getValue() - 1;
+                            int prefBlocks = blocksSlot.getValue().intValue() - 1;
                             if (prefBlocks >= 0 && prefBlocks <= 8 && !usedHotbarSlots.contains(prefBlocks)) {
                                 int invBlocks = ItemUtil.findInventorySlot(prefBlocks);
                                 if (invBlocks != -1) {
@@ -669,7 +672,7 @@ public class InvManager extends Module {
                                     }
                                 }
                             }
-                            int prefThrows = throwsSlot.getValue() - 1;
+                            int prefThrows = throwsSlot.getValue().intValue() - 1;
                             if (prefThrows >= 0 && prefThrows <= 8 && !usedHotbarSlots.contains(prefThrows)) {
                                 int eqThrows = findThrowableSlot(prefThrows, true);
                                 int invThrows = findThrowableSlot(prefThrows, false);
@@ -681,7 +684,7 @@ public class InvManager extends Module {
                                     }
                                 }
                             }
-                            int prefGapple = gappleSlot.getValue() - 1;
+                            int prefGapple = gappleSlot.getValue().intValue() - 1;
                             if (prefGapple >= 0 && prefGapple <= 8 && !usedHotbarSlots.contains(prefGapple)) {
                                 int eqGapple = findGappleSlot(prefGapple, true);
                                 int invGapple = findGappleSlot(prefGapple, false);
@@ -694,7 +697,7 @@ public class InvManager extends Module {
                                 }
                             }
                             if (keepBowAndArrows.getValue()) {
-                                int prefBow = bowSlot.getValue() - 1;
+                                int prefBow = bowSlot.getValue().intValue() - 1;
                                 if (prefBow >= 0 && prefBow <= 8 && !usedHotbarSlots.contains(prefBow)) {
                                     int eqBow = findBowSlot(prefBow, true);
                                     int invBow = findBowSlot(prefBow, false);
@@ -714,21 +717,21 @@ public class InvManager extends Module {
                                 eqArmor.set(i, ItemUtil.findArmorInventorySlot(i, true));
                                 invArmor.set(i, ItemUtil.findArmorInventorySlot(i, false));
                             }
-                            int eqSwordDrop = ItemUtil.findSwordInInventorySlot(swordSlot.getValue() - 1, true);
-                            int invSwordDrop = ItemUtil.findSwordInInventorySlot(swordSlot.getValue() - 1, false);
-                            int eqPickDrop = ItemUtil.findInventorySlot("pickaxe", pickaxeSlot.getValue() - 1, true);
-                            int invPickDrop = ItemUtil.findInventorySlot("pickaxe", pickaxeSlot.getValue() - 1, false);
-                            int eqShovelDrop = ItemUtil.findInventorySlot("shovel", shovelSlot.getValue() - 1, true);
-                            int invShovelDrop = ItemUtil.findInventorySlot("shovel", shovelSlot.getValue() - 1, false);
-                            int eqAxeDrop = ItemUtil.findInventorySlot("axe", axeSlot.getValue() - 1, true);
-                            int invAxeDrop = ItemUtil.findInventorySlot("axe", axeSlot.getValue() - 1, false);
-                            int invBlocksDrop = ItemUtil.findInventorySlot(blocksSlot.getValue() - 1);
-                            int eqThrowsDrop = findThrowableSlot(throwsSlot.getValue() - 1, true);
-                            int invThrowsDrop = findThrowableSlot(throwsSlot.getValue() - 1, false);
-                            int eqGappleDrop = findGappleSlot(gappleSlot.getValue() - 1, true);
-                            int invGappleDrop = findGappleSlot(gappleSlot.getValue() - 1, false);
-                            int eqBowDrop = findBowSlot(bowSlot.getValue() - 1, true);
-                            int invBowDrop = findBowSlot(bowSlot.getValue() - 1, false);
+                            int eqSwordDrop = ItemUtil.findSwordInInventorySlot(swordSlot.getValue().intValue() - 1, true);
+                            int invSwordDrop = ItemUtil.findSwordInInventorySlot(swordSlot.getValue().intValue() - 1, false);
+                            int eqPickDrop = ItemUtil.findInventorySlot("pickaxe", pickaxeSlot.getValue().intValue() - 1, true);
+                            int invPickDrop = ItemUtil.findInventorySlot("pickaxe", pickaxeSlot.getValue().intValue() - 1, false);
+                            int eqShovelDrop = ItemUtil.findInventorySlot("shovel", shovelSlot.getValue().intValue() - 1, true);
+                            int invShovelDrop = ItemUtil.findInventorySlot("shovel", shovelSlot.getValue().intValue() - 1, false);
+                            int eqAxeDrop = ItemUtil.findInventorySlot("axe", axeSlot.getValue().intValue() - 1, true);
+                            int invAxeDrop = ItemUtil.findInventorySlot("axe", axeSlot.getValue().intValue() - 1, false);
+                            int invBlocksDrop = ItemUtil.findInventorySlot(blocksSlot.getValue().intValue() - 1);
+                            int eqThrowsDrop = findThrowableSlot(throwsSlot.getValue().intValue() - 1, true);
+                            int invThrowsDrop = findThrowableSlot(throwsSlot.getValue().intValue() - 1, false);
+                            int eqGappleDrop = findGappleSlot(gappleSlot.getValue().intValue() - 1, true);
+                            int invGappleDrop = findGappleSlot(gappleSlot.getValue().intValue() - 1, false);
+                            int eqBowDrop = findBowSlot(bowSlot.getValue().intValue() - 1, true);
+                            int invBowDrop = findBowSlot(bowSlot.getValue().intValue() - 1, false);
 
                             int currentBlockCount = getStackSize(invBlocksDrop);
                             int totalThrowsCount = getTotalThrowsCount();
@@ -809,24 +812,9 @@ public class InvManager extends Module {
             this.actionDelay = 0;
         } else {
             this.actionDelay = RandomUtils.nextInt(
-                    this.minDelay.getValue() + 1,
-                    this.maxDelay.getValue() + 2
+                    this.minDelay.getValue().intValue() + 1,
+                    this.maxDelay.getValue().intValue() + 2
             );
-        }
-    }
-
-    @Override
-    public void verifyValue(String string) {
-        switch (string) {
-            case "min-delay":
-                if (this.minDelay.getValue() > this.maxDelay.getValue()) {
-                    this.maxDelay.setValue(this.minDelay.getValue());
-                }
-                break;
-            case "max-delay":
-                if (this.minDelay.getValue() > this.maxDelay.getValue()) {
-                    this.minDelay.setValue(this.maxDelay.getValue());
-                }
         }
     }
 }

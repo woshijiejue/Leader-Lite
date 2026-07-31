@@ -1,14 +1,13 @@
 package leader.client.util.player;
 
-import leader.mixin.IAccessorEntity;
-import leader.client.util.RandomUtil;
-import net.minecraft.client.Minecraft;
+import leader.client.util.InstanceAccess;
+import leader.mixin.accessor.IAccessorEntity;
+import leader.client.util.math.RandomUtil;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.*;
 
-public class RotationUtil {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+public class RotationUtil implements InstanceAccess {
     public static float[] nearestRotation(final AxisAlignedBB box, float currentYaw, float currentPitch,
                                    float maxAngle, float smoothFactor) {
         if (mc.thePlayer == null) return null;

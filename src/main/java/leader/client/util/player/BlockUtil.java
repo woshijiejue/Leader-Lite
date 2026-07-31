@@ -1,19 +1,18 @@
 package leader.client.util.player;
 
-import leader.client.util.RandomUtil;
+import leader.client.util.InstanceAccess;
+import leader.client.util.math.RandomUtil;
 import net.minecraft.block.*;
 import net.minecraft.block.material.Material;
-import net.minecraft.client.Minecraft;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 
-public class BlockUtil {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-
+public class BlockUtil implements InstanceAccess {
+    
     public static boolean isReplaceable(BlockPos blockPos) {
-        return BlockUtil.isReplaceable(BlockUtil.mc.theWorld.getBlockState(blockPos).getBlock());
+        return BlockUtil.isReplaceable(mc.theWorld.getBlockState(blockPos).getBlock());
     }
 
     public static boolean isReplaceable(Block block) {
@@ -23,7 +22,7 @@ public class BlockUtil {
     }
 
     public static boolean isInteractable(BlockPos blockPos) {
-        return BlockUtil.isInteractable(BlockUtil.mc.theWorld.getBlockState(blockPos).getBlock());
+        return BlockUtil.isInteractable(mc.theWorld.getBlockState(blockPos).getBlock());
     }
 
     public static boolean isInteractable(Block block) {
@@ -72,7 +71,7 @@ public class BlockUtil {
     }
 
     public static Vec3 getHitVec(BlockPos blockPos, EnumFacing enumFacing, float yaw, float pitch) {
-        MovingObjectPosition movingObjectPosition = RotationUtil.rayTrace(yaw, pitch, BlockUtil.mc.playerController.getBlockReachDistance(), 1.0f);
+        MovingObjectPosition movingObjectPosition = RotationUtil.rayTrace(yaw, pitch, mc.playerController.getBlockReachDistance(), 1.0f);
         if (movingObjectPosition != null) {
             if (movingObjectPosition.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
                 if (movingObjectPosition.getBlockPos().equals(blockPos)) {
@@ -86,7 +85,7 @@ public class BlockUtil {
     }
 
     public static Vec3 getClickVec(BlockPos blockPos, EnumFacing enumFacing) {
-        Block block = BlockUtil.mc.theWorld.getBlockState(blockPos).getBlock();
+        Block block = mc.theWorld.getBlockState(blockPos).getBlock();
         Vec3 vec3 = new Vec3((double) blockPos.getX() + Math.min(Math.max(RandomUtil.nextDouble(0.0, 1.0), block.getBlockBoundsMinX()), block.getBlockBoundsMaxX()), (double) blockPos.getY() + Math.min(Math.max(RandomUtil.nextDouble(0.0, 1.0), block.getBlockBoundsMinY()), block.getBlockBoundsMaxY()), (double) blockPos.getZ() + Math.min(Math.max(RandomUtil.nextDouble(0.0, 1.0), block.getBlockBoundsMinZ()), block.getBlockBoundsMaxZ()));
         switch (enumFacing) {
             default: {

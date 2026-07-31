@@ -6,22 +6,22 @@ import leader.client.event.types.Priority;
 import leader.client.events.MoveInputEvent;
 import leader.client.events.PacketEvent;
 import leader.client.module.Module;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.SliderValue;
 import leader.client.util.timer.TimerUtil;
-import leader.client.property.properties.FloatProperty;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C02PacketUseEntity.Action;
 import net.minecraft.potion.Potion;
 
 public class Wtap extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
-    private final TimerUtil timer = new TimerUtil();
+    public final SliderValue delay = new SliderValue("delay", 5.5, 0.0, 10.0, Representation.FLOAT, this);
+    public final SliderValue duration = new SliderValue("duration", 1.5, 1.0, 5.0, Representation.FLOAT, this);
     private boolean active = false;
     private boolean stopForward = false;
     private long delayTicks = 0L;
     private long durationTicks = 0L;
-    public final FloatProperty delay = new FloatProperty("delay", 5.5F, 0.0F, 10.0F);
-    public final FloatProperty duration = new FloatProperty("duration", 1.5F, 1.0F, 5.0F);
+    private final TimerUtil timer = new TimerUtil();
 
     private boolean canTrigger() {
         return !(mc.thePlayer.movementInput.moveForward < 0.8F)

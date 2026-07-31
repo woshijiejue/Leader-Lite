@@ -7,7 +7,7 @@ import leader.client.events.KeyEvent;
 import leader.client.events.TickEvent;
 import leader.client.module.modules.render.GuiModule;
 import leader.client.module.modules.render.HUD;
-import leader.client.util.ChatUtil;
+import leader.client.util.DebugUtil;
 import leader.client.util.render.SoundUtil;
 
 import java.util.LinkedHashMap;
@@ -45,7 +45,7 @@ public class ModuleManager {
             if (shouldNotify) {
                 String status = module.isEnabled() ? "&a&lON" : "&c&lOFF";
                 String message = String.format("%s%s: %s&r", Leader.clientName, module.getName(), status);
-                ChatUtil.sendFormatted(message);
+                DebugUtil.sendFormatted(message);
             }
         }
     }

@@ -5,16 +5,15 @@ import leader.client.event.types.EventType;
 import leader.client.events.StrafeEvent;
 import leader.client.events.UpdateEvent;
 import leader.client.module.Module;
-import leader.client.util.KeyBindUtil;
-import leader.client.util.MoveUtil;
-import leader.client.property.properties.FloatProperty;
-import net.minecraft.client.Minecraft;
+import leader.client.util.misc.KeyBindUtil;
+import leader.client.util.player.MoveUtil;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.SliderValue;
 
 public class Fly extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    public final SliderValue hSpeed = new SliderValue("horizontal-speed", 1.0, 0.0, 100.0, Representation.FLOAT, this);
+    public final SliderValue vSpeed = new SliderValue("vertical-speed", 1.0, 0.0, 100.0, Representation.FLOAT, this);
     private double verticalMotion = 0.0;
-    public final FloatProperty hSpeed = new FloatProperty("horizontal-speed", 1.0F, 0.0F, 100.0F);
-    public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 1.0F, 0.0F, 100.0F);
 
     public Fly() {
         super("Fly", false);

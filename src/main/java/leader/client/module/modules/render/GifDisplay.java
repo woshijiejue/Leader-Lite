@@ -9,9 +9,10 @@ import org.lwjgl.opengl.GL11;
 import leader.client.event.EventTarget;
 import leader.client.events.Render2DEvent;
 import leader.client.module.Module;
-import leader.client.property.properties.BooleanProperty;
-import leader.client.property.properties.FloatProperty;
-import leader.client.property.properties.ModeProperty;
+import leader.client.module.values.Representation;
+import leader.client.module.values.impl.BoolValue;
+import leader.client.module.values.impl.ListValue;
+import leader.client.module.values.impl.SliderValue;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -25,14 +26,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class GifDisplay extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty gifMode = new ModeProperty("GIF", 0, new String[]{"AngryPig", "Best", "CryCat", "Dancer", "DieCat", "DiePig", "Kabo", "NoneBig", "PigFucker", "YaoMao"});
-    public final BooleanProperty lockRatio = new BooleanProperty("Lock Ratio", true);
-    public final FloatProperty posX = new FloatProperty("X", 200.0F, 0.0F, 3000.0F);
-    public final FloatProperty posY = new FloatProperty("Y", 100.0F, 0.0F, 3000.0F);
-    public final FloatProperty imgWidth = new FloatProperty("Width", 128.0F, 1.0F, 2000.0F);
-    public final FloatProperty imgHeight = new FloatProperty("Height", 128.0F, 1.0F, 2000.0F, () -> !this.lockRatio.getValue());
+
+    public final ListValue gifMode = new ListValue("GIF", new String[]{"AngryPig", "Best", "CryCat", "Dancer", "DieCat", "DiePig", "Kabo", "NoneBig", "PigFucker", "YaoMao"}, "AngryPig", this);
+    public final BoolValue lockRatio = new BoolValue("Lock Ratio", true, this);
+    public final SliderValue posX = new SliderValue("X", 200.0, 0.0, 3000.0, Representation.FLOAT, this);
+    public final SliderValue posY = new SliderValue("Y", 100.0, 0.0, 3000.0, Representation.FLOAT, this);
+    public final SliderValue imgWidth = new SliderValue("Width", 128.0, 1.0, 2000.0, Representation.FLOAT, this);
+    public final SliderValue imgHeight = new SliderValue("Height", 128.0, 1.0, 2000.0, () -> !this.lockRatio.getValue(), Representation.FLOAT, this);
 
     private List<Integer> frameDelays;
     private List<Integer> textureIds;
@@ -50,7 +51,7 @@ public class GifDisplay extends Module {
     public void onRender(Render2DEvent event) {
         if (!this.isEnabled()) return;
 
-        String currentGif = this.gifMode.getModeString();
+        String currentGif = this.gifMode.getValue();
         if (!currentGif.equals(this.loadedGif)) {
             this.loadGif(currentGif);
         }
@@ -66,15 +67,15 @@ public class GifDisplay extends Module {
         int texId = this.textureIds.get(this.currentFrame);
         if (texId == 0) return;
 
-        int drawWidth = (int) (float) this.imgWidth.getValue();
+        int drawWidth = (int)(float) this.imgWidth.getValue();
         int drawHeight;
         if (this.lockRatio.getValue() && this.originalWidth > 0 && this.originalHeight > 0) {
             drawHeight = (int) ((float) drawWidth * (float) this.originalHeight / (float) this.originalWidth);
         } else {
-            drawHeight = (int) (float) this.imgHeight.getValue();
+            drawHeight = (int)(float) this.imgHeight.getValue();
         }
-        int x = (int) (float) this.posX.getValue();
-        int y = (int) (float) this.posY.getValue();
+        int x = (int)(float) this.posX.getValue();
+        int y = (int)(float) this.posY.getValue();
 
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GlStateManager.bindTexture(texId);

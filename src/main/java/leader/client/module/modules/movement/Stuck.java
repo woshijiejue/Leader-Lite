@@ -1,19 +1,18 @@
 package leader.client.module.modules.movement;
 
 import leader.client.Leader;
-import leader.client.enums.BlinkModules;
-import leader.client.enums.DelayModules;
+import leader.client.component.impl.network.blink.BlinkType;
+import leader.client.component.impl.network.delay.DelayType;
 import leader.client.event.EventTarget;
 import leader.client.event.types.EventType;
 import leader.client.events.*;
-import leader.mixin.IAccessorMinecraft;
+import leader.mixin.accessor.IAccessorMinecraft;
 import leader.client.module.Module;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
 
 public class Stuck extends Module {
-    private static final Minecraft mc = Minecraft.getMinecraft();
+    
     private double savedMotionX;
     private double savedMotionY;
     private double savedMotionZ;
@@ -40,9 +39,9 @@ public class Stuck extends Module {
             if (event.getPacket() instanceof S12PacketEntityVelocity){
                 S12PacketEntityVelocity s12PacketEntityVelocity = (S12PacketEntityVelocity) event.getPacket();
                 if (s12PacketEntityVelocity.getEntityID() == mc.thePlayer.getEntityId()){
-                    Leader.delayManager.setDelayState(true, DelayModules.VELOCITY);
+                    Leader.delayComponent.setDelayState(true, DelayType.VELOCITY);
                     tick = 10;
-                    Leader.delayManager.delayedPacket.offer(s12PacketEntityVelocity);
+                    Leader.delayComponent.delayedPacket.offer(s12PacketEntityVelocity);
                     event.setCancelled(true);
                 }
             }
@@ -66,7 +65,7 @@ public class Stuck extends Module {
     @EventTarget
     public void onUpdate(UpdateEvent event) {
         if (this.isEnabled()) {
-            Leader.blinkManager.setBlinkState(true, BlinkModules.BLINK);
+            Leader.blinkComponent.setBlinkState(true, BlinkType.BLINK);
             KeyBinding.unPressAllKeys();
             mc.thePlayer.motionX = 0.0;
             mc.thePlayer.motionZ = 0.0;
@@ -105,11 +104,11 @@ public class Stuck extends Module {
     public void onDisabled() {
         if (mc.thePlayer != null) {
             using = false;
-            Leader.blinkManager.setBlinkState(false, BlinkModules.BLINK);
+            Leader.blinkComponent.setBlinkState(false, BlinkType.BLINK);
             mc.thePlayer.motionX = savedMotionX;
             mc.thePlayer.motionZ = savedMotionZ;
             mc.thePlayer.motionY = savedMotionY;
-            Leader.delayManager.setDelayState(false, DelayModules.VELOCITY);
+            Leader.delayComponent.setDelayState(false, DelayType.VELOCITY);
             ((IAccessorMinecraft)mc).getTimer().timerSpeed = 1.0F;
         }
     }
