@@ -2,27 +2,33 @@ package leader.ui.components;
 
 import leader.Leader;
 import leader.module.Module;
-import leader.module.modules.render.HUD;
 import leader.property.Property;
 import leader.property.properties.*;
+import leader.ui.AnimationValue;
 import leader.ui.Component;
 import leader.ui.GuiText;
-import leader.ui.dataset.impl.*;
+import leader.ui.dataset.impl.FloatSlider;
+import leader.ui.dataset.impl.IntSlider;
+import leader.ui.dataset.impl.PercentageSlider;
 import leader.util.RenderUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.ScaledResolution;
+import org.lwjgl.opengl.GL11;
+
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ModuleComponent implements Component {
+    private static final int TITLE_HEIGHT = 18;
+    private static final int SETTINGS_TOP_GAP = 6;
+    private final ArrayList<Component> settings;
+    private final AnimationValue expandAnimation = new AnimationValue(0.0F, 180L);
     public Module mod;
     public CategoryComponent category;
     public int offsetY;
-    private final ArrayList<Component> settings;
     public boolean panelExpand;
-    private static final int TITLE_HEIGHT = 18;
-    private static final int SETTINGS_TOP_GAP = 6;
 
     public ModuleComponent(Module mod, CategoryComponent category, int offsetY) {
         this.mod = mod;
@@ -35,11 +41,15 @@ public class ModuleComponent implements Component {
             for (Property<?> prop : Leader.propertyManager.properties.get(mod.getClass())) {
                 Component component = null;
                 if (prop instanceof BooleanProperty) component = new CheckBoxComponent((BooleanProperty) prop, this, y);
-                else if (prop instanceof FloatProperty) component = new SliderComponent(new FloatSlider((FloatProperty) prop), this, y);
-                else if (prop instanceof IntProperty) component = new SliderComponent(new IntSlider((IntProperty) prop), this, y);
-                else if (prop instanceof PercentProperty) component = new SliderComponent(new PercentageSlider((PercentProperty) prop), this, y);
+                else if (prop instanceof FloatProperty)
+                    component = new SliderComponent(new FloatSlider((FloatProperty) prop), this, y);
+                else if (prop instanceof IntProperty)
+                    component = new SliderComponent(new IntSlider((IntProperty) prop), this, y);
+                else if (prop instanceof PercentProperty)
+                    component = new SliderComponent(new PercentageSlider((PercentProperty) prop), this, y);
                 else if (prop instanceof ModeProperty) component = new ModeComponent((ModeProperty) prop, this, y);
-                else if (prop instanceof ColorProperty) component = new ColorSliderComponent((ColorProperty) prop, this, y);
+                else if (prop instanceof ColorProperty)
+                    component = new ColorSliderComponent((ColorProperty) prop, this, y);
                 else if (prop instanceof TextProperty) component = new TextComponent((TextProperty) prop, this, y);
                 if (component != null) {
                     settings.add(component);
@@ -74,40 +84,114 @@ public class ModuleComponent implements Component {
             String arrow = panelExpand ? "v" : ">";
             GuiText.draw(arrow, x + width - 16, textY, new Color(150, 155, 166).getRGB());
         }
-        if (panelExpand) {
-            for (Component c : settings) {
-                if (c.isVisible()) {
-                    c.draw(offset);
-                    offset.incrementAndGet();
-                }
-            }
+        float expandProgress = expandAnimation.get();
+        if (expandProgress > 0.001F) {
+            drawAnimatedSettings(offset, expandProgress);
         }
     }
+
     public ArrayList<Component> getSettings() {
         return settings;
     }
-    @Override public void setComponentStartAt(int n) { this.offsetY = n; int y = n + TITLE_HEIGHT + SETTINGS_TOP_GAP; for (Component c : settings) { c.setComponentStartAt(y); if (c.isVisible()) y += c.getHeight(); } }
-    @Override public int getHeight() { return panelExpand ? TITLE_HEIGHT + SETTINGS_TOP_GAP + settings.stream().filter(Component::isVisible).mapToInt(Component::getHeight).sum() : TITLE_HEIGHT; }
-    @Override public void update(int mx, int my) { if (!panelExpand) return; for (Component c : settings) if (c.isVisible()) c.update(mx, my); }
-    @Override public void mouseDown(int x, int y, int b) {
+
+    @Override
+    public void setComponentStartAt(int n) {
+        this.offsetY = n;
+        int y = n + TITLE_HEIGHT + SETTINGS_TOP_GAP;
+        for (Component c : settings) {
+            c.setComponentStartAt(y);
+            if (c.isVisible()) y += c.getHeight();
+        }
+    }
+
+    @Override
+    public int getHeight() {
+        float progress = expandAnimation.get();
+        return TITLE_HEIGHT + Math.round(getSettingsHeight() * progress);
+    }
+
+    @Override
+    public void update(int mx, int my) {
+        if (!panelExpand) return;
+        for (Component c : settings) if (c.isVisible()) c.update(mx, my);
+    }
+
+    @Override
+    public void mouseDown(int x, int y, int b) {
         if (isHovered(x, y)) {
             if (b == 0) mod.toggle();
-            else if (b == 1) panelExpand = !panelExpand;
+            else if (b == 1) {
+                panelExpand = !panelExpand;
+                expandAnimation.setTarget(panelExpand ? 1.0F : 0.0F);
+            }
             return;
         }
         if (!panelExpand) return;
         for (Component c : settings) if (c.isVisible()) c.mouseDown(x, y, b);
     }
-    @Override public void mouseReleased(int x, int y, int b) { if (!panelExpand) return; for (Component c : settings) if (c.isVisible()) c.mouseReleased(x,y,b); }
-    @Override public void keyTyped(char ch, int k) { if (!panelExpand) return; for (Component c : settings) if (c.isVisible()) c.keyTyped(ch, k); }
-    @Override public boolean isVisible() { return true; }
+
+    @Override
+    public void mouseReleased(int x, int y, int b) {
+        if (!panelExpand) return;
+        for (Component c : settings) if (c.isVisible()) c.mouseReleased(x, y, b);
+    }
+
+    @Override
+    public void keyTyped(char ch, int k) {
+        if (!panelExpand) return;
+        for (Component c : settings) if (c.isVisible()) c.keyTyped(ch, k);
+    }
+
+    @Override
+    public boolean isVisible() {
+        return true;
+    }
+
     public boolean contains(int x, int y) {
         return x > category.getX() + 5 && x < category.getX() + category.getWidth() - 5
                 && y > category.getY() + offsetY && y < category.getY() + offsetY + getHeight();
     }
-    private boolean isHovered(int x, int y) { return x > category.getX() + 5 && x < category.getX() + category.getWidth() - 5 && y > category.getY() + offsetY && y < category.getY() + 18 + offsetY; }
+
+    private boolean isHovered(int x, int y) {
+        return x > category.getX() + 5 && x < category.getX() + category.getWidth() - 5 && y > category.getY() + offsetY && y < category.getY() + 18 + offsetY;
+    }
 
     private String trimText(String text, int maxWidth) {
         return GuiText.trim(text, maxWidth);
+    }
+
+    private int getSettingsHeight() {
+        return SETTINGS_TOP_GAP + settings.stream()
+                .filter(Component::isVisible)
+                .mapToInt(Component::getHeight)
+                .sum();
+    }
+
+    private void drawAnimatedSettings(AtomicInteger offset, float progress) {
+        float scale = category.getRenderScale();
+        ScaledResolution resolution = new ScaledResolution(Minecraft.getMinecraft());
+        float moduleTop = category.getY() + offsetY + TITLE_HEIGHT;
+        float moduleBottom = moduleTop + getSettingsHeight() * progress;
+        float categoryTop = category.getY() + category.getTitleHeight();
+        float categoryBottom = categoryTop + category.getDisplayHeight();
+        float clipTop = Math.max(moduleTop, categoryTop);
+        float clipBottom = Math.min(moduleBottom, categoryBottom);
+        if (clipBottom <= clipTop) return;
+
+        int framebufferScale = resolution.getScaleFactor();
+        int left = (int) Math.floor(category.getX() * scale * framebufferScale);
+        int right = (int) Math.ceil((category.getX() + category.getWidth()) * scale * framebufferScale);
+        int bottom = (int) Math.floor((resolution.getScaledHeight() - clipBottom * scale) * framebufferScale);
+        int top = (int) Math.ceil((resolution.getScaledHeight() - clipTop * scale) * framebufferScale);
+        GL11.glPushAttrib(GL11.GL_SCISSOR_BIT);
+        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+        GL11.glScissor(left, bottom, Math.max(1, right - left), Math.max(1, top - bottom));
+        for (Component c : settings) {
+            if (c.isVisible()) {
+                c.draw(offset);
+                offset.incrementAndGet();
+            }
+        }
+        GL11.glPopAttrib();
     }
 }

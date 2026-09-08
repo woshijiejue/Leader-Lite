@@ -211,13 +211,18 @@ public class RenderUtil {
         if (color == 0) {
             return;
         }
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
         RenderUtil.setColor(color);
-        GL11.glBegin(GL11.GL_POLYGON);
+        GL11.glBegin(GL11.GL_QUADS);
         GL11.glVertex2f(x1, y1);
         GL11.glVertex2f(x1, y2);
         GL11.glVertex2f(x2, y2);
         GL11.glVertex2f(x2, y1);
         GL11.glEnd();
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
         GlStateManager.resetColor();
     }
 
@@ -449,7 +454,9 @@ public class RenderUtil {
 
     public static void drawFramebuffer(Framebuffer framebuffer) {
         ScaledResolution scaledResolution = new ScaledResolution(mc);
+        GlStateManager.enableTexture2D();
         GlStateManager.bindTexture(framebuffer.framebufferTexture);
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2d(0.0, 1.0);
         GL11.glVertex2d(0.0, 0.0);
@@ -460,6 +467,7 @@ public class RenderUtil {
         GL11.glTexCoord2d(1.0, 1.0);
         GL11.glVertex2d(scaledResolution.getScaledWidth(), 0.0);
         GL11.glEnd();
+        GlStateManager.bindTexture(0);
     }
 
     public static void fillCircle(double x, double y, double radius, int segments, int color) {

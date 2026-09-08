@@ -25,7 +25,9 @@ public class KawaseBlur {
 
     private static void initFramebuffers(float iterations) {
         for (Framebuffer fb : framebufferList) {
-            fb.deleteFramebuffer();
+            if (fb != null) {
+                fb.deleteFramebuffer();
+            }
         }
         framebufferList.clear();
         framebufferList.add(framebuffer = ShaderElement.createFrameBuffer(null));
@@ -33,10 +35,11 @@ public class KawaseBlur {
         for (int i = 1; i <= iterations; i++) {
             Framebuffer currentBuffer = new Framebuffer((int) (mc.displayWidth / Math.pow(2, i)), (int) (mc.displayHeight / Math.pow(2, i)), false);
             currentBuffer.setFramebufferFilter(GL11.GL_LINEAR);
+            int prevTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
             GlStateManager.bindTexture(currentBuffer.framebufferTexture);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL14.GL_MIRRORED_REPEAT);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL14.GL_MIRRORED_REPEAT);
-            GlStateManager.bindTexture(0);
+            GlStateManager.bindTexture(prevTexture);
             framebufferList.add(currentBuffer);
         }
     }
@@ -110,6 +113,8 @@ public class KawaseBlur {
         ScaledResolution sr = new ScaledResolution(mc);
         float width = (float) sr.getScaledWidth_double();
         float height = (float) sr.getScaledHeight_double();
+        // 确保纹理已启用
+        GlStateManager.enableTexture2D();
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2f(0, 1);
         GL11.glVertex2f(0, 0);
