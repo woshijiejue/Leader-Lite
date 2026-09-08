@@ -46,6 +46,10 @@ public class KawaseBlur {
 
     public static void renderBlur(int stencilFrameBufferTexture, int iterations, int offset) {
         Minecraft mc = Minecraft.getMinecraft();
+        if (iterations < 1 || mc.displayWidth < 1 || mc.displayHeight < 1
+                || !kawaseDown.isUsable() || !kawaseUp.isUsable()) {
+            return;
+        }
         if (currentIterations != iterations || framebuffer.framebufferWidth != mc.displayWidth || framebuffer.framebufferHeight != mc.displayHeight) {
             initFramebuffers(iterations);
             currentIterations = iterations;
@@ -64,10 +68,11 @@ public class KawaseBlur {
         kawaseUp.setOffset(offset, offset);
         kawaseUp.setInTexture(0);
         kawaseUp.setCheck(1);
-        kawaseUp.setTextureToCheck(16);
+        kawaseUp.setTextureToCheck(1);
         kawaseUp.setHalfPixel(1.0f / lastBuffer.framebufferWidth, 1.0f / lastBuffer.framebufferHeight);
         kawaseUp.setResolution(lastBuffer.framebufferWidth, lastBuffer.framebufferHeight);
-        GL13.glActiveTexture(GL13.GL_TEXTURE16);
+        GL13.glActiveTexture(GL13.GL_TEXTURE1);
+        int previousTextureUnit1 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         RenderUtil.bindTexture(stencilFrameBufferTexture);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         RenderUtil.bindTexture(framebufferList.get(1).framebufferTexture);
@@ -79,6 +84,12 @@ public class KawaseBlur {
         enableBlend();
         drawQuads();
         GlStateManager.bindTexture(0);
+        GlStateManager.enableAlpha();
+        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
+        GlStateManager.resetColor();
+        GL13.glActiveTexture(GL13.GL_TEXTURE1);
+        RenderUtil.bindTexture(previousTextureUnit1);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
     }
 
     private static void renderFBO(Framebuffer framebuffer, int framebufferTexture, KawaseDownShader shader, float offset) {

@@ -23,16 +23,31 @@ public abstract class Shader {
     }
 
     private void createProgram(String fragment) {
+        int vertexShader = this.compileShader(vertex, GL20.GL_VERTEX_SHADER);
+        int fragmentShader = this.compileShader(fragment, GL20.GL_FRAGMENT_SHADER);
+        if (vertexShader == -1 || fragmentShader == -1) {
+            if (vertexShader != -1) {
+                GL20.glDeleteShader(vertexShader);
+            }
+            if (fragmentShader != -1) {
+                GL20.glDeleteShader(fragmentShader);
+            }
+            this.programId = 0;
+            return;
+        }
+
         this.programId = GL20.glCreateProgram();
-        GL20.glAttachShader(this.programId, this.compileShader(vertex, GL20.GL_VERTEX_SHADER));
-        GL20.glAttachShader(this.programId, this.compileShader(fragment, GL20.GL_FRAGMENT_SHADER));
+        GL20.glAttachShader(this.programId, vertexShader);
+        GL20.glAttachShader(this.programId, fragmentShader);
         GL20.glLinkProgram(this.programId);
-        int programId = GL20.glGetProgrami(this.programId, GL20.GL_LINK_STATUS);
-        if (programId == 0) {
-            this.programId = -1;
+        if (GL20.glGetProgrami(this.programId, GL20.GL_LINK_STATUS) == 0) {
+            GL20.glDeleteProgram(this.programId);
+            this.programId = 0;
         } else {
             this.onLink();
         }
+        GL20.glDeleteShader(vertexShader);
+        GL20.glDeleteShader(fragmentShader);
     }
 
     public Shader(String string) {
@@ -41,7 +56,13 @@ public abstract class Shader {
     }
 
     public int getUniformLocationCached(String name) {
-        return this.uniformLocations.get(name);
+        Integer location = this.uniformLocations.get(name);
+        return location == null ? -1 : location;
+    }
+
+    public boolean isUsable() {
+        return this.programId != 0 && GL20.glIsProgram(this.programId)
+                && GL20.glGetProgrami(this.programId, GL20.GL_LINK_STATUS) != 0;
     }
 
     public void setUniform(String name) {
@@ -53,7 +74,9 @@ public abstract class Shader {
     public abstract void onUse();
 
     public void use() {
-        onUse();
+        if (isUsable()) {
+            onUse();
+        }
     }
 
     public void stop() {

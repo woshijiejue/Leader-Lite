@@ -29,8 +29,8 @@ public class TextComponent implements Component {
         int y = module.category.getY() + offsetY;
         int w = module.category.getWidth() - 16;
         int textY = y + (getHeight() - GuiText.height()) / 2;
-        RenderUtil.drawRoundedRectWithGl(x, y + 1, x + w, y + getHeight() - 1, 4, new Color(255, 255, 255, 14).getRGB());
-        GuiText.draw(GuiText.trimLabelValue(this.property.getName().replace("-", " ") + ": ",
+        RenderUtil.drawRoundedRectWithGl(x, y + 1, x + w, y + getHeight() - 1, 6, new Color(255, 255, 255, 14).getRGB());
+        GuiText.drawShadow(GuiText.trimLabelValue(this.property.getName().replace("-", " ") + ": ",
                         ChatColors.formatColor(this.property.formatValue()), w - 4),
                 x + 2, textY, new Color(215, 218, 225).getRGB());
     }
