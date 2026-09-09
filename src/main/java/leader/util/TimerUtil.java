@@ -1,24 +1,40 @@
 package leader.util;
 
+/**
+ * @Description: Kiss my ass
+ * @Author: Eremin12
+ * @Date: 2026/9/9 09:49
+ */
 public class TimerUtil {
-    private long lastMS = 0L;
+    private long lastMS = System.currentTimeMillis();
 
-    public void reset() {
-        this.lastMS = System.currentTimeMillis();
-    }
-
-    public long getElapsedTime() {
-        return System.currentTimeMillis() - this.lastMS;
+    public boolean hasTimeElapsed(long time, boolean reset) {
+        if (System.currentTimeMillis() - lastMS > time) {
+            if (reset) {
+                reset();
+            }
+            return true;
+        }
+        return false;
     }
 
     public boolean hasTimeElapsed(long ms) {
-        return this.getElapsedTime() >= ms;
+        return getElapsedTime() >= ms;
+    }
+
+    public boolean getPass(long time) {
+        return getElapsedTime() >= time;
+    }
+
+    public long getElapsedTime() {
+        return System.currentTimeMillis() - lastMS;
+    }
+
+    public void reset() {
+        lastMS = System.currentTimeMillis();
     }
 
     public void setTime() {
-        this.lastMS = 0L;
-    }
-    public boolean getPass(long time) {
-        return System.currentTimeMillis() - this.lastMS >= time;
+        lastMS = 0L;
     }
 }
