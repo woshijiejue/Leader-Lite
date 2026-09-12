@@ -127,6 +127,62 @@ public class RenderUtil {
         drawRoundedRectWithGl(x1, y1, x2, y2, radius, new Color(255, 255, 255, (int) (12.0F * alpha)).getRGB());
     }
 
+    public static void drawRoundedRectGradientH(float x, float y, float x2, float y2, float radius, int leftColor, int rightColor) {
+        radius = Math.max(0.0F, Math.min(radius, Math.min(x2 - x, y2 - y) / 2.0F));
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
+        Tessellator tessellator = Tessellator.getInstance();
+        WorldRenderer wr = tessellator.getWorldRenderer();
+        wr.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+        gradientVertexX(wr, x + radius, y, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x2 - radius, y, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x2 - radius, y2, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x + radius, y2, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x, y + radius, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x + radius, y + radius, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x + radius, y2 - radius, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x, y2 - radius, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x2 - radius, y + radius, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x2, y + radius, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x2, y2 - radius, x, x2, leftColor, rightColor);
+        gradientVertexX(wr, x2 - radius, y2 - radius, x, x2, leftColor, rightColor);
+        tessellator.draw();
+        if (radius >= 0.1F) {
+            drawArcGradientH(x + radius, y + radius, radius, 180, 270, leftColor, rightColor, x, x2);
+            drawArcGradientH(x2 - radius, y + radius, radius, 270, 360, leftColor, rightColor, x, x2);
+            drawArcGradientH(x + radius, y2 - radius, radius, 90, 180, leftColor, rightColor, x, x2);
+            drawArcGradientH(x2 - radius, y2 - radius, radius, 0, 90, leftColor, rightColor, x, x2);
+        }
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+    }
+
+    private static void gradientVertexX(WorldRenderer wr, float x, float y, float xLeft, float xRight, int leftColor, int rightColor) {
+        float span = Math.max(0.0001F, xRight - xLeft);
+        float t = Math.max(0.0F, Math.min(1.0F, (x - xLeft) / span));
+        int a = (int) ((leftColor >> 24 & 255) + t * ((rightColor >> 24 & 255) - (leftColor >> 24 & 255)));
+        int r = (int) ((leftColor >> 16 & 255) + t * ((rightColor >> 16 & 255) - (leftColor >> 16 & 255)));
+        int g = (int) ((leftColor >> 8 & 255) + t * ((rightColor >> 8 & 255) - (leftColor >> 8 & 255)));
+        int b = (int) ((leftColor & 255) + t * ((rightColor & 255) - (leftColor & 255)));
+        wr.pos(x, y, 0).color(r / 255.0F, g / 255.0F, b / 255.0F, a / 255.0F).endVertex();
+    }
+
+    private static void drawArcGradientH(float cx, float cy, float r, int startAngle, int endAngle, int leftColor, int rightColor, float xLeft, float xRight) {
+        Tessellator tessellator = Tessellator.getInstance();
+        WorldRenderer wr = tessellator.getWorldRenderer();
+        wr.begin(GL11.GL_TRIANGLE_FAN, DefaultVertexFormats.POSITION_COLOR);
+        gradientVertexX(wr, cx, cy, xLeft, xRight, leftColor, rightColor);
+        int steps = Math.max(12, Math.min(28, (int) (r * 3.0F)));
+        for (int i = startAngle; i <= endAngle + (endAngle - startAngle) / steps; i += (endAngle - startAngle) / steps) {
+            double rad = Math.toRadians(i);
+            float x = (float) (cx + Math.cos(rad) * r);
+            float y = (float) (cy + Math.sin(rad) * r);
+            gradientVertexX(wr, x, y, xLeft, xRight, leftColor, rightColor);
+        }
+        tessellator.draw();
+    }
+
     public static void drawGlass(float x1, float y1, float x2, float y2, float radius, float alpha) {
         drawRoundedRectWithGl(x1 + 0.5F, y1 + 1.8F, x2 + 0.5F, y2 + 1.8F, radius,
                 new Color(8, 10, 16, (int) (42.0F * alpha)).getRGB());

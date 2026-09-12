@@ -1423,8 +1423,11 @@ public class KillAura extends Module {
                                                             this.blockTick = 4;
                                                             break;
                                                         case 4:
+                                                            int c09Handle = mc.thePlayer.inventory.currentItem;
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(c09Handle)));
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(c09Handle));
+                                                            this.stopBlock();
                                                             attack = false;
-                                                            Leader.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
                                                             if (this.attackDelayMS <= 50L) {
                                                                 this.blockTick = 0;
                                                             }

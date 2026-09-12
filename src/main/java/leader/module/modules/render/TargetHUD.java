@@ -1380,7 +1380,7 @@ public class TargetHUD extends Module {
                 GlStateManager.pushMatrix();
                 GlStateManager.scale(sc, sc, 1.0F);
                 GlStateManager.translate(bx, by, -450.0F);
-                RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, bw, bh, 9.0F, -1);
+                RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, bw, bh, 5.0F, -1);
                 GlStateManager.popMatrix();
             });
         }
@@ -1392,25 +1392,20 @@ public class TargetHUD extends Module {
         GlStateManager.translate(posX, posY, this.renderingFollow ? 0.0F : -450.0F);
 
         boolean glassBg = this.frostGlass.getValue();
-        int textColor = glassBg ? new Color(20, 24, 34, (int) (232.0F * fade)).getRGB()
-                : new Color(255, 255, 255, (int) (240.0F * fade)).getRGB();
-        int trackColor = glassBg ? new Color(20, 24, 34, (int) (22.0F * fade)).getRGB()
-                : new Color(0, 0, 0, (int) (95.0F * fade)).getRGB();
-        int lagColor = glassBg ? new Color(20, 24, 34, (int) (58.0F * fade)).getRGB()
-                : new Color(0, 0, 0, (int) (140.0F * fade)).getRGB();
-        Color healthFill = ColorUtil.darker(healthBarColor, glassBg ? 0.82F : 1.0F);
+        int textColor = new Color(255, 255, 255, (int) (250.0F * fade)).getRGB();
+        int textShadow = new Color(0, 0, 0, (int) (110.0F * fade)).getRGB();
+        int trackColor = new Color(0, 0, 0, (int) (100.0F * fade)).getRGB();
+        int lagColor = new Color(99, 99, 99, (int) (120.0F * fade)).getRGB();
+        Color healthFill = healthBarColor;
 
         if (glassBg) {
-            RenderUtil.drawGlass(0.0F, 0.0F, cardWidth, cardHeight, 9.0F, fade);
+            RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, 5.0F,
+                    new Color(0, 0, 0, (int) (80.0F * fade)).getRGB());
         }
 
         float headSize = 30.0F * this.frostPopScale * Math.max(0.7F, fade);
         float headX = 8.0F + (30.0F - headSize) / 2.0F;
         float headY = (cardHeight - headSize) / 2.0F;
-        if (glassBg) {
-            RenderUtil.drawRoundedRectWithGl(headX - 0.6F, headY - 0.6F, headX + headSize + 0.6F, headY + headSize + 0.6F,
-                    6.6F, new Color(20, 24, 34, (int) (26.0F * fade)).getRGB());
-        }
 
         float lagW = Math.max(2.0F, contentW * this.frostLagRatio);
         float fillW = Math.max(2.0F, contentW * healthRatio * fade);
@@ -1420,19 +1415,20 @@ public class TargetHUD extends Module {
             RenderUtil.drawRoundedRectWithGl(46.0F, barY, 46.0F + lagW, barY + 4.0F,
                     Math.min(2.0F, lagW / 2.0F), lagColor);
         }
-        RenderUtil.drawRoundedRectWithGl(46.0F, barY, 46.0F + fillW, barY + 4.0F,
-                Math.min(2.0F, fillW / 2.0F), new Color(healthFill.getRed(), healthFill.getGreen(),
-                        healthFill.getBlue(), (int) (245.0F * fade)).getRGB());
+        Color barA = new Color(healthFill.getRed(), healthFill.getGreen(), healthFill.getBlue(),
+                (int) (255.0F * fade));
+        Color barB = ColorUtil.darker(barA, 0.67F);
+        RenderUtil.drawRoundedRectGradientH(46.0F, barY, 46.0F + fillW, barY + 4.0F,
+                Math.min(2.0F, fillW / 2.0F), barA.getRGB(), barB.getRGB());
 
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
+        this.drawText(name, 46.0F + 0.6F, nameY + (1.0F - fade) * 5.0F + 0.6F, textShadow);
         this.drawText(name, 46.0F, nameY + (1.0F - fade) * 5.0F, textColor);
-        Color numberFill = glassBg ? ColorUtil.darker(healthFill, 0.78F) : healthFill;
-        int numberColor = new Color(numberFill.getRed(), numberFill.getGreen(), numberFill.getBlue(),
-                (int) (240.0F * fade)).getRGB();
-        this.drawText(healthStr, 46.0F + contentW - healthNumW, nameY + (1.0F - fade) * 5.0F, numberColor);
+        this.drawText(healthStr, 46.0F + contentW - healthNumW + 0.6F, nameY + (1.0F - fade) * 5.0F + 0.6F, textShadow);
+        this.drawText(healthStr, 46.0F + contentW - healthNumW, nameY + (1.0F - fade) * 5.0F, textColor);
 
         if (armorCount > 0) {
             float itemX = 46.0F;
@@ -1449,7 +1445,7 @@ public class TargetHUD extends Module {
         if (showIndicator) {
             float dotX = 46.0F + contentW - healthNumW - 6.5F;
             float dotY = nameY + this.getTextHeight() / 2.0F;
-            Color dotFill = glassBg ? ColorUtil.darker(healthDeltaColor, 0.82F) : healthDeltaColor;
+            Color dotFill = healthDeltaColor;
             RenderUtil.fillCircle(dotX, dotY, 2.4D, 20,
                     new Color(dotFill.getRed(), dotFill.getGreen(), dotFill.getBlue(),
                             (int) (255.0F * fade)).getRGB());
