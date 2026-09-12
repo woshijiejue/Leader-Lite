@@ -65,6 +65,7 @@ public class AutoProjectiles extends Module {
     private boolean isValidTarget(EntityLivingBase entity) {
         if (entity == mc.thePlayer || entity.deathTime > 0) return false;
         if (!(entity instanceof EntityOtherPlayerMP)) return false;
+        if (!mc.thePlayer.canEntityBeSeen(target))return false;
         if (RotationUtil.distanceToEntity(entity) > this.range.getValue()) return false;
         if (RotationUtil.distanceToEntity(entity) < this.minRange.getValue()) return false;
         if (getYawDifference(entity) > this.fov.getValue() / 2.0F) return false;
@@ -211,30 +212,6 @@ public class AutoProjectiles extends Module {
         return bestPitch;
     }
 
-    private boolean isTrajectoryBlocked(float yaw, float pitch) {
-        double vX = -Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * 1.5;
-        double vY = -Math.sin(Math.toRadians(pitch)) * 1.5;
-        double vZ = Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * 1.5;
-        double x = mc.thePlayer.posX - Math.cos(Math.toRadians(yaw)) * 0.16;
-        double y = mc.thePlayer.posY + mc.thePlayer.getEyeHeight() - 0.1;
-        double z = mc.thePlayer.posZ - Math.sin(Math.toRadians(yaw)) * 0.16;
-        Vec3 prev = new Vec3(x, y, z);
-        for (int i = 0; i < 100; i++) {
-            x += vX;
-            y += vY;
-            z += vZ;
-            vX *= 0.99;
-            vY *= 0.99;
-            vZ *= 0.99;
-            vY -= 0.03;
-            Vec3 cur = new Vec3(x, y, z);
-            MovingObjectPosition mop = mc.theWorld.rayTraceBlocks(prev, cur, false, true, false);
-            if (mop != null && mop.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) return true;
-            prev = cur;
-        }
-        return false;
-    }
-
     private float[] calculateSimulatedRotations(EntityLivingBase target) {
         double ping = 0;
         try {
@@ -262,7 +239,6 @@ public class AutoProjectiles extends Module {
                 predicted.yCoord + target.getEyeHeight() * 0.7, predicted.zCoord);
         float yaw = this.yawTo(aimPoint);
         float pitch = this.searchPitch(aimPoint, yaw);
-        if (this.isTrajectoryBlocked(yaw, pitch)) return null;
         return new float[]{yaw, pitch};
     }
 
@@ -336,19 +312,14 @@ public class AutoProjectiles extends Module {
                 this.switchToProjectile();
                 this.throwState = 2;
                 break;
-
             case 2:
                 float[] rots = calculateSimulatedRotations(this.target);
-                if (rots != null) {
-                    if (this.useRotations.getValue()) {
-                        event.setRotation(rots[0], rots[1], 2);
-                        event.setPervRotation(rots[0], 2);
-                    }
-                    this.hasRotated = this.useRotations.getValue();
-                    this.throwState = 3;
-                } else {
-                    this.throwState = 4;
+                if (this.useRotations.getValue()) {
+                    event.setRotation(rots[0], rots[1], 2);
+                    event.setPervRotation(rots[0], 2);
                 }
+                this.hasRotated = this.useRotations.getValue();
+                this.throwState = 3;
                 break;
 
             case 3:
