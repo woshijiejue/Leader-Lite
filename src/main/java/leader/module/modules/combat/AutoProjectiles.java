@@ -141,6 +141,100 @@ public class AutoProjectiles extends Module {
         return -1;
     }
 
+    private Vec3 predictTargetPos(EntityLivingBase target, double flightTicks) {
+        double relVelX = (target.posX - target.prevPosX) - (mc.thePlayer.posX - mc.thePlayer.prevPosX);
+        double relVelZ = (target.posZ - target.prevPosZ) - (mc.thePlayer.posZ - mc.thePlayer.prevPosZ);
+        double predictedX = target.posX + relVelX * flightTicks;
+        double predictedZ = target.posZ + relVelZ * flightTicks;
+        double predictedY = target.posY + (target.posY - target.prevPosY) * Math.min(flightTicks, 2.0);
+        return new Vec3(predictedX, predictedY, predictedZ);
+    }
+
+    private float yawTo(Vec3 aimPoint) {
+        double diffX = aimPoint.xCoord - mc.thePlayer.posX;
+        double diffZ = aimPoint.zCoord - mc.thePlayer.posZ;
+        return (float) (Math.atan2(diffZ, diffX) * 180.0 / Math.PI) - 90.0F;
+    }
+
+    private double horizontalDistanceTo(Vec3 aimPoint) {
+        double diffX = aimPoint.xCoord - mc.thePlayer.posX;
+        double diffZ = aimPoint.zCoord - mc.thePlayer.posZ;
+        return Math.sqrt(diffX * diffX + diffZ * diffZ);
+    }
+
+    private double estimateFlightTicks(double horizontalDist, float pitch) {
+        double vH = Math.cos(Math.toRadians(pitch)) * 1.5;
+        double travelled = 0.0;
+        for (int t = 1; t <= 100; t++) {
+            travelled += vH;
+            vH *= 0.99;
+            if (travelled >= horizontalDist) return t;
+        }
+        return 100.0;
+    }
+
+    private double arcClosestDistance(Vec3 aimPoint, float yaw, float pitch) {
+        double vX = -Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * 1.5;
+        double vY = -Math.sin(Math.toRadians(pitch)) * 1.5;
+        double vZ = Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * 1.5;
+        double x = mc.thePlayer.posX - Math.cos(Math.toRadians(yaw)) * 0.16;
+        double y = mc.thePlayer.posY + mc.thePlayer.getEyeHeight() - 0.1;
+        double z = mc.thePlayer.posZ - Math.sin(Math.toRadians(yaw)) * 0.16;
+        double best = Double.MAX_VALUE;
+        for (int i = 0; i < 100; i++) {
+            x += vX;
+            y += vY;
+            z += vZ;
+            vX *= 0.99;
+            vY *= 0.99;
+            vZ *= 0.99;
+            vY -= 0.03;
+            double dx = x - aimPoint.xCoord;
+            double dy = y - aimPoint.yCoord;
+            double dz = z - aimPoint.zCoord;
+            double distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq < best) best = distSq;
+        }
+        return Math.sqrt(best);
+    }
+
+    private float searchPitch(Vec3 aimPoint, float yaw) {
+        float bestPitch = 0.0F;
+        double bestDist = Double.MAX_VALUE;
+        for (float pitch = -80.0F; pitch <= 80.0F; pitch += 0.5F) {
+            double dist = this.arcClosestDistance(aimPoint, yaw, pitch);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestPitch = pitch;
+            }
+        }
+        return bestPitch;
+    }
+
+    private boolean isTrajectoryBlocked(float yaw, float pitch) {
+        double vX = -Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * 1.5;
+        double vY = -Math.sin(Math.toRadians(pitch)) * 1.5;
+        double vZ = Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * 1.5;
+        double x = mc.thePlayer.posX - Math.cos(Math.toRadians(yaw)) * 0.16;
+        double y = mc.thePlayer.posY + mc.thePlayer.getEyeHeight() - 0.1;
+        double z = mc.thePlayer.posZ - Math.sin(Math.toRadians(yaw)) * 0.16;
+        Vec3 prev = new Vec3(x, y, z);
+        for (int i = 0; i < 100; i++) {
+            x += vX;
+            y += vY;
+            z += vZ;
+            vX *= 0.99;
+            vY *= 0.99;
+            vZ *= 0.99;
+            vY -= 0.03;
+            Vec3 cur = new Vec3(x, y, z);
+            MovingObjectPosition mop = mc.theWorld.rayTraceBlocks(prev, cur, false, true, false);
+            if (mop != null && mop.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) return true;
+            prev = cur;
+        }
+        return false;
+    }
+
     private float[] calculateSimulatedRotations(EntityLivingBase target) {
         double ping = 0;
         try {
@@ -150,60 +244,26 @@ public class AutoProjectiles extends Module {
         double diffX = target.posX - mc.thePlayer.posX;
         double diffZ = target.posZ - mc.thePlayer.posZ;
         double horizontalDist = Math.sqrt(diffX * diffX + diffZ * diffZ);
-        double flightTicks = horizontalDist / 1.5;
-        double totalPredictTicks = flightTicks + (ping / 50.0) + 1.0;
-        Vec3 predictedPos;
-        if (this.prediction.getValue()) {
-            double relVelX = (target.posX - target.prevPosX) - (mc.thePlayer.posX - mc.thePlayer.prevPosX);
-            double relVelZ = (target.posZ - target.prevPosZ) - (mc.thePlayer.posZ - mc.thePlayer.prevPosZ);
-            double predictedX = target.posX + relVelX * totalPredictTicks;
-            double predictedZ = target.posZ + relVelZ * totalPredictTicks;
-            double predictedY = target.posY + (target.posY - target.prevPosY) * Math.min(totalPredictTicks, 2.0);
-            predictedPos = new Vec3(predictedX, predictedY, predictedZ);
-        } else {
-            predictedPos = new Vec3(target.posX, target.posY, target.posZ);
-        }
-        double pDiffX = predictedPos.xCoord - mc.thePlayer.posX;
-        double pDiffZ = predictedPos.zCoord - mc.thePlayer.posZ;
-        double pDiffY = (predictedPos.yCoord + target.getEyeHeight() * 0.7) - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
-        float yaw = (float) (Math.atan2(pDiffZ, pDiffX) * 180.0 / Math.PI) - 90.0F;
-        double pHorizontalDist = Math.sqrt(pDiffX * pDiffX + pDiffZ * pDiffZ);
-        float bestPitch = 0;
-        double minDiff = Double.MAX_VALUE;
-        boolean found = false;
-        for (float pitch = -90; pitch < 90; pitch += 0.5F) {
-            double simulatedY = simulateProjectile(pHorizontalDist, pitch);
-            double currentDiff = Math.abs(simulatedY - pDiffY);
-            if (currentDiff < minDiff) {
-                minDiff = currentDiff;
-                bestPitch = pitch;
-                found = true;
-            }
-        }
-        if (!found) return null;
-        MovingObjectPosition mop = mc.theWorld.rayTraceBlocks(
-                new Vec3(mc.thePlayer.posX, mc.thePlayer.posY + mc.thePlayer.getEyeHeight(), mc.thePlayer.posZ),
-                new Vec3(predictedPos.xCoord, predictedPos.yCoord + target.getEyeHeight(), predictedPos.zCoord),
-                false, true, false);
-        if (mop != null && mop.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) return null;
-        return new float[]{yaw, bestPitch};
-    }
 
-    private double simulateProjectile(double dist, float pitch) {
-        double v = 1.5;
-        double vY = -Math.sin(Math.toRadians(pitch)) * v;
-        double vH = Math.cos(Math.toRadians(pitch)) * v;
-        double curH = 0;
-        double curY = 0;
-        for (int i = 0; i < 100; i++) {
-            curH += vH;
-            curY += vY;
-            vH *= 0.99;
-            vY *= 0.99;
-            vY -= 0.03;
-            if (curH >= dist) return curY;
+        Vec3 predicted;
+        if (this.prediction.getValue()) {
+            predicted = this.predictTargetPos(target, horizontalDist / 1.5 + ping / 50.0 + 1.0);
+            float yaw = this.yawTo(predicted);
+            float pitch = this.searchPitch(new Vec3(predicted.xCoord,
+                    predicted.yCoord + target.getEyeHeight() * 0.7, predicted.zCoord), yaw);
+            double flightTicks = this.estimateFlightTicks(this.horizontalDistanceTo(predicted), pitch)
+                    + ping / 50.0 + 1.0;
+            predicted = this.predictTargetPos(target, flightTicks);
+        } else {
+            predicted = new Vec3(target.posX, target.posY, target.posZ);
         }
-        return curY;
+
+        Vec3 aimPoint = new Vec3(predicted.xCoord,
+                predicted.yCoord + target.getEyeHeight() * 0.7, predicted.zCoord);
+        float yaw = this.yawTo(aimPoint);
+        float pitch = this.searchPitch(aimPoint, yaw);
+        if (this.isTrajectoryBlocked(yaw, pitch)) return null;
+        return new float[]{yaw, pitch};
     }
 
     private void switchToProjectile() {

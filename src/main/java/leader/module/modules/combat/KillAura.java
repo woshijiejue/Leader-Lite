@@ -1407,25 +1407,28 @@ public class KillAura extends Module {
                                                         case 2:
                                                             attack = false;
                                                             if (this.isPlayerBlocking()) {
-                                                                int c09Handle2 = mc.thePlayer.inventory.currentItem;
-                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(c09Handle2)));
-                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(c09Handle2));
+                                                                int handle = mc.thePlayer.inventory.currentItem;
+                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(handle)));
+                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(handle % 7 + 2));
+                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(handle));
                                                                 this.stopBlock();
                                                             }
                                                             this.blockTick = 3;
                                                             break;
                                                         case 3:
                                                             attack = false;
-                                                            int c09Handle2 = mc.thePlayer.inventory.currentItem;
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(c09Handle2)));
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(c09Handle2));
+                                                            int handle1 = mc.thePlayer.inventory.currentItem;
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(handle1)));
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(handle1 % 7 + 2));
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(handle1));
                                                             this.stopBlock();
                                                             this.blockTick = 4;
                                                             break;
                                                         case 4:
-                                                            int c09Handle = mc.thePlayer.inventory.currentItem;
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(c09Handle)));
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(c09Handle));
+                                                            int handle = mc.thePlayer.inventory.currentItem;
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(handle)));
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(handle % 7 + 2));
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(handle));
                                                             this.stopBlock();
                                                             attack = false;
                                                             if (this.attackDelayMS <= 50L) {
