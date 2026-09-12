@@ -257,7 +257,7 @@ public class HUD extends Module {
                 y = (float) new ScaledResolution(mc).getScaledHeight() - y - height * this.scale.getValue();
             }
             GlStateManager.pushMatrix();
-            GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 0.0F);
+            GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
             long l = System.currentTimeMillis();
             long offset = 0L;
             float listMinX = Float.MAX_VALUE, listMinY = Float.MAX_VALUE;

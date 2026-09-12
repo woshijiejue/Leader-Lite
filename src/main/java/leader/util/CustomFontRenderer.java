@@ -171,12 +171,12 @@ public class CustomFontRenderer {
 
     private int drawCodePointGlyph(int codePoint, float x, float y) {
         CodePointGlyph glyph = getOrGenerateGlyph(codePoint);
+        int tw = nextPowerOfTwo(glyph.width);
+        int th = nextPowerOfTwo(glyph.height);
         GlStateManager.bindTexture(glyph.textureId);
         GlStateManager.enableTexture2D();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        int tw = nextPowerOfTwo(glyph.width);
-        int th = nextPowerOfTwo(glyph.height);
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2d(0.0D, 0.0D);
         GL11.glVertex2f(x, y);

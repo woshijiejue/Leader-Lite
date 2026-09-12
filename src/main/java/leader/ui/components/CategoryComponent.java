@@ -1,6 +1,7 @@
 package leader.ui.components;
 
 import leader.module.Module;
+import leader.ui.AnimationValue;
 import leader.ui.Component;
 import leader.util.RenderUtil;
 import net.minecraft.client.Minecraft;
@@ -27,11 +28,13 @@ public class CategoryComponent {
     public boolean pin = false;
     private double marginY, marginX;
     private int scroll = 0;
-    private double animScroll = 0;
-    private double animExpandHeight = 0;
+    private final AnimationValue scrollAnimation = new AnimationValue(0.0F, 180L);
+    private final AnimationValue expandAnimation = new AnimationValue(0.0F, 220L);
     private int height = 0;
-    private int displayHeight = 0;
+    private float displayHeight = 0.0F;
+    private float renderScale = 1.0F;
     private final int titleHeight;
+    private static final float EDGE_FADE_HEIGHT = 8.0F;
 
     public CategoryComponent(String category, List<Module> modules) {
         this.categoryName = category;
@@ -63,14 +66,17 @@ public class CategoryComponent {
     public void setOpened(boolean on) { this.categoryOpened = on; }
 
     public void render(float uiScale) {
-        int displayH = displayHeight;
-        int totalH = titleHeight + displayH + (displayH > 0 ? 4 : 0);
+        renderScale = uiScale;
+        float animatedScroll = scrollAnimation.get();
+        float displayH = displayHeight;
+        float totalH = titleHeight + displayH + (displayH > 0.0F ? 4.0F : 0.0F);
 
         // Frosted-glass panel: soft white rim, translucent dark pane, title shine.
-        RenderUtil.drawRoundedRectWithGl(x, y, x + width, y + totalH, 6, new Color(255, 255, 255, 30).getRGB());
-        RenderUtil.drawRoundedRectWithGl(x + 1, y + 1, x + width - 1, y + totalH - 1, 5, new Color(15, 17, 23, 208).getRGB());
-        RenderUtil.drawRoundedRectWithGl(x + 2, y + 2, x + width - 2, y + titleHeight, 4, new Color(255, 255, 255, 14).getRGB());
-        Gui.drawRect(x + 8, y + titleHeight - 1, x + width - 8, y + titleHeight, new Color(255, 255, 255, 16).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x, y, x + width, y + totalH, 8, new Color(255, 255, 255, 30).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x + 1, y + 1, x + width - 1, y + totalH - 1, 7, new Color(15, 17, 23, 208).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x + 2, y + 2, x + width - 2, y + titleHeight, 6, new Color(255, 255, 255, 14).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x + 8, y + titleHeight - 1, x + width - 8, y + titleHeight, 0.75F,
+                new Color(255, 255, 255, 16).getRGB());
 
         Minecraft.getMinecraft().fontRendererObj.drawString(trimText(categoryName, width - 32), x + 9, y + 6, new Color(232, 235, 242).getRGB(), false);
         Minecraft.getMinecraft().fontRendererObj.drawString(categoryOpened ? "−" : "+", x + width - 14, y + 6, new Color(125, 172, 238).getRGB(), false);
@@ -91,19 +97,42 @@ public class CategoryComponent {
                     (int) Math.ceil(scaledHeight * framebufferScale));
             for (Component c : modulesInCategory) {
                 int ch = c.getHeight();
-                if (renderHeight + ch > animScroll && renderHeight < animScroll + displayH) {
+                if (renderHeight + ch > animatedScroll && renderHeight < animatedScroll + displayH) {
                     c.draw(new AtomicInteger(0));
                 }
                 renderHeight += ch;
             }
             GL11.glDisable(GL11.GL_SCISSOR_TEST);
 
+            // Soften the hard viewport boundary when a category reaches its
+            // maximum height. The small stacked alpha bands preserve context
+            // while making the clipped row feel intentional.
+            boolean fadeTop = animatedScroll > 0.5F;
+            boolean fadeBottom = animatedScroll + displayH < height - 0.5F;
+            float fadeHeight = Math.min(EDGE_FADE_HEIGHT, Math.max(1.0F, displayH));
+            if (fadeTop) drawEdgeFade(x + 1, y + titleHeight, x + width - 1, fadeHeight, true);
+            if (fadeBottom) drawEdgeFade(x + 1, y + titleHeight + displayH - fadeHeight,
+                    x + width - 1, fadeHeight, false);
+
             if (height > displayH) {
-                float scrollY = y + titleHeight + (float)(animScroll * displayH / height);
+                float scrollY = y + titleHeight + animatedScroll * displayH / height;
                 float barH = Math.max( (float)displayH * displayH / height, 10);
-                Gui.drawRect(x + width - 4, y + titleHeight + 5, x + width - 3, y + titleHeight + displayH - 5, new Color(255, 255, 255, 18).getRGB());
-                RenderUtil.drawRoundedRectWithGl(x + width - 5, scrollY, x + width - 2, scrollY + barH, 2, new Color(255, 255, 255, 90).getRGB());
+                Gui.drawRect(x + width - 4, y + titleHeight + 5, x + width - 3,
+                        y + titleHeight + Math.round(displayH) - 5, new Color(255, 255, 255, 18).getRGB());
+                RenderUtil.drawRoundedRectWithGl(x + width - 5, scrollY, x + width - 2, scrollY + barH, 2.5F, new Color(255, 255, 255, 90).getRGB());
             }
+        }
+    }
+
+    private void drawEdgeFade(float left, float top, float right, float height, boolean fromTop) {
+        int bands = 6;
+        float bandHeight = height / bands;
+        for (int i = 0; i < bands; i++) {
+            int distance = fromTop ? bands - 1 - i : i;
+            int alpha = 10 + distance * 12;
+            float y1 = top + i * bandHeight;
+            float y2 = top + (i + 1) * bandHeight + 0.25F;
+            RenderUtil.drawRect(left, y1, right, y2, new Color(15, 17, 23, alpha).getRGB());
         }
     }
 
@@ -117,21 +146,22 @@ public class CategoryComponent {
 
         int maxScroll = Math.max(0, height - MAX_HEIGHT);
         if (scroll > maxScroll) scroll = maxScroll;
-        animScroll += (scroll - animScroll) * 0.2;
+        scrollAnimation.setTarget(scroll);
+        float animatedScroll = scrollAnimation.get();
         int targetHeight = categoryOpened ? Math.min(height, MAX_HEIGHT) : 0;
-        animExpandHeight += (targetHeight - animExpandHeight) * 0.2;
-        displayHeight = (int) Math.round(animExpandHeight);
-        if (displayHeight < 1 && !categoryOpened) displayHeight = 0;
+        expandAnimation.setTarget(targetHeight);
+        displayHeight = expandAnimation.get();
+        if (displayHeight < 0.01F && !categoryOpened) displayHeight = 0.0F;
 
         int contentOffset = 0;
         for (Component component : modulesInCategory) {
-            component.setComponentStartAt(titleHeight + (int) (contentOffset - animScroll));
+            component.setComponentStartAt(titleHeight + (int) (contentOffset - animatedScroll));
             contentOffset += component.getHeight();
         }
     }
 
     public boolean isInsideContent(int mouseX, int mouseY) {
-        return categoryOpened && displayHeight > 0
+        return categoryOpened && displayHeight > 0.0F
                 && mouseX >= x && mouseX <= x + width
                 && mouseY >= y + titleHeight && mouseY <= y + titleHeight + displayHeight;
     }
@@ -142,8 +172,12 @@ public class CategoryComponent {
     public void setWidth(int width) { this.width = Math.max(100, width); }
 
     public int getVisualHeight() {
-        return titleHeight + displayHeight + (displayHeight > 0 ? 4 : 0);
+        return Math.round(titleHeight + displayHeight + (displayHeight > 0.0F ? 4.0F : 0.0F));
     }
+
+    public int getTitleHeight() { return titleHeight; }
+    public float getDisplayHeight() { return displayHeight; }
+    public float getRenderScale() { return renderScale; }
 
     private String trimText(String text, int maxWidth) {
         FontRenderer font = Minecraft.getMinecraft().fontRendererObj;
@@ -181,7 +215,7 @@ public class CategoryComponent {
     public void onScroll(int mouseX, int mouseY, int scrollAmount) {
         if (!categoryOpened || height <= MAX_HEIGHT) return;
         int areaTop = this.y + this.titleHeight;
-        int areaBottom = this.y + this.titleHeight + this.displayHeight;
+        int areaBottom = this.y + this.titleHeight + Math.round(this.displayHeight);
         if (mouseX >= this.x && mouseX <= this.x + width && mouseY >= areaTop && mouseY <= areaBottom) {
             scroll -= scrollAmount * 12;
             scroll = Math.max(0, Math.min(scroll, height - MAX_HEIGHT));

@@ -30,6 +30,14 @@ public class BookClickGuiScreen extends GuiScreen {
     private static final int PANEL_GAP = 6;
     private static final int WINDOW_PADDING = 8;
 
+    // A small, consistent radius scale keeps the interface feeling soft without
+    // making the compact Minecraft layout look inflated.
+    private static final float WINDOW_RADIUS = 11.0F;
+    private static final float PANEL_RADIUS = 8.0F;
+    private static final float ITEM_RADIUS = 6.0F;
+    private static final float SCROLLBAR_RADIUS = 2.5F;
+    private static final float EDGE_FADE_HEIGHT = 8.0F;
+
     private int windowX, windowY;
     private boolean draggingWindow;
     private boolean windowPositionInitialized;
@@ -145,13 +153,13 @@ public class BookClickGuiScreen extends GuiScreen {
         int w = getWindowWidth();
         int h = getWindowHeight();
 
-        drawRoundedRectSafe(x + 2, y + 2, x + w + 2, y + h + 2, 7, COLOR_SHADOW);
-        drawRoundedRectSafe(x, y, x + w, y + h, 7, COLOR_WINDOW_BG);
+        drawRoundedRectSafe(x + 2, y + 3, x + w + 2, y + h + 3, WINDOW_RADIUS, COLOR_SHADOW);
+        drawRoundedRectSafe(x, y, x + w, y + h, WINDOW_RADIUS, COLOR_WINDOW_BG);
 
-        drawRoundedRectSafe(x, y, x + w, y + TITLE_BAR_HEIGHT + WINDOW_PADDING, 7, COLOR_TITLE_BG);
-        RenderUtil.enableRenderState();
-        Gui.drawRect(x + 8, y + TITLE_BAR_HEIGHT + WINDOW_PADDING - 1, x + w - 8, y + TITLE_BAR_HEIGHT + WINDOW_PADDING, new Color(255, 255, 255, 22).getRGB());
-        RenderUtil.disableRenderState();
+        drawRoundedTopRectSafe(x, y, x + w, y + TITLE_BAR_HEIGHT + WINDOW_PADDING, WINDOW_RADIUS, COLOR_TITLE_BG);
+        drawRoundedRectSafe(x + 8, y + TITLE_BAR_HEIGHT + WINDOW_PADDING - 1,
+                x + w - 8, y + TITLE_BAR_HEIGHT + WINDOW_PADDING, 0.75F,
+                new Color(255, 255, 255, 22).getRGB());
         GlStateManager.disableDepth();
         GlStateManager.enableAlpha();
 
@@ -175,8 +183,18 @@ public class BookClickGuiScreen extends GuiScreen {
         GlStateManager.disableDepth();
     }
 
+    /** Draws a rounded cap at the top while keeping the title bar flush with the window body. */
+    private void drawRoundedTopRectSafe(float x1, float y1, float x2, float y2, float radius, int color) {
+        drawRoundedRectSafe(x1, y1, x2, y2, radius, color);
+        RenderUtil.enableRenderState();
+        Gui.drawRect(Math.round(x1), Math.round(y1 + radius), Math.round(x2), Math.round(y2), color);
+        RenderUtil.disableRenderState();
+        GlStateManager.disableDepth();
+        GlStateManager.enableAlpha();
+    }
+
     private void drawLeftPanel(int x, int y, int mouseX, int mouseY) {
-        drawRoundedRectSafe(x, y, x + LEFT_PANEL_WIDTH, y + PANEL_HEIGHT, 5, COLOR_PANEL_BG);
+        drawRoundedRectSafe(x, y, x + LEFT_PANEL_WIDTH, y + PANEL_HEIGHT, PANEL_RADIUS, COLOR_PANEL_BG);
         GuiText.draw("Categories", x + 8, y + 6, COLOR_WHITE);
 
         int itemY = y + 19;
@@ -186,9 +204,9 @@ public class BookClickGuiScreen extends GuiScreen {
             boolean selected = (i == selectedCategory);
 
             if (selected) {
-                drawRoundedRectSafe(x + 4, itemY, x + LEFT_PANEL_WIDTH - 4, itemY + ITEM_HEIGHT, 4, new Color(86, 157, 255, 48).getRGB());
+                drawRoundedRectSafe(x + 4, itemY, x + LEFT_PANEL_WIDTH - 4, itemY + ITEM_HEIGHT, ITEM_RADIUS, new Color(86, 157, 255, 48).getRGB());
             } else if (hovered) {
-                drawRoundedRectSafe(x + 4, itemY, x + LEFT_PANEL_WIDTH - 4, itemY + ITEM_HEIGHT, 4, new Color(255, 255, 255, 12).getRGB());
+                drawRoundedRectSafe(x + 4, itemY, x + LEFT_PANEL_WIDTH - 4, itemY + ITEM_HEIGHT, ITEM_RADIUS, new Color(255, 255, 255, 12).getRGB());
             }
 
             int color = selected ? COLOR_WHITE : (hovered ? new Color(200, 200, 215).getRGB() : COLOR_GRAY);
@@ -198,7 +216,7 @@ public class BookClickGuiScreen extends GuiScreen {
     }
 
     private void drawMiddlePanel(int x, int y, int mouseX, int mouseY) {
-        drawRoundedRectSafe(x, y, x + MID_PANEL_WIDTH, y + PANEL_HEIGHT, 5, COLOR_PANEL_BG);
+        drawRoundedRectSafe(x, y, x + MID_PANEL_WIDTH, y + PANEL_HEIGHT, PANEL_RADIUS, COLOR_PANEL_BG);
         GuiText.draw("Modules", x + 8, y + 6, COLOR_WHITE);
 
         CategoryComponent cat = categoryList.get(selectedCategory);
@@ -229,9 +247,9 @@ public class BookClickGuiScreen extends GuiScreen {
                     && mouseY >= rowY && mouseY < rowY + ITEM_HEIGHT;
 
             if (selected) {
-                drawRoundedRectSafe(x + 4, rowY, x + MID_PANEL_WIDTH - 4, rowY + ITEM_HEIGHT, 4, new Color(86, 157, 255, 54).getRGB());
+                drawRoundedRectSafe(x + 4, rowY, x + MID_PANEL_WIDTH - 4, rowY + ITEM_HEIGHT, ITEM_RADIUS, new Color(86, 157, 255, 54).getRGB());
             } else if (hovered) {
-                drawRoundedRectSafe(x + 4, rowY, x + MID_PANEL_WIDTH - 4, rowY + ITEM_HEIGHT, 4, new Color(255, 255, 255, 12).getRGB());
+                drawRoundedRectSafe(x + 4, rowY, x + MID_PANEL_WIDTH - 4, rowY + ITEM_HEIGHT, ITEM_RADIUS, new Color(255, 255, 255, 12).getRGB());
             }
 
             if (enabled) {
@@ -247,7 +265,7 @@ public class BookClickGuiScreen extends GuiScreen {
     }
 
     private void drawRightPanel(int x, int y, int mouseX, int mouseY) {
-        drawRoundedRectSafe(x, y, x + RIGHT_PANEL_WIDTH, y + PANEL_HEIGHT, 5, COLOR_PANEL_BG);
+        drawRoundedRectSafe(x, y, x + RIGHT_PANEL_WIDTH, y + PANEL_HEIGHT, PANEL_RADIUS, COLOR_PANEL_BG);
 
         if (categoryList.isEmpty()) return;
         CategoryComponent cat = categoryList.get(selectedCategory);
@@ -267,7 +285,8 @@ public class BookClickGuiScreen extends GuiScreen {
         int nameWidth = Math.max(0, stateX - (x + 8) - 6);
         GuiText.draw(trimText(modName, nameWidth), x + 8, y + 6, isEnabled ? COLOR_WHITE : COLOR_GRAY);
         GuiText.draw(stateText, stateX, y + 6, isEnabled ? COLOR_ACCENT : COLOR_GRAY);
-        Gui.drawRect(x + 8, y + 18, x + RIGHT_PANEL_WIDTH - 8, y + 19, new Color(255, 255, 255, 22).getRGB());
+        drawRoundedRectSafe(x + 8, y + 18, x + RIGHT_PANEL_WIDTH - 8, y + 19, 0.75F,
+                new Color(255, 255, 255, 22).getRGB());
 
         ArrayList<Component> settings = modComp.getSettings();
         if (settings == null || settings.isEmpty()) {
@@ -324,6 +343,19 @@ public class BookClickGuiScreen extends GuiScreen {
         }
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
 
+        // Fade the edges of an overflowing settings list instead of ending
+        // rows on a visibly rigid clipping line.
+        if (totalHeight > contentAreaHeight) {
+            double maxScrollD = Math.max(0, totalHeight - contentAreaHeight);
+            if (settingScrollSmooth > 0.5) {
+                drawEdgeFade(x + 1, contentStartY, x + RIGHT_PANEL_WIDTH - 1, EDGE_FADE_HEIGHT, true);
+            }
+            if (settingScrollSmooth < maxScrollD - 0.5) {
+                drawEdgeFade(x + 1, contentStartY + contentAreaHeight - EDGE_FADE_HEIGHT,
+                        x + RIGHT_PANEL_WIDTH - 1, EDGE_FADE_HEIGHT, false);
+            }
+        }
+
         cat.setX(origCatX);
         cat.setY(origCatY);
         cat.setWidth(origCatWidth);
@@ -339,7 +371,20 @@ public class BookClickGuiScreen extends GuiScreen {
             float barX = x + RIGHT_PANEL_WIDTH - 6;
             float barH = (float) contentAreaHeight * contentAreaHeight / totalHeight;
             float barY = contentStartY + (float) (settingScrollSmooth * contentAreaHeight / totalHeight);
-            drawRoundedRectSafe(barX, barY, barX + 3, barY + barH, 2, new Color(255, 255, 255, 105).getRGB());
+            drawRoundedRectSafe(barX, barY, barX + 4, barY + barH, SCROLLBAR_RADIUS, new Color(255, 255, 255, 105).getRGB());
+        }
+    }
+
+    private void drawEdgeFade(float left, float top, float right, float height, boolean fromTop) {
+        int bands = 6;
+        float bandHeight = height / bands;
+        for (int i = 0; i < bands; i++) {
+            int distance = fromTop ? bands - 1 - i : i;
+            int alpha = 10 + distance * 12;
+            float y1 = top + i * bandHeight;
+            float y2 = top + (i + 1) * bandHeight + 0.25F;
+            drawRoundedRectSafe(left, y1, right, y2, 0.5F,
+                    new Color(30, 33, 41, alpha).getRGB());
         }
     }
 

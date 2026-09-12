@@ -42,8 +42,10 @@ public abstract class MixinGuiIngameForge {
             boolean notificationBlur = notification != null && notification.isEnabled() && notification.blur.getValue();
             boolean potionBlur = potion != null && potion.isEnabled() && potion.blur.getValue();
 
-            if (hudBlur || targetBlur) {
-                if (hud != null) hud.drawBlur();
+            if (hudBlur) {
+                hud.drawBlur();
+            } else if (targetBlur) {
+                targetHud.drawBlur();
             } else if (notificationBlur && notification != null) {
                 notification.drawBlur();
             } else if (potionBlur && potion != null) {

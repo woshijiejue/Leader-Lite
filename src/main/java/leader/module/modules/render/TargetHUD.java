@@ -15,6 +15,7 @@ import leader.util.ColorUtil;
 import leader.util.RenderUtil;
 import leader.util.TeamUtil;
 import leader.util.TimerUtil;
+import leader.util.shader.KawaseBlur;
 import leader.util.shader.ShaderElement;
 import leader.property.properties.*;
 import net.minecraft.client.Minecraft;
@@ -26,6 +27,7 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityArmorStand;
@@ -78,6 +80,9 @@ public class TargetHUD extends Module {
     public final BooleanProperty kaOnly = new BooleanProperty("ka-only", true);
     public final BooleanProperty chatPreview = new BooleanProperty("chat-preview", false);
     public final BooleanProperty blur = new BooleanProperty("blur", false, () -> this.mode.getValue() >= 2);
+    public final IntProperty blurIterations = new IntProperty("blur-iterations", 2, 1, 8, blur::getValue);
+    public final IntProperty blurOffset = new IntProperty("blur-offset", 3, 1, 10, blur::getValue);
+    private Framebuffer blurStencil;
 
     private EntityLivingBase resolveTarget() {
         KillAura killAura = (KillAura) Leader.moduleManager.modules.get(KillAura.class);
@@ -127,6 +132,22 @@ public class TargetHUD extends Module {
 
     public TargetHUD() {
         super("TargetHUD", false, true);
+    }
+
+    public void drawBlur() {
+        if (!this.blur.getValue()) {
+            return;
+        }
+
+        blurStencil = ShaderElement.createFrameBuffer(blurStencil);
+        blurStencil.framebufferClear();
+        blurStencil.bindFramebuffer(false);
+        for (Runnable runnable : ShaderElement.getTasks()) {
+            runnable.run();
+        }
+        ShaderElement.getTasks().clear();
+        blurStencil.unbindFramebuffer();
+        KawaseBlur.renderBlur(blurStencil.framebufferTexture, blurIterations.getValue(), blurOffset.getValue());
     }
 
     private int getBackgroundColor() {
