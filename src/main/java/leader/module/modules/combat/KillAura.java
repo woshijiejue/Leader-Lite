@@ -1595,8 +1595,6 @@ public class KillAura extends Module {
                     Leader.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
                     Leader.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
                 }
-            } else if (this.moveFix.getValue() == 3) {
-                this.applyStrafeRotation(event);
             }
         }
         if (event.getType() == EventType.POST && this.isEnabled()){
