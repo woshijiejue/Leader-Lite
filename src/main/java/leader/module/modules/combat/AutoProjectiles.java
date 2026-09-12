@@ -65,7 +65,6 @@ public class AutoProjectiles extends Module {
     private boolean isValidTarget(EntityLivingBase entity) {
         if (entity == mc.thePlayer || entity.deathTime > 0) return false;
         if (!(entity instanceof EntityOtherPlayerMP)) return false;
-        if (!mc.thePlayer.canEntityBeSeen(target))return false;
         if (RotationUtil.distanceToEntity(entity) > this.range.getValue()) return false;
         if (RotationUtil.distanceToEntity(entity) < this.minRange.getValue()) return false;
         if (getYawDifference(entity) > this.fov.getValue() / 2.0F) return false;
