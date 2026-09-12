@@ -1541,7 +1541,7 @@ public class KillAura extends Module {
                 }
                 boolean attacked = false;
                 if (this.isBoxInSwingRange(this.target.getBox())) {
-                    boolean willAttack = attack && this.attackDelayMS <= 0L;
+                    boolean willAttack = attack && this.attackDelayMS <= 0L && hasValidTarget();
                     boolean strafe = this.moveFix.getValue() == 3 && !willAttack;
                     this.strafeFacing = strafe;
                     if (strafe) {
