@@ -56,6 +56,7 @@ public class Scaffold extends Module {
     public final BooleanProperty onlyInVoid = new BooleanProperty("Only Void", false, this.clutch::getValue);
     public final BooleanProperty bPSRender = new BooleanProperty("Render BPS", true);
     public final BooleanProperty blockCounter = new BooleanProperty("Block Counter", false);
+    public final BooleanProperty airRescue = new BooleanProperty("Air Rescue", true);
     public final FloatProperty edgeThreshold = new FloatProperty("Edge Threshold", 0.15F, 0.01F, 0.5F, () -> mode.getValue() == 2);
     public final BooleanProperty ticksLimit = new BooleanProperty("Ticks Limit", false, () -> mode.getValue() == 2);
     public final IntProperty limitTicks = new IntProperty("Limit Ticks", 10, 1, 40, () -> mode.getValue() == 2 && ticksLimit.getValue());
@@ -66,7 +67,6 @@ public class Scaffold extends Module {
     public final IntProperty speedLimitTicks = new IntProperty("Speed Limit Ticks", 3, 0, 5, () -> mode.getValue() == 1 && speedLimit.getValue());
     public final IntProperty forwardRotationTicks = new IntProperty("Forward Rotation Ticks", 1, 1, 5, () -> mode.getValue() == 1 && speedLimit.getValue());
     public final IntProperty legitSneakDelay = new IntProperty("Legit Sneak Delay", 4, 1, 5, () -> mode.getValue() == 3);
-    public final IntProperty legitPlaceDuration = new IntProperty("Legit Place Time", 4, 2, 5, () -> mode.getValue() == 3);
     public final FloatProperty forwardSpeed = new FloatProperty("ForwardSpeed", 180.0F, 1.0F, 180.0F, () -> mode.getValue() == 4);
     public final FloatProperty backSpeed = new FloatProperty("BackSpeed", 180.0F, 1.0F, 180.0F, () -> mode.getValue() == 4);
     public final FloatProperty placeSpeed = new FloatProperty("PlaceSpeed", 180.0F, 1.0F, 180.0F, () -> mode.getValue() == 4);
@@ -145,6 +145,50 @@ public class Scaffold extends Module {
             }
         }
         return enumFacing;
+    }
+
+    private Vec3 applyRescueRotation(BlockData blockData, UpdateEvent event) {
+        double[] fx = {0.1, 0.3, 0.5, 0.7, 0.9};
+        double[] fy = {0.1, 0.3, 0.5, 0.7, 0.9};
+        double[] fz = {0.1, 0.3, 0.5, 0.7, 0.9};
+        switch (blockData.facing()) {
+            case NORTH: fz = new double[]{0.02}; break;
+            case EAST: fx = new double[]{0.98}; break;
+            case SOUTH: fz = new double[]{0.98}; break;
+            case WEST: fx = new double[]{0.02}; break;
+            case DOWN: fy = new double[]{0.02}; break;
+            case UP: fy = new double[]{0.98}; break;
+        }
+        float bestYaw = -180.0F, bestPitch = 0.0F;
+        double bestDist = Double.MAX_VALUE;
+        Vec3 bestHit = null;
+        for (double dx : fx) {
+            for (double dy : fy) {
+                for (double dz : fz) {
+                    double tx = blockData.blockPos().getX() + dx;
+                    double ty = blockData.blockPos().getY() + dy;
+                    double tz = blockData.blockPos().getZ() + dz;
+                    float[] rot = RotationUtil.getRotations(tx, ty, tz);
+                    MovingObjectPosition mop = RotationUtil.rayTrace(rot[0], rot[1], mc.playerController.getBlockReachDistance(), 1.0F);
+                    if (mop != null && mop.typeOfHit == MovingObjectType.BLOCK
+                            && mop.getBlockPos().equals(blockData.blockPos()) && mop.sideHit == blockData.facing()) {
+                        float yawDiff = Math.abs(MathHelper.wrapAngleTo180_float(rot[0] - event.getYaw()));
+                        double dist = yawDiff * yawDiff + (rot[1] - event.getPitch()) * (rot[1] - event.getPitch());
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestYaw = rot[0];
+                            bestPitch = rot[1];
+                            bestHit = mop.hitVec;
+                        }
+                    }
+                }
+            }
+        }
+        if (bestHit == null) return null;
+        this.yaw = bestYaw;
+        this.pitch = bestPitch;
+        this.canRotate = true;
+        return bestHit;
     }
 
     private BlockData getBlockData() {
@@ -509,9 +553,9 @@ public class Scaffold extends Module {
                 else if (atEdge && holdingBlock) {
                     switch (this.legitEdgeState) {
                         case 0: if (justReachedEdge || this.legitEdgeTimer == 0) { this.legitEdgeState = 1; this.legitEdgeTimer = this.legitSneakDelay.getValue(); } break;
-                        case 1: this.legitEdgeTimer--; if (this.legitEdgeTimer <= 0) { this.legitEdgeState = 2; this.legitEdgeTimer = this.legitPlaceDuration.getValue(); } break;
-                        case 2: this.legitEdgeTimer--; if (this.legitEdgeTimer <= 0) { this.legitEdgeState = 3; this.legitEdgeTimer = 3 + (int)(Math.random() * 4); } break;
-                        case 3: this.legitEdgeTimer--; if (this.legitEdgeTimer <= 0) { this.legitEdgeState = 0; this.legitEdgeTimer = 0; } break;
+                        case 1: this.legitEdgeTimer--; if (this.legitEdgeTimer <= 0) { this.legitEdgeState = 2; this.legitEdgeTimer = 0; } break;
+                        case 2: break;
+                        default: this.legitEdgeState = 0; this.legitEdgeTimer = 0; break;
                     }
                 } else { this.legitEdgeState = 0; this.legitEdgeTimer = 0; }
                 this.legitWasOnEdge = atEdge;
@@ -613,6 +657,8 @@ public class Scaffold extends Module {
                                 this.yaw = mc.thePlayer.rotationYaw;
                                 this.pitch = mc.thePlayer.rotationPitch;
                             }
+                        } else if (!mc.thePlayer.onGround && this.airRescue.getValue()) {
+                            hitVec = this.applyRescueRotation(blockData, event);
                         }
                     } else if (this.rotationMode.getValue() == 3) {
                         double[] offsets = {0.1, 0.3, 0.5, 0.7, 0.9};
@@ -681,6 +727,10 @@ public class Scaffold extends Module {
                         }
                         if (bestYaw != -180.0F || bestPitch != 0.0F) { this.yaw = bestYaw; this.pitch = bestPitch; this.canRotate = true; }
                     }
+                }
+
+                if (blockData != null && hitVec == null && !mc.thePlayer.onGround && this.airRescue.getValue()) {
+                    hitVec = this.applyRescueRotation(blockData, event);
                 }
 
                 if (this.canRotate && MoveUtil.isForwardPressed() && Math.abs(MathHelper.wrapAngleTo180_float(yawDiffTo180 - this.yaw)) < 90.0F) {
@@ -891,50 +941,36 @@ public class Scaffold extends Module {
         float textW = FontManager.getStringWidth(text) * textScale;
         float textH = FontManager.getFontHeight() * textScale;
 
-        float padX = 12.0F;
-        float padY = 7.0F;
+        float padX = 10.0F;
+        float padY = 6.0F;
         float dot = 4.0F;
         float dotGap = 7.0F;
         float cardW = padX + dot + dotGap + textW + padX;
         float cardH = padY + textH + padY;
-        float radius = 6.0F;
+        float radius = 8.0F;
 
         ScaledResolution sr = new ScaledResolution(mc);
         float x = sr.getScaledWidth() / 2.0F - cardW / 2.0F;
         float y = sr.getScaledHeight() / 2.0F - cardH - 12.0F;
-
-        int rimCol = new Color(255, 255, 255, 36).getRGB();
-        int glassCol = new Color(13, 15, 21, 172).getRGB();
-        int tintCol = new Color(tc.getRed(), tc.getGreen(), tc.getBlue(), 14).getRGB();
-        int shineCol = new Color(255, 255, 255, 20).getRGB();
+        float pulse = 0.7F + 0.3F * (float) Math.sin(now * 0.004D);
+        int accent = new Color(tc.getRed(), tc.getGreen(), tc.getBlue(), 250).getRGB();
 
         GlStateManager.pushMatrix();
-        RenderUtil.drawRoundedRectWithGl(x, y, x + cardW, y + cardH, radius, rimCol);
-        RenderUtil.drawRoundedRectWithGl(x + 1.0F, y + 1.0F, x + cardW - 1.0F, y + cardH - 1.0F, radius - 1.0F, glassCol);
-        RenderUtil.drawRoundedRectWithGl(x + 1.0F, y + 1.0F, x + cardW - 1.0F, y + cardH - 1.0F, radius - 1.0F, tintCol);
-        RenderUtil.drawRoundedRectWithGl(x + 2.0F, y + 2.0F, x + cardW - 2.0F, y + cardH * 0.45F, radius - 2.0F, shineCol);
-
-        float pulse = 0.7F + 0.3F * (float) Math.sin(now * 0.004D);
-        float dotY = y + (cardH - dot) / 2.0F;
-        int dotGlow = new Color(tc.getRed(), tc.getGreen(), tc.getBlue(), (int) (70.0F * pulse)).getRGB();
-        int dotCore = new Color(tc.getRed(), tc.getGreen(), tc.getBlue(), (int) (235.0F * pulse)).getRGB();
-        RenderUtil.drawRoundedRectWithGl(x + padX - 1.5F, dotY - 1.5F, x + padX + dot + 1.5F, dotY + dot + 1.5F, 3.0F, dotGlow);
-        RenderUtil.drawRoundedRectWithGl(x + padX, dotY, x + padX + dot, dotY + dot, 2.0F, dotCore);
+        RenderUtil.drawZenGlass(x, y, x + cardW, y + cardH, radius, 1.0F);
+        RenderUtil.drawRoundedRectWithGl(x + padX - 1.0F, y + (cardH - dot) / 2.0F - 1.0F,
+                x + padX + dot + 1.0F, y + (cardH + dot) / 2.0F + 1.0F, 3.0F,
+                new Color(tc.getRed(), tc.getGreen(), tc.getBlue(), (int) (60.0F * pulse)).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x + padX, y + (cardH - dot) / 2.0F, x + padX + dot, y + (cardH + dot) / 2.0F,
+                2.0F, accent);
 
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
-        float textX = x + padX + dot + dotGap;
-        float textY = y + (cardH - textH) / 2.0F + 1.0F;
-        int textColor = new Color(245, 245, 250, 245).getRGB();
-        int shadowColor = new Color(0, 0, 0, 80).getRGB();
-
         GlStateManager.pushMatrix();
-        GlStateManager.translate(textX, textY, 0.0F);
+        GlStateManager.translate(x + padX + dot + dotGap, y + (cardH - textH) / 2.0F + 1.0F, 0.0F);
         GlStateManager.scale(textScale, textScale, 1.0F);
-        FontManager.drawString(text, 0.8F, 0.8F, shadowColor, false);
-        FontManager.drawString(text, 0.0F, 0.0F, textColor, false);
+        FontManager.drawString(text, 0.0F, 0.0F, new Color(244, 247, 252, 238).getRGB(), false);
         GlStateManager.popMatrix();
 
         GlStateManager.enableDepth();

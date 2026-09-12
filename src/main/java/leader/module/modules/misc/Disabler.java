@@ -100,15 +100,30 @@ public class Disabler extends Module {
 
     private void handlePredictionInventory(PacketEvent event) {
         Packet<?> packet = event.getPacket();
-        if (packet instanceof C16PacketClientStatus || packet instanceof C0EPacketClickWindow) {
+        if (packet instanceof C16PacketClientStatus) {
+            if (((C16PacketClientStatus) packet).getStatus() == C16PacketClientStatus.EnumState.PERFORM_RESPAWN) {
+                flushPredictionInventory();
+                return;
+            }
             event.setCancelled(true);
             inventoryPackets.add(packet);
-        } else if (packet instanceof C0DPacketCloseWindow) {
-            for (Packet<?> p : inventoryPackets) {
-                PacketUtil.sendPacketNoEvent(p);
-            }
-            inventoryPackets.clear();
+            return;
         }
+        if (packet instanceof C0DPacketCloseWindow) {
+            flushPredictionInventory();
+            return;
+        }
+        if (packet instanceof C0EPacketClickWindow) {
+            event.setCancelled(true);
+            inventoryPackets.add(packet);
+        }
+    }
+
+    private void flushPredictionInventory() {
+        for (Packet<?> p : inventoryPackets) {
+            PacketUtil.sendPacketNoEvent(p);
+        }
+        inventoryPackets.clear();
     }
     public static int getC09TargetSlot() {
         Disabler disabler = (Disabler) Leader.moduleManager.getModule(Disabler.class);

@@ -56,7 +56,10 @@ public class KillAura extends Module {
     public final ModeProperty sort;
     public ModeProperty autoBlock;
     public ModeProperty hypixelMode;
-    public ModeProperty lagMode;
+    public ModeProperty lagClass;
+    public ModeProperty tickMode;
+    public ModeProperty fullMode;
+    public ModeProperty swapMode;
     private final BooleanProperty noStop = new BooleanProperty("NoSwap",true,this::isOldHypixel);
     private final BooleanProperty test = new BooleanProperty("MoreAttack",false,this::isOldHypixel);
     private final IntProperty moreAttackDelay = new IntProperty("MoreAttackDelay",1,0,3,() -> this.isOldHypixel() && test.getValue());
@@ -74,6 +77,9 @@ public class KillAura extends Module {
     private final BooleanProperty alwaysRenderBlocking = new BooleanProperty("AlwaysRenderBlocking",true,this::isLag);
     private final BooleanProperty c09Instead = new BooleanProperty("C09Instead",true,this::isLag3Tick);
     private final BooleanProperty fullC09 = new BooleanProperty("FullC09(Will Cause Damage Less)",false,() -> isLag4Tick() | isLag5Tick());
+    private boolean strafeFacing = false;
+    private float strafeYaw;
+    private float strafeYawOffset;
     public final BooleanProperty autoBlockRequirePress;
     public final IntProperty autoBlockCPS;
     public final FloatProperty autoBlockRange;
@@ -136,8 +142,17 @@ public class KillAura extends Module {
         this.hypixelMode = new ModeProperty(
                 "HypixelMode", 0, new String[]{"OldHypixel", "Without NoSlow", "Custom", "Lag","Predict"}, () -> this.autoBlock.getValue() == 2
         );
-        this.lagMode = new ModeProperty(
-                "LagMode", 1, new String[]{"2Tick", "3Tick", "4Tick", "3Tick + 2Tick", "5Tick","6Tick","3TickFull","4TickFull","Swap","TestPostSwap"}, () -> this.autoBlock.getValue() == 2 && this.hypixelMode.getValue() == 3
+        this.lagClass = new ModeProperty(
+                "LagClass", 0, new String[]{"Tick", "Combo", "Full", "Swap", "Stop"}, () -> this.autoBlock.getValue() == 2 && this.hypixelMode.getValue() == 3
+        );
+        this.tickMode = new ModeProperty(
+                "TickMode", 1, new String[]{"2Tick", "3Tick", "4Tick", "5Tick", "6Tick"}, () -> this.isLag() && this.lagClass.getValue() == 0
+        );
+        this.fullMode = new ModeProperty(
+                "FullMode", 0, new String[]{"3TickFull", "4TickFull"}, () -> this.isLag() && this.lagClass.getValue() == 2
+        );
+        this.swapMode = new ModeProperty(
+                "SwapMode", 0, new String[]{"Swap", "TestPostSwap"}, () -> this.isLag() && this.lagClass.getValue() == 3
         );
         this.autoBlockRequirePress = new BooleanProperty("AutoBlock Require Press", false);
         this.autoBlockCPS = new IntProperty("AutoBlock Aps", 10, 1, 20);
@@ -149,7 +164,7 @@ public class KillAura extends Module {
         this.maxCPS = new IntProperty("Max Aps", 14, 1, 20);
         this.switchDelay = new IntProperty("Switch Delay", 150, 0, 1000);
         this.rotations = new ModeProperty("Rotations", 2, new String[]{"None", "Legit", "Silent", "Lock View"});
-        this.moveFix = new ModeProperty("Move Fix", 1, new String[]{"None", "Silent", "Strict"});
+        this.moveFix = new ModeProperty("Move Fix", 1, new String[]{"None", "Silent", "Strict", "Strafe"});
         this.rotationMode = new ModeProperty("RotationMode", 2, new String[]{"Normal", "Nearest", "Smart"});
         this.smoothing = new PercentProperty("Smoothing", 0);
         this.angleStep = new IntProperty("Angle Step", 90, 30, 180);
@@ -220,17 +235,19 @@ public class KillAura extends Module {
                     } else if (isHypixelCustom()) {
                         blockTick = attackTick.getValue();
                     } else if (isLag()) {
-                        if (lagMode.getValue() == 0) {
+                        if (getEffectiveLagMode() == 10) {
+                            blockTick = 4;
+                        } else if (getEffectiveLagMode() == 0) {
                             blockTick = 1;
-                        } else if (lagMode.getValue() == 1) {
+                        } else if (getEffectiveLagMode() == 1) {
                             blockTick = 2;
-                        } else if (lagMode.getValue() == 2) {
+                        } else if (getEffectiveLagMode() == 2) {
                             blockTick = 3;
-                        } else if (lagMode.getValue() == 5) {
+                        } else if (getEffectiveLagMode() == 5) {
                             blockTick = 5;
-                        } else if (lagMode.getValue() == 8) {
+                        } else if (getEffectiveLagMode() == 8) {
                             blockTick = 3;
-                        } else if (lagMode.getValue() == 9) {
+                        } else if (getEffectiveLagMode() == 9) {
                             blockTick = 2;
                         } else {
                             blockTick = 4;
@@ -504,15 +521,33 @@ public class KillAura extends Module {
     }
 
     public boolean isLag3Tick() {
-        return this.isLag() && this.lagMode.getValue() == 1;
+        return this.isLag() && this.getEffectiveLagMode() == 1;
     }
 
     public boolean isLag4Tick() {
-        return this.isLag() && this.lagMode.getValue() == 2;
+        return this.isLag() && this.getEffectiveLagMode() == 2;
     }
     public boolean isLag5Tick() {
-        return this.isLag() && (this.lagMode.getValue() == 3 || this.lagMode.getValue() == 4 || this.lagMode.getValue() == 5 || this.lagMode.getValue() ==  6 || this.lagMode.getValue() == 7 || this.lagMode.getValue() == 8);
+        return this.isLag() && (this.getEffectiveLagMode() == 3 || this.getEffectiveLagMode() == 4 || this.getEffectiveLagMode() == 5 || this.getEffectiveLagMode() ==  6 || this.getEffectiveLagMode() == 7 || this.getEffectiveLagMode() == 8);
     }
+
+    public int getEffectiveLagMode() {
+        if (!this.isLag()) {
+            return 1;
+        }
+        switch (this.lagClass.getValue()) {
+            case 1: return 3;
+            case 2: return this.fullMode.getValue() == 0 ? 6 : 7;
+            case 3: return this.swapMode.getValue() == 0 ? 8 : 9;
+            case 4: return 10;
+            default:
+                int tick = this.tickMode.getValue();
+                if (tick == 3) return 4;
+                if (tick == 4) return 5;
+                return tick;
+        }
+    }
+
     public boolean isPredict() {
         return this.autoBlock.getValue() == 2 && this.hypixelMode.getValue() == 4;
     }
@@ -550,7 +585,7 @@ public class KillAura extends Module {
                         }
                     }
                     case 3:
-                        switch (this.lagMode.getValue()) {
+                        switch (this.getEffectiveLagMode()) {
                             case 0:
                                 return phase == 2 ? tick == 1 : tick == 0;
                             case 1:
@@ -567,6 +602,8 @@ public class KillAura extends Module {
                                 return phase == 2 ? tick == 3 : phase == 1 ? tick == 0 : (tick == 0 || tick == 3);
                             case 9:
                                 return phase == 2 ? tick == 2 : tick == 0;
+                            case 10:
+                                return phase == 2 ? tick == 4 : phase == 1 ? tick == 0 : (tick == 0 || tick == 4);
                             default:
                                 return false;
                         }
@@ -621,6 +658,7 @@ public class KillAura extends Module {
                 this.blockTick = 0;
             }
             if (attack) {
+                this.strafeFacing = false;
                 if (predictBlocking){
                     holdTicks++;
                 }
@@ -810,7 +848,7 @@ public class KillAura extends Module {
                                     }
                                     break;
                                 case 3:
-                                    switch (this.lagMode.getValue()) {
+                                    switch (this.getEffectiveLagMode()) {
                                         case 0:
                                             if (this.hasValidTarget()) {
                                                 if (!Leader.playerStateManager.digging && !Leader.playerStateManager.placing) {
@@ -1350,6 +1388,60 @@ public class KillAura extends Module {
                                                 Velocity.extraAttacked = false;
                                             }
                                             break;
+                                        case 10:
+                                            if (this.hasValidTarget()) {
+                                                if (!Leader.playerStateManager.digging && !Leader.playerStateManager.placing) {
+                                                    switch (this.blockTick) {
+                                                        case 0:
+                                                            Leader.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+                                                            blocked = true;
+                                                            if (!this.isPlayerBlocking()) {
+                                                                swap = true;
+                                                            }
+                                                            this.blockTick = 1;
+                                                            break;
+                                                        case 1:
+                                                            attack = false;
+                                                            this.blockTick = 2;
+                                                            break;
+                                                        case 2:
+                                                            attack = false;
+                                                            if (this.isPlayerBlocking()) {
+                                                                int c09Handle2 = mc.thePlayer.inventory.currentItem;
+                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(c09Handle2)));
+                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(c09Handle2));
+                                                                this.stopBlock();
+                                                            }
+                                                            this.blockTick = 3;
+                                                            break;
+                                                        case 3:
+                                                            attack = false;
+                                                            int c09Handle2 = mc.thePlayer.inventory.currentItem;
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(c09Handle2)));
+                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(c09Handle2));
+                                                            this.stopBlock();
+                                                            this.blockTick = 4;
+                                                            break;
+                                                        case 4:
+                                                            attack = false;
+                                                            Leader.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+                                                            if (this.attackDelayMS <= 50L) {
+                                                                this.blockTick = 0;
+                                                            }
+                                                            break;
+                                                        default:
+                                                            this.blockTick = 0;
+                                                    }
+                                                }
+                                                this.isBlocking = true;
+                                                this.fakeBlockState = alwaysRenderBlocking.getValue();
+                                            } else {
+                                                Leader.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+                                                this.isBlocking = false;
+                                                this.fakeBlockState = false;
+                                                Velocity.extraAttacked = false;
+                                            }
+                                            break;
                                         default:
                                             break;
                                     }
@@ -1443,39 +1535,45 @@ public class KillAura extends Module {
                 }
                 boolean attacked = false;
                 if (this.isBoxInSwingRange(this.target.getBox())) {
-                    if (this.rotations.getValue() == 2 || this.rotations.getValue() == 3) {
-                        AxisAlignedBB box = this.target.getBox();
-                        float currentYaw = event.getYaw();
-                        float currentPitch = event.getPitch();
-                        float angleStep = (float) this.angleStep.getValue() + RandomUtil.nextFloat(-5.0F, 5.0F);
-                        float smooth = (float) this.smoothing.getValue() / 100.0F;
-                        float[] rotations;
-                        int mode = this.rotationMode.getValue();
-                        if (mode == 1) {
-                            rotations = RotationUtil.nearestRotation(box, currentYaw, currentPitch, angleStep, smooth);
-                        } else if (mode == 2) {
-                            if (this.isNormalTargetVisible(box)) {
-                                rotations = RotationUtil.getRotationsToBox(box, currentYaw, currentPitch, angleStep, smooth);
-                            } else {
-                                rotations = RotationUtil.nearestRotation(box, currentYaw, currentPitch, angleStep, smooth);
-                            }
-                        } else {
-                            rotations = RotationUtil.getRotationsToBox(box, currentYaw, currentPitch, angleStep, smooth);
-                        }
-                        if (rotations != null) {
-                            event.setRotation(rotations[0], rotations[1], 1);
-                        }
-                        if (this.rotations.getValue() == 3) {
-                            if (rotations != null) {
-                                Leader.rotationManager.setRotation(rotations[0], rotations[1], 1, true);
-                            }
-                        }
-                        if (this.moveFix.getValue() != 0 || this.rotations.getValue() == 3) {
-                            if (rotations != null) {
-                                event.setPervRotation(rotations[0], 1);
-                            }
-                        }
+                    boolean willAttack = attack && this.attackDelayMS <= 0L;
+                    boolean strafe = this.moveFix.getValue() == 3 && !willAttack;
+                    this.strafeFacing = strafe;
+                    if (strafe) {
+                        this.applyStrafeRotation(event);
                     }
+                    if (!strafe && (this.rotations.getValue() == 2 || this.rotations.getValue() == 3)) {
+                            AxisAlignedBB box = this.target.getBox();
+                            float currentYaw = event.getYaw();
+                            float currentPitch = event.getPitch();
+                            float angleStep = (float) this.angleStep.getValue() + RandomUtil.nextFloat(-5.0F, 5.0F);
+                            float smooth = (float) this.smoothing.getValue() / 100.0F;
+                            float[] rotations;
+                            int mode = this.rotationMode.getValue();
+                            if (mode == 1) {
+                                rotations = RotationUtil.nearestRotation(box, currentYaw, currentPitch, angleStep, smooth);
+                            } else if (mode == 2) {
+                                if (this.isNormalTargetVisible(box)) {
+                                    rotations = RotationUtil.getRotationsToBox(box, currentYaw, currentPitch, angleStep, smooth);
+                                } else {
+                                    rotations = RotationUtil.nearestRotation(box, currentYaw, currentPitch, angleStep, smooth);
+                                }
+                            } else {
+                                rotations = RotationUtil.getRotationsToBox(box, currentYaw, currentPitch, angleStep, smooth);
+                            }
+                            if (rotations != null) {
+                                event.setRotation(rotations[0], rotations[1], 1);
+                            }
+                            if (this.rotations.getValue() == 3) {
+                                if (rotations != null) {
+                                    Leader.rotationManager.setRotation(rotations[0], rotations[1], 1, true);
+                                }
+                            }
+                            if (this.moveFix.getValue() != 0 || this.rotations.getValue() == 3) {
+                                if (rotations != null) {
+                                    event.setPervRotation(rotations[0], 1);
+                                }
+                            }
+                        }
                     if (attack && !(Velocity.cancellingKillAuraAttack && Leader.moduleManager.getModule(Velocity.class).isEnabled())) {
                         attacked = this.performAttack(event.getNewYaw(), event.getNewPitch());
                     }
@@ -1491,6 +1589,8 @@ public class KillAura extends Module {
                     Leader.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
                     Leader.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
                 }
+            } else if (this.moveFix.getValue() == 3) {
+                this.applyStrafeRotation(event);
             }
         }
         if (event.getType() == EventType.POST && this.isEnabled()){
@@ -1611,15 +1711,62 @@ public class KillAura extends Module {
 
     @EventTarget
     public void onMove(MoveInputEvent event) {
-        if (this.isEnabled()) {
-            if (this.moveFix.getValue() == 1
-                    && this.rotations.getValue() != 3
-                    && RotationState.isActived()
-                    && RotationState.getPriority() == 1.0F
-                    && MoveUtil.isForwardPressed()) {
-                MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-            }
+        if (!this.isEnabled()) return;
+        if (this.moveFix.getValue() == 3 && this.strafeFacing && this.strafeYawOffset != 0.0F
+                && RotationState.isActived()) {
+            MoveUtil.fixStrafe(this.strafeYaw);
+            return;
         }
+        if (this.moveFix.getValue() == 1
+                && this.rotations.getValue() != 3
+                && RotationState.isActived()
+                && RotationState.getPriority() == 1.0F
+                && MoveUtil.isForwardPressed()) {
+            MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
+        }
+    }
+
+    @EventTarget
+    public void onLivingUpdate(LivingUpdateEvent event) {
+        if (this.isEnabled()
+                && this.moveFix.getValue() == 3
+                && !this.strafeFacing
+                && !mc.thePlayer.isSprinting()) {
+            mc.thePlayer.movementInput.jump = false;
+        }
+    }
+
+    private float getYawOffsetFromKeys() {
+        if (mc.gameSettings.keyBindForward.isKeyDown() && mc.gameSettings.keyBindLeft.isKeyDown()) {
+            return 45.0F;
+        }
+        if (mc.gameSettings.keyBindForward.isKeyDown() && mc.gameSettings.keyBindRight.isKeyDown()) {
+            return -45.0F;
+        }
+        if (mc.gameSettings.keyBindBack.isKeyDown() && mc.gameSettings.keyBindLeft.isKeyDown()) {
+            return 135.0F;
+        }
+        if (mc.gameSettings.keyBindBack.isKeyDown() && mc.gameSettings.keyBindRight.isKeyDown()) {
+            return -135.0F;
+        }
+        if (mc.gameSettings.keyBindBack.isKeyDown()) {
+            return 180.0F;
+        }
+        if (mc.gameSettings.keyBindLeft.isKeyDown()) {
+            return 90.0F;
+        }
+        if (mc.gameSettings.keyBindRight.isKeyDown()) {
+            return -90.0F;
+        }
+        return 0.0F;
+    }
+
+    private void applyStrafeRotation(UpdateEvent event) {
+        this.strafeYawOffset = this.getYawOffsetFromKeys();
+        this.strafeYaw = mc.thePlayer.rotationYaw - this.strafeYawOffset;
+        this.strafeFacing = this.strafeYawOffset != 0.0F;
+        event.setRotation(this.strafeYaw, mc.thePlayer.rotationPitch, 0);
+        event.setPervRotation(this.strafeYaw, 0);
     }
 
     @EventTarget

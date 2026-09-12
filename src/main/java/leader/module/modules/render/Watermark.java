@@ -26,7 +26,7 @@ public class Watermark extends Module {
     private int displayFps = 0;
     private int frameCount = 0;
 
-    public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN"});
+    public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN", "FROST"});
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
     public final IntProperty offX = new IntProperty("offset-x", 4, 0, 500);
@@ -95,6 +95,10 @@ public class Watermark extends Module {
 
         if (this.mode.getValue() == 0) {
             renderClassic(curText, nextText, anim, tc);
+            return;
+        }
+        if (this.mode.getValue() == 2) {
+            renderFrost(curText, nextText, anim, tc, now);
             return;
         }
 
@@ -168,6 +172,71 @@ public class Watermark extends Module {
 
         GlStateManager.enableDepth();
         GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
+    }
+
+    private void renderFrost(String curText, String nextText, float anim, Color themeColor, long now) {
+        float uiScale = this.scale.getValue();
+        float textScale = this.fontScale.getValue();
+        float curW = FontManager.getStringWidth(curText) * textScale;
+        float nextW = FontManager.getStringWidth(nextText) * textScale;
+        float textH = FontManager.getFontHeight() * textScale;
+        float textW = curW + (nextW - curW) * anim;
+
+        float padX = 10.0F;
+        float padY = 6.0F;
+        float dot = 4.0F;
+        float dotGap = 7.0F;
+        float contentW = dot + dotGap + textW;
+        float cardW = padX + contentW + padX;
+        float cardH = padY + textH + padY;
+        float radius = 8.0F;
+
+        ScaledResolution sr = new ScaledResolution(mc);
+        float maxW = sr.getScaledWidth() / uiScale;
+        float maxH = sr.getScaledHeight() / uiScale;
+        float x = this.offX.getValue();
+        float y = this.offY.getValue();
+        if (x + cardW > maxW) x = maxW - cardW - 4.0F;
+        if (y + cardH > maxH) y = maxH - cardH - 4.0F;
+        if (x < 4.0F) x = 4.0F;
+        if (y < 4.0F) y = 4.0F;
+
+        float pulse = 0.7F + 0.3F * (float) Math.sin(now * 0.004D);
+        int accent = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), 250).getRGB();
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(uiScale, uiScale, 1.0F);
+        RenderUtil.drawZenGlass(x, y, x + cardW, y + cardH, radius, 1.0F);
+        RenderUtil.drawRoundedRectWithGl(x + padX - 1.0F, y + (cardH - dot) / 2.0F - 1.0F,
+                x + padX + dot + 1.0F, y + (cardH + dot) / 2.0F + 1.0F, 3.0F,
+                new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(),
+                        (int) (60.0F * pulse)).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x + padX, y + (cardH - dot) / 2.0F, x + padX + dot, y + (cardH + dot) / 2.0F,
+                2.0F, accent);
+
+        GlStateManager.disableDepth();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+        float textX = x + padX + dot + dotGap;
+        float baseY = y + (cardH - textH) / 2.0F + 1.0F;
+        drawFrostPhaseText(curText, textX, baseY - 5.0F * anim, textScale, (int) ((1.0F - anim) * 232.0F));
+        if (anim > 0.005F) {
+            drawFrostPhaseText(nextText, textX, baseY + 7.0F - 7.0F * anim, textScale, (int) (anim * 232.0F));
+        }
+
+        GlStateManager.enableDepth();
+        GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
+    }
+
+    private void drawFrostPhaseText(String text, float x, float y, float textScale, int alpha) {
+        if (alpha <= 0) return;
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x, y, 0.0F);
+        GlStateManager.scale(textScale, textScale, 1.0F);
+        FontManager.drawString(text, 0.0F, 0.0F, new Color(244, 247, 252, alpha).getRGB(), false);
         GlStateManager.popMatrix();
     }
 

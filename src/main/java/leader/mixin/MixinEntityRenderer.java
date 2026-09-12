@@ -6,6 +6,7 @@ import leader.event.EventManager;
 import leader.events.PickEvent;
 import leader.events.RaytraceEvent;
 import leader.events.Render3DEvent;
+import leader.management.RotationState;
 import leader.module.modules.combat.KillAura;
 import leader.module.modules.misc.AntiDebuff;
 import leader.module.modules.player.AutoBlockIn;
@@ -43,6 +44,16 @@ public abstract class MixinEntityRenderer {
     private Box<ItemStack> using = null;
     @Unique
     private Box<Integer> useCount = null;
+    @Unique
+    private boolean silentMouseOver = false;
+    @Unique
+    private float silentYaw;
+    @Unique
+    private float silentPitch;
+    @Unique
+    private float silentPrevYaw;
+    @Unique
+    private float silentPrevPitch;
     @Shadow
     private Minecraft mc;
     @Shadow
@@ -165,6 +176,40 @@ public abstract class MixinEntityRenderer {
         PickEvent event = new PickEvent(range);
         EventManager.call(event);
         return event.getRange();
+    }
+
+    @Inject(
+            method = {"getMouseOver"},
+            at = {@At("HEAD")}
+    )
+    private void preGetMouseOver(float partialTicks, CallbackInfo callbackInfo) {
+        if (this.mc.thePlayer != null && RotationState.isActived()) {
+            this.silentYaw = this.mc.thePlayer.rotationYaw;
+            this.silentPitch = this.mc.thePlayer.rotationPitch;
+            this.silentPrevYaw = this.mc.thePlayer.prevRotationYaw;
+            this.silentPrevPitch = this.mc.thePlayer.prevRotationPitch;
+            this.silentMouseOver = true;
+            float yaw = RotationState.getRotationYawHead();
+            float pitch = RotationState.getRotationPitch();
+            this.mc.thePlayer.rotationYaw = yaw;
+            this.mc.thePlayer.rotationPitch = pitch;
+            this.mc.thePlayer.prevRotationYaw = yaw;
+            this.mc.thePlayer.prevRotationPitch = pitch;
+        }
+    }
+
+    @Inject(
+            method = {"getMouseOver"},
+            at = {@At("RETURN")}
+    )
+    private void postGetMouseOver(float partialTicks, CallbackInfo callbackInfo) {
+        if (this.silentMouseOver && this.mc.thePlayer != null) {
+            this.mc.thePlayer.rotationYaw = this.silentYaw;
+            this.mc.thePlayer.rotationPitch = this.silentPitch;
+            this.mc.thePlayer.prevRotationYaw = this.silentPrevYaw;
+            this.mc.thePlayer.prevRotationPitch = this.silentPrevPitch;
+            this.silentMouseOver = false;
+        }
     }
 
     @ModifyVariable(

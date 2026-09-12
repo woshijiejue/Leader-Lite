@@ -32,6 +32,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityArmorStand;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C02PacketUseEntity.Action;
 import net.minecraft.util.ResourceLocation;
@@ -60,7 +61,7 @@ public class TargetHUD extends Module {
     private float lastObservedHealth = Float.NaN;
     private final List<HitParticle> hitParticles = new ArrayList<>();
     private boolean renderingFollow = false;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"DEFAULT", "TRIANGLE", "BACKGROUND", "MODERN", "INK", "AURA"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"DEFAULT", "TRIANGLE", "BACKGROUND", "MODERN", "INK", "AURA", "FROST"});
     public final ModeProperty color = new ModeProperty("color", 0, new String[]{"DEFAULT", "HUD"});
     public final ModeProperty position = new ModeProperty("position", 0, new String[]{"SCREEN", "FOLLOW"});
     public final ModeProperty posX = new ModeProperty("position-x", 1, new String[]{"LEFT", "MIDDLE", "RIGHT"}, () -> this.position.getValue() == 0);
@@ -80,6 +81,17 @@ public class TargetHUD extends Module {
     public final BooleanProperty kaOnly = new BooleanProperty("ka-only", true);
     public final BooleanProperty chatPreview = new BooleanProperty("chat-preview", false);
     public final BooleanProperty blur = new BooleanProperty("blur", false, () -> this.mode.getValue() >= 2);
+    public final BooleanProperty frostEquip = new BooleanProperty("frost-equip", true, () -> this.mode.getValue() == 6);
+    public final BooleanProperty frostLag = new BooleanProperty("frost-lag", true, () -> this.mode.getValue() == 6);
+    public final BooleanProperty frostPop = new BooleanProperty("frost-pop", true, () -> this.mode.getValue() == 6);
+    public final BooleanProperty frostGlass = new BooleanProperty("frost-glass", true, () -> this.mode.getValue() == 6);
+    private float frostLagRatio = -1.0F;
+    private float frostFade = 0.0F;
+    private float frostPopScale = 1.0F;
+    private float frostPopVel = 0.0F;
+    private int frostLastHurt = 0;
+    private long frostLastFrame = 0L;
+    private EntityLivingBase frostFadeTarget = null;
     public final IntProperty blurIterations = new IntProperty("blur-iterations", 2, 1, 8, blur::getValue);
     public final IntProperty blurOffset = new IntProperty("blur-offset", 3, 1, 10, blur::getValue);
     private Framebuffer blurStencil;
@@ -292,6 +304,12 @@ public class TargetHUD extends Module {
         } else if (this.mode.getValue() == 5) {
             cardWidth = this.getAuraCardWidth(targetNameWidth, statusTextWidth, healthTextWidth, healthDiffWidth);
             cardHeight = this.getAuraCardHeight();
+        } else if (this.mode.getValue() == 6) {
+            String frostHealthStr = heal == Math.floor(heal) ? String.format("%.0f", heal) : healthFormat.format(heal);
+            float frostTopRow = targetNameWidth + 6.0F + this.getTextWidth(frostHealthStr)
+                    + (this.indicator.getValue() ? 9.0F : 0.0F);
+            cardWidth = this.getFrostCardWidth(frostTopRow);
+            cardHeight = this.getFrostCardHeight();
         } else if (this.mode.getValue() == 2) {
             cardWidth = 150.0F;
             cardHeight = this.getCardHeight();
@@ -341,6 +359,8 @@ public class TargetHUD extends Module {
             renderInk(scaledResolution, targetNameText, healthText, statusText, healthDiffText, targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth, healthRatio, targetColor, healthBarColor, healthDeltaColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
         } else if (this.mode.getValue() == 5) {
             renderAura(scaledResolution, targetNameText, healthText, statusText, healthDiffText, targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth, healthRatio, targetColor, healthBarColor, healthDeltaColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
+        } else if (this.mode.getValue() == 6) {
+            renderFrost(scaledResolution, targetNameText, healthText, statusText, healthDiffText, targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth, healthRatio, targetColor, healthBarColor, healthDeltaColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
         } else if (this.mode.getValue() == 2) {
             renderBackground(scaledResolution, targetNameText, healthText, targetNameWidth, healthTextWidth, healthRatio, targetColor, healthBarColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
         } else if (this.mode.getValue() == 1) {
@@ -456,6 +476,11 @@ public class TargetHUD extends Module {
                             heal, health, abs);
                 } else if (this.mode.getValue() == 5) {
                     renderAura(scaledResolution, targetNameText, healthText, statusText, healthDiffText,
+                            targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth,
+                            healthRatio, targetColor, healthBarColor, healthDeltaColor,
+                            heal, health, abs);
+                } else if (this.mode.getValue() == 6) {
+                    renderFrost(scaledResolution, targetNameText, healthText, statusText, healthDiffText,
                             targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth,
                             healthRatio, targetColor, healthBarColor, healthDeltaColor,
                             heal, health, abs);
@@ -1206,6 +1231,247 @@ public class TargetHUD extends Module {
             int particleColor = new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.max(0, Math.min(255, alpha))).getRGB();
             RenderUtil.drawRoundedRectWithGl(px - size / 2.0F, py - size / 2.0F, px + size / 2.0F, py + size / 2.0F, size / 2.0F, particleColor);
         }
+    }
+
+    private int getFrostArmorCount() {
+        if (!this.frostEquip.getValue() || this.target == null) {
+            return 0;
+        }
+        int count = 0;
+        for (int slot = 4; slot >= 1; slot--) {
+            if (this.target.getEquipmentInSlot(slot) != null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private float getFrostEquipWidth() {
+        int count = this.getFrostArmorCount();
+        return count <= 0 ? 0.0F : count * 18.0F - 2.0F;
+    }
+
+    private float getFrostContentWidth(float topRowWidth) {
+        return Math.max(80.0F, Math.max(topRowWidth, this.getFrostEquipWidth()));
+    }
+
+    private float getFrostCardWidth(float topRowWidth) {
+        return 46.0F + this.getFrostContentWidth(topRowWidth) + 10.0F;
+    }
+
+    private float getFrostNameBlock() {
+        return Math.max(11.0F, this.getTextHeight());
+    }
+
+    private float getFrostEquipBlock() {
+        return this.getFrostArmorCount() > 0 ? 18.0F : 5.0F;
+    }
+
+    private float getFrostCardHeight() {
+        return Math.max(38.0F, this.getFrostNameBlock() + this.getFrostEquipBlock() + 15.5F);
+    }
+
+    private String frostPlainText(String text) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\u00a7' && i + 1 < text.length()) {
+                i++;
+                continue;
+            }
+            builder.append(c);
+        }
+        return builder.toString();
+    }
+
+    private void renderFrost(ScaledResolution scaledResolution,
+                             String targetNameText, String healthText, String statusText, String healthDiffText,
+                             float targetNameWidth, float healthTextWidth, float statusTextWidth, float healthDiffWidth,
+                             float healthRatio, Color targetColor, Color healthBarColor, Color healthDeltaColor,
+                             float heal, float playerHealth, float abs) {
+        String name = this.frostPlainText(targetNameText);
+        String healthStr = heal == Math.floor(heal) ? String.format("%.0f", heal) : healthFormat.format(heal);
+        float nameW = this.getTextWidth(name);
+        float healthNumW = this.getTextWidth(healthStr);
+        boolean showIndicator = this.indicator.getValue();
+        float topRowW = nameW + 6.0F + healthNumW + (showIndicator ? 9.0F : 0.0F);
+
+        float contentW = this.getFrostContentWidth(topRowW);
+        float cardWidth = 46.0F + contentW + 10.0F;
+        float cardHeight = this.getFrostCardHeight();
+        float nameBlock = this.getFrostNameBlock();
+        float equipBlock = this.getFrostEquipBlock();
+        float contentTop = (cardHeight - (nameBlock + equipBlock + 4.0F)) / 2.0F;
+        float nameY = contentTop;
+        float equipY = nameY + nameBlock + 0.5F;
+        float barY = nameY + nameBlock + equipBlock;
+        int armorCount = this.getFrostArmorCount();
+
+        long now = System.currentTimeMillis();
+        float frameDelta = this.frostLastFrame == 0L ? 0.0165F : (now - this.frostLastFrame) / 1000.0F;
+        this.frostLastFrame = now;
+        frameDelta = Math.min(Math.max(frameDelta, 0.001F), 0.05F);
+
+        if (this.target != null && this.target != this.frostFadeTarget) {
+            this.frostFadeTarget = this.target;
+            this.frostFade = 0.0F;
+            this.frostPopScale = 1.0F;
+            this.frostPopVel = 0.0F;
+            this.frostLagRatio = -1.0F;
+            this.frostLastHurt = this.target.hurtTime;
+        }
+        this.frostFade += (1.0F - this.frostFade) * (1.0F - (float) Math.exp(-frameDelta * 9.0F));
+        this.frostFade = Math.min(this.frostFade, 1.0F);
+
+        if (this.target != null && this.animations.getValue() && this.frostPop.getValue()) {
+            if (this.target.hurtTime > this.frostLastHurt) {
+                this.frostPopScale = 0.74F;
+                this.frostPopVel = 0.0F;
+            }
+            this.frostLastHurt = this.target.hurtTime;
+        }
+        this.frostPopVel += (1.0F - this.frostPopScale) * 240.0F * frameDelta;
+        this.frostPopVel *= 0.72F;
+        this.frostPopScale += this.frostPopVel * frameDelta;
+
+        float fade = this.frostFade;
+        float lagTarget = healthRatio;
+        if (this.frostLagRatio < 0.0F) {
+            this.frostLagRatio = lagTarget;
+        }
+        this.frostLagRatio += (lagTarget - this.frostLagRatio)
+                * (lagTarget > this.frostLagRatio ? 1.0F : (1.0F - (float) Math.exp(-frameDelta * 4.5F)));
+        if (this.frostLagRatio < lagTarget) {
+            this.frostLagRatio = lagTarget;
+        }
+
+        float posX = this.renderingFollow ? 0.0F : this.offX.getValue().floatValue() / this.scale.getValue();
+        if (!this.renderingFollow) {
+            switch (this.posX.getValue()) {
+                case 1:
+                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - cardWidth / 2.0F;
+                    break;
+                case 2:
+                    posX *= -1.0F;
+                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - cardWidth;
+                    break;
+            }
+        }
+        float posY = this.renderingFollow ? 0.0F : this.offY.getValue().floatValue() / this.scale.getValue();
+        if (!this.renderingFollow) {
+            switch (this.posY.getValue()) {
+                case 1:
+                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - cardHeight / 2.0F;
+                    break;
+                case 2:
+                    posY *= -1.0F;
+                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - cardHeight;
+                    break;
+            }
+        }
+
+        if (this.blur.getValue() && !this.renderingFollow) {
+            final float bx = posX;
+            final float by = posY;
+            final float bw = cardWidth;
+            final float bh = cardHeight;
+            final float sc = this.scale.getValue();
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                GlStateManager.translate(bx, by, -450.0F);
+                RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, bw, bh, 9.0F, -1);
+                GlStateManager.popMatrix();
+            });
+        }
+
+        GlStateManager.pushMatrix();
+        if (!this.renderingFollow) {
+            GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
+        }
+        GlStateManager.translate(posX, posY, this.renderingFollow ? 0.0F : -450.0F);
+
+        boolean glassBg = this.frostGlass.getValue();
+        int textColor = glassBg ? new Color(20, 24, 34, (int) (232.0F * fade)).getRGB()
+                : new Color(255, 255, 255, (int) (240.0F * fade)).getRGB();
+        int trackColor = glassBg ? new Color(20, 24, 34, (int) (22.0F * fade)).getRGB()
+                : new Color(0, 0, 0, (int) (95.0F * fade)).getRGB();
+        int lagColor = glassBg ? new Color(20, 24, 34, (int) (58.0F * fade)).getRGB()
+                : new Color(0, 0, 0, (int) (140.0F * fade)).getRGB();
+        Color healthFill = ColorUtil.darker(healthBarColor, glassBg ? 0.82F : 1.0F);
+
+        if (glassBg) {
+            RenderUtil.drawGlass(0.0F, 0.0F, cardWidth, cardHeight, 9.0F, fade);
+        }
+
+        float headSize = 30.0F * this.frostPopScale * Math.max(0.7F, fade);
+        float headX = 8.0F + (30.0F - headSize) / 2.0F;
+        float headY = (cardHeight - headSize) / 2.0F;
+        if (glassBg) {
+            RenderUtil.drawRoundedRectWithGl(headX - 0.6F, headY - 0.6F, headX + headSize + 0.6F, headY + headSize + 0.6F,
+                    6.6F, new Color(20, 24, 34, (int) (26.0F * fade)).getRGB());
+        }
+
+        float lagW = Math.max(2.0F, contentW * this.frostLagRatio);
+        float fillW = Math.max(2.0F, contentW * healthRatio * fade);
+        RenderUtil.drawRoundedRectWithGl(46.0F, barY, 46.0F + contentW, barY + 4.0F,
+                2.0F, trackColor);
+        if (this.frostLag.getValue()) {
+            RenderUtil.drawRoundedRectWithGl(46.0F, barY, 46.0F + lagW, barY + 4.0F,
+                    Math.min(2.0F, lagW / 2.0F), lagColor);
+        }
+        RenderUtil.drawRoundedRectWithGl(46.0F, barY, 46.0F + fillW, barY + 4.0F,
+                Math.min(2.0F, fillW / 2.0F), new Color(healthFill.getRed(), healthFill.getGreen(),
+                        healthFill.getBlue(), (int) (245.0F * fade)).getRGB());
+
+        GlStateManager.disableDepth();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+        this.drawText(name, 46.0F, nameY + (1.0F - fade) * 5.0F, textColor);
+        Color numberFill = glassBg ? ColorUtil.darker(healthFill, 0.78F) : healthFill;
+        int numberColor = new Color(numberFill.getRed(), numberFill.getGreen(), numberFill.getBlue(),
+                (int) (240.0F * fade)).getRGB();
+        this.drawText(healthStr, 46.0F + contentW - healthNumW, nameY + (1.0F - fade) * 5.0F, numberColor);
+
+        if (armorCount > 0) {
+            float itemX = 46.0F;
+            for (int slot = 4; slot >= 1; slot--) {
+                ItemStack itemStack = this.target.getEquipmentInSlot(slot);
+                if (itemStack == null) {
+                    continue;
+                }
+                RenderUtil.renderItemInGUI(itemStack, (int) itemX, (int) equipY);
+                itemX += 18.0F;
+            }
+        }
+
+        if (showIndicator) {
+            float dotX = 46.0F + contentW - healthNumW - 6.5F;
+            float dotY = nameY + this.getTextHeight() / 2.0F;
+            Color dotFill = glassBg ? ColorUtil.darker(healthDeltaColor, 0.82F) : healthDeltaColor;
+            RenderUtil.fillCircle(dotX, dotY, 2.4D, 20,
+                    new Color(dotFill.getRed(), dotFill.getGreen(), dotFill.getBlue(),
+                            (int) (255.0F * fade)).getRGB());
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.disableDepth();
+        }
+
+        if (this.head.getValue() && this.headTexture != null && headSize > 1.0F) {
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, fade);
+            mc.getTextureManager().bindTexture(this.headTexture);
+            drawRoundedHead(headX, headY, headSize, 6.0F * this.frostPopScale, 8.0F, 8.0F);
+            drawRoundedHead(headX, headY, headSize, 6.0F * this.frostPopScale, 40.0F, 8.0F);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+
+        GlStateManager.disableBlend();
+        GlStateManager.enableDepth();
+        GlStateManager.popMatrix();
     }
 
     private void renderTriangle(ScaledResolution scaledResolution,

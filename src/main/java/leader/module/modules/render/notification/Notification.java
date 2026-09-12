@@ -31,7 +31,7 @@ public class Notification extends Module {
     private static final List<NotificationEntry> entries = new ArrayList<>();
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"RIGHT", "LEFT"});
-    public final ModeProperty style = new ModeProperty("style", 1, new String[]{"CLASSIC", "MODERN", "8BIT", "AURA"});
+    public final ModeProperty style = new ModeProperty("style", 1, new String[]{"CLASSIC", "MODERN", "8BIT", "AURA", "FROST"});
     public final IntProperty duration = new IntProperty("duration", 1500, 500, 5000);
     public final IntProperty maxAlerts = new IntProperty("max-alerts", 5, 1, 10);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
@@ -97,6 +97,10 @@ public class Notification extends Module {
             renderAura(sr, now, dur);
             return;
         }
+        if (this.style.getValue() == 4) {
+            renderFrost(sr, now, dur);
+            return;
+        }
 
         float cardWidth = 100.0F;
         float cardHeight = 20.0F;
@@ -112,6 +116,7 @@ public class Notification extends Module {
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
         float step = cardHeight + gap;
+        float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
 
         float baseX = isRight ? screenWidth - cardWidth - offX : offX;
         float baseY = screenHeight - offY - cardHeight;
@@ -124,7 +129,10 @@ public class Notification extends Module {
             float progress = Math.min((float) (now - entry.startTime) / (float) dur, 1.0F);
             float alpha = getAlpha(now, entry.startTime, dur);
             int idx = max - 1 - i;
-            float y = (baseY - idx * step) * invScale;
+            float targetY = (baseY - idx * step) * invScale;
+            if (Float.isNaN(entry.animY)) entry.animY = targetY;
+            entry.animY += (targetY - entry.animY) * reflow;
+            float y = entry.animY;
             float x = baseX * invScale;
             Color themeColor = switch (entry.noticeMode) {
                 case Enable ->  new Color(0x00FF00);
@@ -235,6 +243,7 @@ public class Notification extends Module {
         float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
         float baseY = sr.getScaledHeight() - offY - cardHeight;
         float step = cardHeight + gap;
+        float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
@@ -246,7 +255,10 @@ public class Notification extends Module {
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 18.0F;
             float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float y = (baseY - idx * step) * invScale;
+            float targetY = (baseY - idx * step) * invScale;
+            if (Float.isNaN(entry.animY)) entry.animY = targetY;
+            entry.animY += (targetY - entry.animY) * reflow;
+            float y = entry.animY;
             Color themeColor = switch (entry.noticeMode) {
                 case Enable ->  new Color(96, 224, 150);
                 case Disable -> new Color(255, 110, 11);
@@ -348,6 +360,7 @@ public class Notification extends Module {
         float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
         float baseY = sr.getScaledHeight() - offY - cardHeight;
         float step = cardHeight + gap;
+        float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
         final float notch = 3.0F;
 
         GlStateManager.pushMatrix();
@@ -362,7 +375,10 @@ public class Notification extends Module {
             // Snap the slide to whole pixels so the retro edges stay crisp.
             slide = Math.round(slide);
             float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float y = (baseY - idx * step) * invScale;
+            float targetY = (baseY - idx * step) * invScale;
+            if (Float.isNaN(entry.animY)) entry.animY = targetY;
+            entry.animY += (targetY - entry.animY) * reflow;
+            float y = entry.animY;
             Color themeColor = switch (entry.noticeMode) {
                 case Enable ->  new Color(61, 255, 110);
                 case Disable -> new Color(255, 61, 92);
@@ -538,6 +554,7 @@ public class Notification extends Module {
         float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
         float baseY = sr.getScaledHeight() - offY - cardHeight;
         float step = cardHeight + gap;
+        float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
@@ -549,7 +566,10 @@ public class Notification extends Module {
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
             float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float y = (baseY - idx * step) * invScale;
+            float targetY = (baseY - idx * step) * invScale;
+            if (Float.isNaN(entry.animY)) entry.animY = targetY;
+            entry.animY += (targetY - entry.animY) * reflow;
+            float y = entry.animY;
             Color themeColor = switch (entry.noticeMode) {
                     case Enable -> new Color(96, 224, 150);
                     case Disable -> new Color(255, 110, 116);
@@ -610,6 +630,120 @@ public class Notification extends Module {
         GlStateManager.popMatrix();
     }
 
+    private Color frostAccent(NoticeMode noticeMode) {
+        switch (noticeMode) {
+            case Disable: return new Color(0xFF, 0x6B, 0x7E);
+            case Info: return new Color(0xFF, 0xC4, 0x6B);
+            default: return new Color(0x6F, 0xB2, 0xFF);
+        }
+    }
+
+    private void renderFrost(ScaledResolution sr, long now, long dur) {
+        float textScale = this.fontScale.getValue();
+        float offX = this.offsetX.getValue() + 6.0F;
+        float offY = this.offsetY.getValue() + 8.0F;
+        float localScale = this.scale.getValue();
+        float invScale = 1.0F / localScale;
+        boolean isRight = this.mode.getValue() == 0;
+        boolean doBlur = this.blur.getValue();
+        int max = Math.min(entries.size(), this.maxAlerts.getValue());
+
+        float cardHeight = 26.0F;
+        float radius = 8.0F;
+        float barInset = 5.0F;
+        float padLeft = 12.0F;
+        float padRight = 10.0F;
+        float minWidth = 96.0F;
+        float maxWidth = 200.0F;
+        float textHeight = FontManager.getFontHeight() * textScale;
+        float step = cardHeight + 5.0F;
+        float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
+        float baseY = sr.getScaledHeight() - offY - cardHeight;
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(localScale, localScale, 1.0F);
+
+        for (int i = 0; i < max; i++) {
+            NotificationEntry entry = entries.get(i);
+            float progress = Math.min((float) (now - entry.startTime) / (float) dur, 1.0F);
+            float alpha = Math.max(0.0F, Math.min(1.0F, getAlpha(now, entry.startTime, dur)));
+            Color accent = frostAccent(entry.noticeMode);
+            int ar = accent.getRed();
+            int ag = accent.getGreen();
+            int ab = accent.getBlue();
+
+            String name = entry.text;
+            float maxNameWidth = (maxWidth - padLeft - padRight) / textScale;
+            if (FontManager.getStringWidth(name) > maxNameWidth) {
+                while (name.length() > 1 && FontManager.getStringWidth(name + "..") > maxNameWidth) {
+                    name = name.substring(0, name.length() - 1);
+                }
+                name = name + "..";
+            }
+
+            float cardWidth = Math.max(minWidth, Math.min(maxWidth,
+                    padLeft + FontManager.getStringWidth(name) * textScale + padRight));
+
+            int idx = max - 1 - i;
+            float slide = (1.0F - alpha) * 14.0F;
+            float targetX = (isRight ? sr.getScaledWidth() - offX - cardWidth + slide : offX - slide) * invScale;
+            float targetY = (baseY - idx * step) * invScale;
+            if (Float.isNaN(entry.animX)) {
+                entry.animX = targetX;
+                entry.animY = targetY;
+            }
+            entry.animX += (targetX - entry.animX) * reflow;
+            entry.animY += (targetY - entry.animY) * reflow;
+            float x = entry.animX;
+            float y = entry.animY;
+
+            if (doBlur) {
+                final float bx = x;
+                final float by = y;
+                final float bw = cardWidth;
+                final float bh = cardHeight;
+                final float br = radius;
+                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1));
+            }
+
+            RenderUtil.drawZenGlass(x, y, x + cardWidth, y + cardHeight, radius, alpha);
+            RenderUtil.drawRoundedRectWithGl(x + 4.0F, y + barInset, x + 7.0F, y + cardHeight - barInset, 1.5F,
+                    new Color(ar, ag, ab, (int) (250.0F * alpha)).getRGB());
+
+            float lineY = y + cardHeight - 3.6F;
+            float lineLeft = x + padLeft;
+            float lineRight = x + cardWidth - padRight;
+            RenderUtil.drawRoundedRectWithGl(lineLeft, lineY, lineRight, lineY + 1.6F,
+                    Math.min(0.8F, (lineRight - lineLeft) / 2.0F),
+                    new Color(255, 255, 255, (int) (28.0F * alpha)).getRGB());
+            float remain = 1.0F - progress;
+            if (remain > 0.004F) {
+                float fillRight = lineLeft + (lineRight - lineLeft) * remain;
+                RenderUtil.drawRoundedRectWithGl(lineLeft, lineY, fillRight, lineY + 1.6F,
+                        Math.min(0.8F, (fillRight - lineLeft) / 2.0F),
+                        new Color(ar, ag, ab, (int) (250.0F * alpha)).getRGB());
+            }
+
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+            float contentWidth = cardWidth - padLeft - padRight;
+            float textX = x + padLeft + Math.max(0.0F,
+                    (contentWidth - FontManager.getStringWidth(name) * textScale) / 2.0F);
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(textX, y + (cardHeight - textHeight) / 2.0F - 2.2F, 0.0F);
+            GlStateManager.scale(textScale, textScale, 1.0F);
+            FontManager.drawString(name, 0.0F, 0.0F, new Color(244, 247, 252, (int) (238.0F * alpha)).getRGB(), false);
+            GlStateManager.popMatrix();
+
+            GlStateManager.enableDepth();
+            GlStateManager.disableBlend();
+        }
+
+        GlStateManager.popMatrix();
+    }
+
     private void drawStatusIcon(float x, float y, float iconSize, NoticeMode noticeMode, Color themeColor, float alpha) {
         GlStateManager.pushMatrix();
         GlStateManager.translate(x, y, 0.0F);
@@ -641,7 +775,6 @@ public class Notification extends Module {
                 float radius = (iconSize - 2.0F) * 0.5F;
                 int segments = 16;
 
-                // 圆圈
                 for (int i = 0; i < segments; i++) {
                     double angle1 = Math.PI * 2.0D * i / segments;
                     double angle2 = Math.PI * 2.0D * (i + 1) / segments;
@@ -657,11 +790,9 @@ public class Notification extends Module {
                     );
                 }
 
-                // 叹号竖线
                 GL11.glVertex2f(center, iconSize * 0.68F);
                 GL11.glVertex2f(center, iconSize * 0.36F);
 
-                // 叹号底部
                 GL11.glVertex2f(center - 1.0F, iconSize * 0.18F);
                 GL11.glVertex2f(center + 1.0F, iconSize * 0.18F);
             }
@@ -694,6 +825,8 @@ public class Notification extends Module {
         final String text;
         final NoticeMode noticeMode;
         final long startTime;
+        float animX = Float.NaN;
+        float animY = Float.NaN;
 
         NotificationEntry(String text, NoticeMode mode, long startTime) {
             this.text = text;

@@ -30,6 +30,7 @@ import org.lwjgl.util.glu.GLU;
 
 import javax.vecmath.Vector3d;
 import javax.vecmath.Vector4d;
+import java.awt.*;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.HashMap;
@@ -60,6 +61,7 @@ public class RenderUtil {
         float r = (color >> 16 & 255) / 255.0F;
         float g = (color >> 8 & 255) / 255.0F;
         float b = (color & 255) / 255.0F;
+        radius = Math.max(0.0F, Math.min(radius, Math.min(x2 - x, y2 - y) / 2.0F));
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
         GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
@@ -79,12 +81,70 @@ public class RenderUtil {
         wr.pos(x2, y2 - radius, 0).color(r, g, b, a).endVertex();
         wr.pos(x2 - radius, y2 - radius, 0).color(r, g, b, a).endVertex();
         tessellator.draw();
-        drawArc(x + radius, y + radius, radius, 180, 270, color);
-        drawArc(x2 - radius, y + radius, radius, 270, 360, color);
-        drawArc(x + radius, y2 - radius, radius, 90, 180, color);
-        drawArc(x2 - radius, y2 - radius, radius, 0, 90, color);
+        if (radius >= 0.1F) {
+            drawArc(x + radius, y + radius, radius, 180, 270, color);
+            drawArc(x2 - radius, y + radius, radius, 270, 360, color);
+            drawArc(x + radius, y2 - radius, radius, 90, 180, color);
+            drawArc(x2 - radius, y2 - radius, radius, 0, 90, color);
+        }
         GlStateManager.enableTexture2D();
         GlStateManager.disableBlend();
+    }
+
+    public static void drawRoundedRectGradient(float x, float y, float x2, float y2, float radius, int topColor, int bottomColor) {
+        radius = Math.max(0.0F, Math.min(radius, Math.min(x2 - x, y2 - y) / 2.0F));
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
+        Tessellator tessellator = Tessellator.getInstance();
+        WorldRenderer wr = tessellator.getWorldRenderer();
+        wr.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+        gradientVertex(wr, x + radius, y, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x2 - radius, y, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x2 - radius, y2, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x + radius, y2, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x, y + radius, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x + radius, y + radius, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x + radius, y2 - radius, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x, y2 - radius, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x2 - radius, y + radius, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x2, y + radius, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x2, y2 - radius, y, y2, topColor, bottomColor);
+        gradientVertex(wr, x2 - radius, y2 - radius, y, y2, topColor, bottomColor);
+        tessellator.draw();
+        if (radius >= 0.1F) {
+            drawArcGradient(x + radius, y + radius, radius, 180, 270, topColor, bottomColor, y, y2);
+            drawArcGradient(x2 - radius, y + radius, radius, 270, 360, topColor, bottomColor, y, y2);
+            drawArcGradient(x + radius, y2 - radius, radius, 90, 180, topColor, bottomColor, y, y2);
+            drawArcGradient(x2 - radius, y2 - radius, radius, 0, 90, topColor, bottomColor, y, y2);
+        }
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+    }
+
+    public static void drawZenGlass(float x1, float y1, float x2, float y2, float radius, float alpha) {
+        drawRoundedRectWithGl(x1, y1, x2, y2, radius, new Color(12, 14, 20, (int) (44.0F * alpha)).getRGB());
+        drawRoundedRectWithGl(x1, y1, x2, y2, radius, new Color(255, 255, 255, (int) (12.0F * alpha)).getRGB());
+    }
+
+    public static void drawGlass(float x1, float y1, float x2, float y2, float radius, float alpha) {
+        drawRoundedRectWithGl(x1 + 0.5F, y1 + 1.8F, x2 + 0.5F, y2 + 1.8F, radius,
+                new Color(8, 10, 16, (int) (42.0F * alpha)).getRGB());
+        drawRoundedRectGradient(x1, y1, x2, y2, radius,
+                new Color(255, 255, 255, (int) (204.0F * alpha)).getRGB(),
+                new Color(226, 232, 244, (int) (116.0F * alpha)).getRGB());
+        drawRoundedRectWithGl(x1 + radius * 0.7F, y1 + 0.7F, x2 - radius * 0.7F, y1 + 1.5F, 0.4F,
+                new Color(255, 255, 255, (int) (120.0F * alpha)).getRGB());
+    }
+
+    private static void gradientVertex(WorldRenderer wr, float x, float y, float yTop, float yBottom, int topColor, int bottomColor) {
+        float span = Math.max(0.0001F, yBottom - yTop);
+        float t = Math.max(0.0F, Math.min(1.0F, (y - yTop) / span));
+        int a = (int) ((topColor >> 24 & 255) + t * ((bottomColor >> 24 & 255) - (topColor >> 24 & 255)));
+        int r = (int) ((topColor >> 16 & 255) + t * ((bottomColor >> 16 & 255) - (topColor >> 16 & 255)));
+        int g = (int) ((topColor >> 8 & 255) + t * ((bottomColor >> 8 & 255) - (topColor >> 8 & 255)));
+        int b = (int) ((topColor & 255) + t * ((bottomColor & 255) - (topColor & 255)));
+        wr.pos(x, y, 0).color(r / 255.0F, g / 255.0F, b / 255.0F, a / 255.0F).endVertex();
     }
     private static void drawArc(float cx, float cy, float r, int startAngle, int endAngle, int color) {
         float a = (color >> 24 & 255) / 255.0F;
@@ -95,12 +155,27 @@ public class RenderUtil {
         WorldRenderer wr = tessellator.getWorldRenderer();
         wr.begin(GL11.GL_TRIANGLE_FAN, DefaultVertexFormats.POSITION_COLOR);
         wr.pos(cx, cy, 0).color(rc, gc, bc, a).endVertex();
-        int steps = 6;
-        for (int i = startAngle; i <= endAngle; i += (endAngle - startAngle) / steps) {
+        int steps = Math.max(12, Math.min(28, (int) (r * 3.0F)));
+        for (int i = startAngle; i <= endAngle + (endAngle - startAngle) / steps; i += (endAngle - startAngle) / steps) {
             double rad = Math.toRadians(i);
             float x = (float) (cx + Math.cos(rad) * r);
             float y = (float) (cy + Math.sin(rad) * r);
             wr.pos(x, y, 0).color(rc, gc, bc, a).endVertex();
+        }
+        tessellator.draw();
+    }
+
+    private static void drawArcGradient(float cx, float cy, float r, int startAngle, int endAngle, int topColor, int bottomColor, float yTop, float yBottom) {
+        Tessellator tessellator = Tessellator.getInstance();
+        WorldRenderer wr = tessellator.getWorldRenderer();
+        wr.begin(GL11.GL_TRIANGLE_FAN, DefaultVertexFormats.POSITION_COLOR);
+        gradientVertex(wr, cx, cy, yTop, yBottom, topColor, bottomColor);
+        int steps = Math.max(12, Math.min(28, (int) (r * 3.0F)));
+        for (int i = startAngle; i <= endAngle + (endAngle - startAngle) / steps; i += (endAngle - startAngle) / steps) {
+            double rad = Math.toRadians(i);
+            float x = (float) (cx + Math.cos(rad) * r);
+            float y = (float) (cy + Math.sin(rad) * r);
+            gradientVertex(wr, x, y, yTop, yBottom, topColor, bottomColor);
         }
         tessellator.draw();
     }

@@ -9,7 +9,6 @@ plugins {
     id("dev.architectury.architectury-pack200") version "0.1.3"
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("xyz.wagyourtail.jvmdowngrader") version "1.3.6"
-    kotlin("jvm")
 }
 //Constants:
 val baseGroup: String by project
@@ -100,9 +99,6 @@ dependencies {
     shadowImpl("org.slf4j:slf4j-api:2.0.17")
     // compile-time netty API (runtime uses the one bundled with 1.8.9)
     compileOnly("io.netty:netty-all:4.2.2.Final")
-    // NoticeMode is compiled from Kotlin and the standalone Minecraft runtime
-    // does not provide Kotlin classes, so include the stdlib in the shaded mod.
-    shadowImpl(kotlin("stdlib-jdk8"))
 }
 // Tasks:
 tasks.withType(JavaCompile::class) {

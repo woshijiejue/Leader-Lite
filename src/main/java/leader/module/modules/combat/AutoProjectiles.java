@@ -154,8 +154,10 @@ public class AutoProjectiles extends Module {
         double totalPredictTicks = flightTicks + (ping / 50.0) + 1.0;
         Vec3 predictedPos;
         if (this.prediction.getValue()) {
-            double predictedX = target.posX + (target.posX - target.prevPosX) * totalPredictTicks;
-            double predictedZ = target.posZ + (target.posZ - target.prevPosZ) * totalPredictTicks;
+            double relVelX = (target.posX - target.prevPosX) - (mc.thePlayer.posX - mc.thePlayer.prevPosX);
+            double relVelZ = (target.posZ - target.prevPosZ) - (mc.thePlayer.posZ - mc.thePlayer.prevPosZ);
+            double predictedX = target.posX + relVelX * totalPredictTicks;
+            double predictedZ = target.posZ + relVelZ * totalPredictTicks;
             double predictedY = target.posY + (target.posY - target.prevPosY) * Math.min(totalPredictTicks, 2.0);
             predictedPos = new Vec3(predictedX, predictedY, predictedZ);
         } else {
