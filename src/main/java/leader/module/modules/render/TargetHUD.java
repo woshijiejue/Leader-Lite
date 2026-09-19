@@ -809,18 +809,13 @@ public class TargetHUD extends Module {
         if (size <= 0.05F || alpha <= 0.004F) {
             return;
         }
-        float feather = Math.min(0.5F, size / 6.0F);
-        float ix = x + feather;
-        float iy = y + feather;
-        float inner = size - feather * 2.0F;
-        if (inner <= 0.1F) {
-            feather = 0.0F;
-            ix = x;
-            iy = y;
-            inner = size;
-        }
-        float innerRadius = Math.max(0.0F, Math.min(radius - feather, inner / 2.0F));
-        int steps = Math.max(6, Math.min(24, (int) Math.ceil(radius * 1.5F) + 4));
+        // Hard clip only. The previous feathered strip blended the skin edge
+        // with transparent pixels and made small heads look visibly blurred.
+        float inner = size;
+        float ix = x;
+        float iy = y;
+        float innerRadius = Math.max(0.0F, Math.min(radius, inner / 2.0F));
+        int steps = Math.max(8, Math.min(20, (int) Math.ceil(radius * 1.25F) + 3));
         int total = 4 * (steps + 1);
 
         boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
@@ -830,6 +825,13 @@ public class TargetHUD extends Module {
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GlStateManager.enableTexture2D();
+        // Minecraft's skin texture is usually linearly filtered. A 24-30px
+        // portrait makes that interpolation look blurry, so use nearest-neighbor
+        // for this clipped face and restore the texture's original filters.
+        int oldMinFilter = GL11.glGetTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER);
+        int oldMagFilter = GL11.glGetTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
 
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
         headVertex(ix + inner / 2.0F, iy + inner / 2.0F, x, y, size, texU, texV, alpha);
@@ -838,20 +840,8 @@ public class TargetHUD extends Module {
             headVertex(HEAD_BOUNDARY[0], HEAD_BOUNDARY[1], x, y, size, texU, texV, alpha);
         }
         GL11.glEnd();
-
-        if (feather > 0.02F) {
-            GL11.glBegin(GL11.GL_TRIANGLE_STRIP);
-            for (int i = 0; i <= total; i++) {
-                headBoundaryPoint(i == total ? 0 : i, x, y, size, radius, steps);
-                float px = HEAD_BOUNDARY[0];
-                float py = HEAD_BOUNDARY[1];
-                float nx = HEAD_BOUNDARY[2] * feather;
-                float ny = HEAD_BOUNDARY[3] * feather;
-                headVertex(px - nx, py - ny, x, y, size, texU, texV, alpha);
-                headVertex(px + nx, py + ny, x, y, size, texU, texV, 0.0F);
-            }
-            GL11.glEnd();
-        }
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, oldMinFilter);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, oldMagFilter);
 
         if (cull) {
             GlStateManager.enableCull();

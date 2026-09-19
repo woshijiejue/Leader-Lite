@@ -962,16 +962,16 @@ public class Notification extends Module {
                 ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + cardHeight, radius, -1));
             }
 
-            int panelR = Math.max(32, (int) (hudColor.getRed() * 0.58F));
-            int panelG = Math.max(36, (int) (hudColor.getGreen() * 0.58F));
-            int panelB = Math.max(48, (int) (hudColor.getBlue() * 0.72F));
+            // Transparent neutral-gray body; HUD color is reserved for the
+            // status icon and the thin lifetime bar at the bottom.
             RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.5F, x + cardWidth + 0.5F, y + cardHeight + 1.5F,
-                    radius, new Color(0, 0, 0, (int) (55.0F * alpha)).getRGB());
+                    radius, new Color(0, 0, 0, (int) (42.0F * alpha)).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight,
-                    radius, new Color(panelR, panelG, panelB, (int) (242.0F * alpha)).getRGB());
-            RenderUtil.drawRect(x + 2.0F, y + cardHeight - 2.0F,
-                    x + 2.0F + (cardWidth - 4.0F) * remain, y + cardHeight - 1.0F,
-                    new Color(255, 255, 255, (int) (70.0F * alpha)).getRGB());
+                    radius, new Color(105, 106, 112, (int) (158.0F * alpha)).getRGB());
+            float barWidth = Math.max(1.5F, (cardWidth - 4.0F) * remain);
+            RenderUtil.drawRoundedRectWithGl(x + 2.0F, y + cardHeight - 3.0F,
+                    x + 2.0F + barWidth, y + cardHeight - 1.0F, 1.0F,
+                    new Color(hudColor.getRed(), hudColor.getGreen(), hudColor.getBlue(), (int) (235.0F * alpha)).getRGB());
 
             // White state icon, matching the reference card.
             lucidIcon(entry.noticeMode).drawCentered(x + iconWell / 2.0F, y + cardHeight / 2.0F,

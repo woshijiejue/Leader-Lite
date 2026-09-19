@@ -619,9 +619,8 @@ public class Potion extends Module {
             float maxNameWidth = 132.0F;
             name = fitText(name, maxNameWidth, textScale);
             float nameWidth = FontManager.getStringWidth(name) * textScale;
-            float durationWidth = FontManager.getStringWidth(durationStr) * Math.max(0.72F, textScale * 0.8F);
-            float cardWidth = Math.max(112.0F, Math.min(210.0F,
-                    iconWell + 8.0F + nameWidth + 8.0F + Math.max(timerWell, durationWidth + 8.0F)));
+            float namePanelWidth = Math.max(76.0F, nameWidth + 18.0F);
+            float cardWidth = Math.max(112.0F, Math.min(210.0F, iconWell + 4.0F + namePanelWidth));
             float baseX = isRight ? (screenWidth - cardWidth - offX) * invScale : offX * invScale;
             float x = baseX;
             float y = baseY + index * step;
@@ -643,38 +642,28 @@ public class Potion extends Module {
             RenderUtil.drawRect(x + iconWell - radius, y, x + iconWell, y + cardHeight,
                     new Color(53, 54, 60, 242).getRGB());
 
-            float timerX = x + cardWidth - Math.max(timerWell, durationWidth + 8.0F);
-            RenderUtil.drawRoundedRectWithGl(timerX, y, x + cardWidth, y + cardHeight,
+            float namePanelX = x + iconWell + 4.0F;
+            float namePanelRight = x + cardWidth;
+            // The name block itself is the duration visualization: a dark track
+            // remains visible while a HUD-colored layer recedes from right to left.
+            RenderUtil.drawRoundedRectWithGl(namePanelX, y, namePanelRight, y + cardHeight,
                     radius, new Color(57, 58, 64, 230).getRGB());
-            RenderUtil.drawRect(timerX, y, timerX + radius, y + cardHeight,
-                    new Color(57, 58, 64, 230).getRGB());
+            float fillRight = namePanelX + (namePanelRight - namePanelX) * ratio;
+            RenderUtil.drawRoundedRectWithGl(namePanelX, y, fillRight, y + cardHeight,
+                    radius, new Color(hudColor.getRed(), hudColor.getGreen(), hudColor.getBlue(), 92).getRGB());
 
-            // HUD-colored icon and a slim remaining-duration marker.
+            // HUD-colored potion icon in its independent dark well.
             Icon.potion(id).drawCentered(x + iconWell / 2.0F, y + cardHeight / 2.0F,
                     14.0F, hudColor.getRGB(), 1.0F);
-            float markerH = Math.max(2.0F, (cardHeight - 8.0F) * ratio);
-            float markerY = y + (cardHeight - markerH) / 2.0F;
-            RenderUtil.drawRoundedRectWithGl(timerX + 3.0F, markerY,
-                    timerX + 5.5F, markerY + markerH, 1.25F,
-                    new Color(hudColor.getRed(), hudColor.getGreen(), hudColor.getBlue(), 245).getRGB());
 
             GlStateManager.disableDepth();
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
             GlStateManager.pushMatrix();
-            GlStateManager.translate(x + iconWell + 8.0F, y + (cardHeight - textHeight) / 2.0F, 0.0F);
+            GlStateManager.translate(namePanelX + 9.0F, y + (cardHeight - textHeight) / 2.0F, 0.0F);
             GlStateManager.scale(textScale, textScale, 1.0F);
             FontManager.drawString(name, 0.0F, 0.0F, new Color(250, 250, 252).getRGB(), false);
-            GlStateManager.popMatrix();
-
-            float durationScale = Math.max(0.72F, textScale * 0.8F);
-            GlStateManager.pushMatrix();
-            GlStateManager.translate(x + cardWidth - 4.0F - durationWidth,
-                    y + (cardHeight - FontManager.getFontHeight() * durationScale) / 2.0F, 0.0F);
-            GlStateManager.scale(durationScale, durationScale, 1.0F);
-            FontManager.drawString(durationStr, 0.0F, 0.0F,
-                    new Color(245, 245, 248, 230).getRGB(), false);
             GlStateManager.popMatrix();
 
             GlStateManager.enableDepth();
