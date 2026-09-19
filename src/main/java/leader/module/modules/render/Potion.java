@@ -543,8 +543,6 @@ public class Potion extends Module {
                 ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1));
             }
 
-            RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.8F, x + cardWidth + 0.5F, y + cardHeight + 1.8F,
-                    radius, new Color(0, 0, 0, 55).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
                     new Color(12, 14, 19, 51).getRGB());
 
@@ -632,8 +630,6 @@ public class Potion extends Module {
                 ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + cardHeight, radius, -1));
             }
 
-            RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.5F, x + cardWidth + 0.5F, y + cardHeight + 1.5F,
-                    radius, new Color(0, 0, 0, 48).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight,
                     radius, new Color(93, 94, 101, 51).getRGB());
 

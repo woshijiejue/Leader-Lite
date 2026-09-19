@@ -957,10 +957,8 @@ public class TargetHUD extends Module {
         }
         GlStateManager.translate(posX, posY, this.renderingFollow ? 0.0F : -450.0F);
 
-        int shadowColor = new Color(0, 0, 0, 55).getRGB();
         int cardAlpha = 51;
         int cardColor = new Color(20, 22, 27, cardAlpha).getRGB();
-        RenderUtil.drawRoundedRectWithGl(0.0F, 2.0F, cardWidth, cardHeight + 2.0F, radius, shadowColor);
         RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, radius, cardColor);
 
         float ringCX = 24.0F;
@@ -1305,16 +1303,11 @@ public class TargetHUD extends Module {
         // New reference-style panel stays lightweight instead of solid.
         int panelAlpha = 51;
 
-        RenderUtil.drawRoundedRectWithGl(0.5F, 1.5F, cardWidth + 0.5F, cardHeight + 1.5F, radius,
-                new Color(0, 0, 0, 50).getRGB());
         RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, radius,
                 new Color(73, 75, 84, panelAlpha).getRGB());
-        // Small mid-panel accent block from the reference layout. It visually
-        // bridges the portrait and the content without adding another label.
-        RenderUtil.drawRoundedRectWithGl(36.0F, 16.0F, 39.0F, 22.0F, 1.5F,
-                new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 220).getRGB());
-        RenderUtil.drawRoundedRectWithGl(36.5F, 16.5F, 38.5F, 18.0F, 0.75F,
-                new Color(255, 255, 255, 100).getRGB());
+        // Straight accent bar attached to the far-left edge of the full panel.
+        RenderUtil.drawRect(0.0F, cardHeight / 2.0F - 4.0F, 2.0F, cardHeight / 2.0F + 4.0F,
+                new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 235).getRGB());
         RenderUtil.drawRoundedRectWithGl(contentX, barY, contentRight, barY + barHeight, 2.0F,
                 new Color(48, 51, 59, 220).getRGB());
 
