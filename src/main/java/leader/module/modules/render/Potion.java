@@ -546,7 +546,7 @@ public class Potion extends Module {
             RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.8F, x + cardWidth + 0.5F, y + cardHeight + 1.8F,
                     radius, new Color(0, 0, 0, 55).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
-                    new Color(12, 14, 19, 205).getRGB());
+                    new Color(12, 14, 19, 51).getRGB());
 
             float chipY = y + (cardHeight - chipSize) / 2.0F;
             RenderUtil.drawRoundedRectWithGl(x + chipX, chipY, x + chipX + chipSize, chipY + chipSize, 5.5F,
@@ -635,19 +635,19 @@ public class Potion extends Module {
             RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.5F, x + cardWidth + 0.5F, y + cardHeight + 1.5F,
                     radius, new Color(0, 0, 0, 48).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight,
-                    radius, new Color(93, 94, 101, 235).getRGB());
+                    radius, new Color(93, 94, 101, 51).getRGB());
 
             RenderUtil.drawRoundedRectWithGl(x, y, x + iconWell, y + cardHeight,
-                    radius, new Color(53, 54, 60, 242).getRGB());
+                    radius, new Color(53, 54, 60, 51).getRGB());
             RenderUtil.drawRect(x + iconWell - radius, y, x + iconWell, y + cardHeight,
-                    new Color(53, 54, 60, 242).getRGB());
+                    new Color(53, 54, 60, 51).getRGB());
 
             float namePanelX = x + iconWell + 4.0F;
             float namePanelRight = x + cardWidth;
             // The name block itself is the duration visualization: a dark track
             // remains visible while a HUD-colored layer recedes from right to left.
             RenderUtil.drawRoundedRectWithGl(namePanelX, y, namePanelRight, y + cardHeight,
-                    radius, new Color(57, 58, 64, 230).getRGB());
+                    radius, new Color(57, 58, 64, 51).getRGB());
             float fillRight = namePanelX + (namePanelRight - namePanelX) * ratio;
             RenderUtil.drawRoundedRectWithGl(namePanelX, y, fillRight, y + cardHeight,
                     radius, new Color(hudColor.getRed(), hudColor.getGreen(), hudColor.getBlue(), 92).getRGB());

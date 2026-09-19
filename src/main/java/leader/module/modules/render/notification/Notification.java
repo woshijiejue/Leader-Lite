@@ -830,7 +830,7 @@ public class Notification extends Module {
             RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.8F, x + cardWidth + 0.5F, y + cardHeight + 1.8F,
                     radius, new Color(0, 0, 0, (int) (60.0F * alpha)).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
-                    new Color(48, 57, 103, (int) (242.0F * alpha)).getRGB());
+                    new Color(48, 57, 103, (int) (51.0F * alpha)).getRGB());
 
             float iconY = y + (cardHeight - iconSize) / 2.0F;
             lucidIcon(entry.noticeMode).draw(x + iconX, iconY, iconSize, 0xFFFFFF, alpha);
@@ -967,7 +967,7 @@ public class Notification extends Module {
             RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.5F, x + cardWidth + 0.5F, y + cardHeight + 1.5F,
                     radius, new Color(0, 0, 0, (int) (42.0F * alpha)).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight,
-                    radius, new Color(105, 106, 112, (int) (158.0F * alpha)).getRGB());
+                    radius, new Color(105, 106, 112, (int) (51.0F * alpha)).getRGB());
             float barWidth = Math.max(1.5F, (cardWidth - 4.0F) * remain);
             RenderUtil.drawRoundedRectWithGl(x + 2.0F, y + cardHeight - 3.0F,
                     x + 2.0F + barWidth, y + cardHeight - 1.0F, 1.0F,
