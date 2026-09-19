@@ -12,8 +12,10 @@ import net.minecraft.util.BlockPos;
 import net.minecraft.world.biome.BiomeGenBase;
 
 import java.lang.reflect.Field;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class EnvModifier extends Module {
 
@@ -26,17 +28,32 @@ public class EnvModifier extends Module {
             () -> this.timeEnabled.getValue() && this.timePreset.getValue() == 5);
     public final ModeProperty weather = new ModeProperty("Weather", 0,
             new String[]{"Off", "Clear", "Rain", "Snow", "Thunder"});
-    private final Set<BiomeGenBase> snowBiomes = new HashSet<>();
+
+    private final Map<BiomeGenBase, Float> snowTemperatures = new HashMap<>();
+    private final Map<BiomeGenBase, Boolean> snowFlags = new HashMap<>();
     private static Field snowField;
+    private static boolean snowFieldMissing;
+
+    private boolean saved;
+    private long savedTime;
+    private boolean savedRaining;
+    private boolean savedThundering;
+    private float savedRainStrength;
+    private float savedThunderStrength;
+
+    public EnvModifier() {
+        super("EnvModifier", false);
+    }
 
     private static Field getSnowField() {
-        if (snowField == null) {
+        if (snowField == null && !snowFieldMissing) {
             try {
                 snowField = BiomeGenBase.class.getDeclaredField("enableSnow");
             } catch (NoSuchFieldException ignored) {
                 try {
                     snowField = BiomeGenBase.class.getDeclaredField("field_76766_R");
                 } catch (NoSuchFieldException ignored2) {
+                    snowFieldMissing = true;
                     return null;
                 }
             }
@@ -56,10 +73,6 @@ public class EnvModifier extends Module {
         }
     }
 
-    public EnvModifier() {
-        super("EnvModifier", false);
-    }
-
     private long getTargetTime() {
         return switch (this.timePreset.getValue()) {
             case 0 -> 23000L;
@@ -73,75 +86,86 @@ public class EnvModifier extends Module {
 
     @EventTarget
     public void onTick(TickEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.PRE) return;
-        if (mc.theWorld == null) return;
-
-        if (this.timeEnabled.getValue()) {
-            mc.theWorld.setWorldTime(this.getTargetTime());
-        }
-
-        int mode = this.weather.getValue();
-        if (mode == 0) {
-            this.clearSnow();
-            return;
-        }
-
-        boolean precipitation = mode != 1;
-        boolean snow = mode == 3;
-        boolean thunder = mode == 4;
-        mc.theWorld.getWorldInfo().setRaining(precipitation);
-        mc.theWorld.getWorldInfo().setThundering(thunder);
-        mc.theWorld.getWorldInfo().setRainTime(Integer.MAX_VALUE);
-        mc.theWorld.getWorldInfo().setThunderTime(Integer.MAX_VALUE);
-
-        float rainStrength = precipitation ? 1.0F : 0.0F;
-        float thunderStrength = thunder ? 1.0F : 0.0F;
-        if (mc.theWorld.getRainStrength(1.0F) != rainStrength) {
-            mc.theWorld.setRainStrength(rainStrength);
-        }
-        if (mc.theWorld.getThunderStrength(1.0F) != thunderStrength) {
-            mc.theWorld.setThunderStrength(thunderStrength);
-        }
-
-        if (snow) {
+        if (!this.isEnabled() || event.getType() != EventType.PRE || mc.theWorld == null) return;
+        if (this.weather.getValue() == 3) {
             this.applySnow();
         } else {
             this.clearSnow();
         }
     }
 
+    public void applyWorldState() {
+        if (mc.theWorld == null) return;
+        this.savedTime = mc.theWorld.getWorldTime();
+        this.savedRaining = mc.theWorld.getWorldInfo().isRaining();
+        this.savedThundering = mc.theWorld.getWorldInfo().isThundering();
+        this.savedRainStrength = mc.theWorld.getRainStrength(1.0F);
+        this.savedThunderStrength = mc.theWorld.getThunderStrength(1.0F);
+        this.saved = true;
+
+        if (this.timeEnabled.getValue()) {
+            mc.theWorld.setWorldTime(this.getTargetTime());
+        }
+
+        int mode = this.weather.getValue();
+        if (mode == 0) return;
+
+        boolean precipitation = mode != 1;
+        boolean thunder = mode == 4;
+        mc.theWorld.getWorldInfo().setRaining(precipitation);
+        mc.theWorld.getWorldInfo().setThundering(thunder);
+        mc.theWorld.setRainStrength(precipitation ? 1.0F : 0.0F);
+        mc.theWorld.setThunderStrength(thunder ? 1.0F : 0.0F);
+    }
+
+    public void restoreWorldState() {
+        if (!this.saved) return;
+        this.saved = false;
+        if (mc.theWorld == null) return;
+        mc.theWorld.setWorldTime(this.savedTime);
+        mc.theWorld.getWorldInfo().setRaining(this.savedRaining);
+        mc.theWorld.getWorldInfo().setThundering(this.savedThundering);
+        mc.theWorld.setRainStrength(this.savedRainStrength);
+        mc.theWorld.setThunderStrength(this.savedThunderStrength);
+    }
+
     private void applySnow() {
         if (mc.thePlayer == null) return;
         BiomeGenBase biome = mc.theWorld.getBiomeGenForCoords(
                 new BlockPos(mc.thePlayer.posX, 0.0D, mc.thePlayer.posZ));
-        if (biome == null || biome.getEnableSnow()) return;
+        if (biome == null || this.snowTemperatures.containsKey(biome)) return;
+        this.snowTemperatures.put(biome, biome.temperature);
+        this.snowFlags.put(biome, biome.getEnableSnow());
+        biome.temperature = 0.0F;
         this.setBiomeSnow(biome, true);
-        this.snowBiomes.add(biome);
     }
 
     private void clearSnow() {
-        if (this.snowBiomes.isEmpty()) return;
-        for (BiomeGenBase biome : this.snowBiomes) {
-            this.setBiomeSnow(biome, false);
+        if (this.snowTemperatures.isEmpty()) return;
+        for (Map.Entry<BiomeGenBase, Float> entry : this.snowTemperatures.entrySet()) {
+            entry.getKey().temperature = entry.getValue();
+            this.setBiomeSnow(entry.getKey(), this.snowFlags.get(entry.getKey()));
         }
-        this.snowBiomes.clear();
+        this.snowTemperatures.clear();
+        this.snowFlags.clear();
     }
 
     @Override
     public void onDisabled() {
         this.clearSnow();
-        if (mc.theWorld == null) return;
-        mc.theWorld.getWorldInfo().setRainTime(0);
-        mc.theWorld.getWorldInfo().setThunderTime(0);
     }
 
     @Override
     public String[] getSuffix() {
-        if (this.weather.getValue() == 1) return new String[]{"Clear"};
-        if (this.weather.getValue() == 2) return new String[]{"Rain"};
-        if (this.weather.getValue() == 3) return new String[]{"Snow"};
-        if (this.weather.getValue() == 4) return new String[]{"Thunder"};
-        if (this.timeEnabled.getValue()) return new String[]{this.timePreset.getModeString()};
-        return new String[]{"Off"};
+        List<String> suffix = new ArrayList<>();
+        if (this.timeEnabled.getValue()) {
+            suffix.add(this.timePreset.getValue() == 5
+                    ? String.valueOf(this.customTime.getValue())
+                    : this.timePreset.getModeString());
+        }
+        if (this.weather.getValue() != 0) {
+            suffix.add(this.weather.getModeString());
+        }
+        return suffix.isEmpty() ? new String[]{"Off"} : suffix.toArray(new String[0]);
     }
 }

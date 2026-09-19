@@ -12,6 +12,7 @@ import leader.module.modules.misc.AntiDebuff;
 import leader.module.modules.player.AutoBlockIn;
 import leader.module.modules.player.GhostHand;
 import leader.module.modules.player.Scaffold;
+import leader.module.modules.render.EnvModifier;
 import leader.module.modules.render.NoHurtCam;
 import leader.module.modules.render.ViewClip;
 import net.minecraft.block.Block;
@@ -100,6 +101,33 @@ public abstract class MixinEntityRenderer {
             ((IAccessorEntityPlayer) this.mc.thePlayer).setItemInUseCount(this.useCount.value);
             this.useCount = null;
         }
+    }
+
+    @Inject(
+            method = {"updateCameraAndRender"},
+            at = {@At("HEAD")}
+    )
+    private void applyEnvironment(float float1, long long2, CallbackInfo callbackInfo) {
+        EnvModifier envModifier = this.envModifier();
+        if (envModifier != null && envModifier.isEnabled()) {
+            envModifier.applyWorldState();
+        }
+    }
+
+    @Inject(
+            method = {"updateCameraAndRender"},
+            at = {@At("RETURN")}
+    )
+    private void restoreEnvironment(float float1, long long2, CallbackInfo callbackInfo) {
+        EnvModifier envModifier = this.envModifier();
+        if (envModifier != null) {
+            envModifier.restoreWorldState();
+        }
+    }
+
+    @Unique
+    private EnvModifier envModifier() {
+        return Leader.moduleManager == null ? null : (EnvModifier) Leader.moduleManager.modules.get(EnvModifier.class);
     }
 
     @Inject(

@@ -57,12 +57,12 @@ public class AutoHypixel extends Module {
             if (mc.thePlayer != null) {
                 ChatUtil.sendMessage(command);
             }
-            Notification.addNotification("AutoPlay Running...", NoticeMode.Info);
+            Notification.addNotification("AutoPlay", "Running...", NoticeMode.Info);
             return;
         }
 
         new Thread(() -> {
-            Notification.addNotification("Play again in" + delay + " seconds.", NoticeMode.Info);
+            Notification.addNotification("AutoPlay", "Play again in " + delay + " seconds.", NoticeMode.Info);
             try {
                 Thread.sleep((long) (delay * 1000L));
             } catch (InterruptedException ignored) {

@@ -42,7 +42,7 @@ public class Stuck extends Module {
                 S12PacketEntityVelocity s12PacketEntityVelocity = (S12PacketEntityVelocity) event.getPacket();
                 if (s12PacketEntityVelocity.getEntityID() == mc.thePlayer.getEntityId()){
                     Leader.delayManager.setDelayState(true, DelayModules.VELOCITY);
-                    tick = 10;
+                    tick = 11;
                     Leader.delayManager.delayedPacket.offer(s12PacketEntityVelocity);
                     event.setCancelled(true);
                 }

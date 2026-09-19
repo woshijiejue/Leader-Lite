@@ -7,6 +7,7 @@ import leader.module.Module;
 import leader.property.properties.FloatProperty;
 import leader.property.properties.IntProperty;
 import leader.property.properties.ModeProperty;
+import leader.util.Icon;
 import leader.util.RenderUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
@@ -26,7 +27,7 @@ public class Watermark extends Module {
     private int displayFps = 0;
     private int frameCount = 0;
 
-    public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN", "FROST", "ICON"});
+    public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN", "FROST", "ICON", "LUCID"});
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
     public final IntProperty offX = new IntProperty("offset-x", 4, 0, 500);
@@ -72,7 +73,6 @@ public class Watermark extends Module {
             lastFrameTime = now;
         }
 
-        // ── Phase cycling ──
         long total = PHASE_MS * 3L;
         long pos = now % total;
         int phase = (int) (pos / PHASE_MS);
@@ -81,7 +81,6 @@ public class Watermark extends Module {
         String curText = getText(phase);
         String nextText = getText((phase + 1) % 3);
 
-        // ── Fade animation ──
         float fade = 0.0F;
         if (phasePos > PHASE_MS - FADE_MS) {
             fade = (float) (phasePos - (PHASE_MS - FADE_MS)) / (float) FADE_MS;
@@ -89,7 +88,6 @@ public class Watermark extends Module {
         fade = Math.max(0.0F, Math.min(1.0F, fade));
         float anim = easeOutCubic(fade);
 
-        // ── Theme color ──
         HUD hud = getHud();
         Color tc = hud != null ? hud.getColor(now) : new Color(0, 190, 255);
 
@@ -105,17 +103,19 @@ public class Watermark extends Module {
             renderIcon(tc);
             return;
         }
+        if (this.mode.getValue() == 4) {
+            renderLucid(tc);
+            return;
+        }
 
         float uiScale = this.scale.getValue();
         float textScale = this.fontScale.getValue();
 
-        // ── Measure text ──
         float curW = FontManager.getStringWidth(curText) * textScale;
         float nextW = FontManager.getStringWidth(nextText) * textScale;
         float textH = FontManager.getFontHeight() * textScale;
         float textW = curW + (nextW - curW) * anim;
 
-        // ── Layout ──
         float padX = 12.0F;
         float padY = 7.0F;
         float dot = 4.0F;
@@ -126,7 +126,6 @@ public class Watermark extends Module {
         float cardH = padY + textH + padY;
         float radius = 6.0F;
 
-        // ── Clamp to screen ──
         ScaledResolution sr = new ScaledResolution(mc);
         float maxW = sr.getScaledWidth() / uiScale;
         float maxH = sr.getScaledHeight() / uiScale;
@@ -138,7 +137,6 @@ public class Watermark extends Module {
         if (x < 4.0F) x = 4.0F;
         if (y < 4.0F) y = 4.0F;
 
-        // ── Frosted-glass card ──
         int rimCol = new Color(255, 255, 255, 36).getRGB();
         int glassCol = new Color(13, 15, 21, 172).getRGB();
         int tintCol = new Color(tc.getRed(), tc.getGreen(), tc.getBlue(), 14).getRGB();
@@ -151,7 +149,6 @@ public class Watermark extends Module {
         RenderUtil.drawRoundedRectWithGl(x + 1.0F, y + 1.0F, x + cardW - 1.0F, y + cardH - 1.0F, radius - 1.0F, tintCol);
         RenderUtil.drawRoundedRectWithGl(x + 2.0F, y + 2.0F, x + cardW - 2.0F, y + cardH * 0.45F, radius - 2.0F, shineCol);
 
-        // ── Pulsing theme dot ──
         float pulse = 0.7F + 0.3F * (float) Math.sin(now * 0.004D);
         float dotY = y + (cardH - dot) / 2.0F;
         int dotGlow = new Color(tc.getRed(), tc.getGreen(), tc.getBlue(), (int) (70.0F * pulse)).getRGB();
@@ -367,6 +364,85 @@ public class Watermark extends Module {
         GlStateManager.resetColor();
     }
 
+    private void renderLucid(Color themeColor) {
+        float uiScale = this.scale.getValue();
+        float textScale = this.fontScale.getValue();
+        String name = CLIENT_NAME;
+        String fps = this.displayFps + " FPS";
+        String player = mc.thePlayer != null ? mc.thePlayer.getName() : "-";
+
+        float chipSize = 16.0F;
+        float chipX = 4.0F;
+        float gap = 7.0F;
+        float padRight = 8.0F;
+        float padY = 3.5F;
+        float textH = FontManager.getFontHeight() * textScale;
+        float nameW = FontManager.getStringWidth(name) * textScale;
+        float fpsW = FontManager.getStringWidth(fps) * textScale;
+        float playerW = FontManager.getStringWidth(player) * textScale;
+        float sepW = FontManager.getStringWidth("|") * textScale;
+        float sepGap = 6.0F;
+
+        float contentW = chipSize + gap + nameW + sepGap + sepW + sepGap + fpsW + sepGap + sepW + sepGap + playerW;
+        float cardW = chipX + contentW + padRight;
+        float cardH = Math.max(chipSize + padY * 2.0F, padY * 2.0F + textH);
+        float radius = 7.0F;
+
+        ScaledResolution sr = new ScaledResolution(mc);
+        float maxW = sr.getScaledWidth() / uiScale;
+        float maxH = sr.getScaledHeight() / uiScale;
+        float x = this.offX.getValue();
+        float y = this.offY.getValue();
+        if (x + cardW > maxW) x = maxW - cardW - 4.0F;
+        if (y + cardH > maxH) y = maxH - cardH - 4.0F;
+        if (x < 4.0F) x = 4.0F;
+        if (y < 4.0F) y = 4.0F;
+
+        int accent = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), 255).getRGB();
+        int chipBg = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), 40).getRGB();
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(uiScale, uiScale, 1.0F);
+        RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.8F, x + cardW + 0.5F, y + cardH + 1.8F, radius,
+                new Color(0, 0, 0, 55).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x, y, x + cardW, y + cardH, radius, new Color(12, 14, 19, 205).getRGB());
+
+        float chipY = y + (cardH - chipSize) / 2.0F;
+        RenderUtil.drawRoundedRectWithGl(x + chipX, chipY, x + chipX + chipSize, chipY + chipSize, 5.0F, chipBg);
+        Icon.CROWN.drawCentered(x + chipX + chipSize / 2.0F, chipY + chipSize / 2.0F, 10.0F, accent, 1.0F);
+
+        GlStateManager.disableDepth();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+        float cursor = x + chipX + chipSize + gap;
+        float textY = y + (cardH - textH) / 2.0F + 1.0F;
+        int white = new Color(240, 244, 250, 246).getRGB();
+        int dim = new Color(148, 156, 170, 200).getRGB();
+
+        drawLucidText(name, cursor, textY, textScale, accent);
+        cursor += nameW + sepGap;
+        drawLucidText("|", cursor, textY, textScale, dim);
+        cursor += sepW + sepGap;
+        drawLucidText(fps, cursor, textY, textScale, white);
+        cursor += fpsW + sepGap;
+        drawLucidText("|", cursor, textY, textScale, dim);
+        cursor += sepW + sepGap;
+        drawLucidText(player, cursor, textY, textScale, white);
+
+        GlStateManager.enableDepth();
+        GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
+    }
+
+    private void drawLucidText(String text, float x, float y, float textScale, int color) {
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x, y, 0.0F);
+        GlStateManager.scale(textScale, textScale, 1.0F);
+        FontManager.drawString(text, 0.0F, 0.0F, color, false);
+        GlStateManager.popMatrix();
+    }
+
     private void renderClassic(String curText, String nextText, float anim, Color themeColor) {
         float uiScale = this.scale.getValue();
         float textScale = this.fontScale.getValue();
@@ -393,7 +469,6 @@ public class Watermark extends Module {
         GlStateManager.popMatrix();
     }
 
-    /** Draw a single text phase with the given alpha, including a subtle shadow. */
     private void drawPhaseText(String text, float x, float y, float textScale, int alpha) {
         if (alpha <= 0) return;
 

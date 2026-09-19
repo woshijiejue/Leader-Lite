@@ -10,6 +10,7 @@ import leader.property.properties.BooleanProperty;
 import leader.property.properties.FloatProperty;
 import leader.property.properties.IntProperty;
 import leader.property.properties.ModeProperty;
+import leader.util.Icon;
 import leader.util.RenderUtil;
 import leader.util.shader.ShaderElement;
 import net.minecraft.client.Minecraft;
@@ -31,7 +32,7 @@ public class Notification extends Module {
     private static final List<NotificationEntry> entries = new ArrayList<>();
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"RIGHT", "LEFT"});
-    public final ModeProperty style = new ModeProperty("style", 1, new String[]{"CLASSIC", "MODERN", "8BIT", "AURA", "FROST"});
+    public final ModeProperty style = new ModeProperty("style", 1, new String[]{"CLASSIC", "MODERN", "8BIT", "AURA", "FROST", "LUCID", "SLATE"});
     public final IntProperty duration = new IntProperty("duration", 1500, 500, 5000);
     public final IntProperty maxAlerts = new IntProperty("max-alerts", 5, 1, 10);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
@@ -51,7 +52,11 @@ public class Notification extends Module {
     }
 
     public static void addNotification(String text, NoticeMode noticeMode) {
-        entries.add(new NotificationEntry(text, noticeMode, System.currentTimeMillis()));
+        addNotification(text, "", noticeMode);
+    }
+
+    public static void addNotification(String text, String description, NoticeMode noticeMode) {
+        entries.add(new NotificationEntry(text, description, noticeMode, System.currentTimeMillis()));
         Notification notification = (Notification) Leader.moduleManager.modules.get(Notification.class);
         if (notification != null) {
             int max = notification.maxAlerts.getValue();
@@ -99,6 +104,14 @@ public class Notification extends Module {
         }
         if (this.style.getValue() == 4) {
             renderFrost(sr, now, dur);
+            return;
+        }
+        if (this.style.getValue() == 5) {
+            renderLucid(sr, now, dur);
+            return;
+        }
+        if (this.style.getValue() == 6) {
+            renderSlate(sr, now, dur);
             return;
         }
 
@@ -193,10 +206,10 @@ public class Notification extends Module {
             GL11.glColor4f(themeColor.getRed() / 255f, themeColor.getGreen() / 255f, themeColor.getBlue() / 255f, alpha);
             switch (entry.noticeMode) {
                 case Enable -> {
-                    // 叹号主体
+
                     GL11.glVertex2f(1.0F, iconSize * 0.55F);
                     GL11.glVertex2f(iconSize * 0.45F, iconSize - 1.0F);
-                    // 叹号底部像素点
+
                     GL11.glVertex2f(iconSize * 0.45F, iconSize - 1.0F);
                     GL11.glVertex2f(iconSize - 1.0F, 1.0F);
                 }
@@ -278,7 +291,7 @@ public class Notification extends Module {
 
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius, rimColor);
             RenderUtil.drawRoundedRectWithGl(x + 1.0F, y + 1.0F, x + cardWidth - 1.0F, y + cardHeight - 1.0F, radius - 1.0F, glassColor);
-            // Left accent bar.
+
             RenderUtil.drawRoundedRectWithGl(x + 3.0F, y + 7.5F, x + 4.5F, y + cardHeight - 7.5F, 0.75F, accent);
             RenderUtil.drawRoundedRectWithGl(x + cardWidth - 23.0F, y + 7.0F, x + cardWidth - 9.0F, y + 21.0F, 4.0F, accentSoft);
 
@@ -372,7 +385,7 @@ public class Notification extends Module {
             float alpha = Math.max(0.0F, Math.min(1.0F, getAlpha(now, entry.startTime, dur)));
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 16.0F;
-            // Snap the slide to whole pixels so the retro edges stay crisp.
+
             slide = Math.round(slide);
             float x = (baseX + (isRight ? slide : -slide)) * invScale;
             float targetY = (baseY - idx * step) * invScale;
@@ -401,24 +414,21 @@ public class Notification extends Module {
 
             RenderUtil.enableRenderState();
 
-            // Hard drop shadow, offset like an old console sprite.
             int shadowColor = new Color(0, 0, 0, (int) (110.0F * alpha)).getRGB();
             RenderUtil.drawRect(x + 3.0F, y + 3.0F, x + cardWidth + 3.0F, y + cardHeight + 3.0F, shadowColor);
 
-            // Body with notched corners: center slab + two side slabs.
             int bodyColor = new Color(12, 12, 18, (int) (235.0F * alpha)).getRGB();
             RenderUtil.drawRect(x + notch, y, x + cardWidth - notch, y + cardHeight, bodyColor);
             RenderUtil.drawRect(x, y + notch, x + notch, y + cardHeight - notch, bodyColor);
             RenderUtil.drawRect(x + cardWidth - notch, y + notch, x + cardWidth, y + cardHeight - notch, bodyColor);
 
-            // Chunky 2px pixel border following the notched silhouette.
             int borderColor = new Color(themeR, themeG, themeB, (int) (255.0F * alpha)).getRGB();
             int darkBorder = new Color(themeR / 3, themeG / 3, themeB / 3, (int) (255.0F * alpha)).getRGB();
             RenderUtil.drawRect(x + notch, y, x + cardWidth - notch, y + 2.0F, borderColor);
             RenderUtil.drawRect(x + notch, y + cardHeight - 2.0F, x + cardWidth - notch, y + cardHeight, darkBorder);
             RenderUtil.drawRect(x, y + notch, x + 2.0F, y + cardHeight - notch, borderColor);
             RenderUtil.drawRect(x + cardWidth - 2.0F, y + notch, x + cardWidth, y + cardHeight - notch, darkBorder);
-            // Corner step pixels.
+
             RenderUtil.drawRect(x + 1.0F, y + 1.0F, x + notch, y + 2.0F, borderColor);
             RenderUtil.drawRect(x + 1.0F, y + 2.0F, x + 2.0F, y + notch, borderColor);
             RenderUtil.drawRect(x + cardWidth - notch, y + 1.0F, x + cardWidth - 1.0F, y + 2.0F, borderColor);
@@ -428,7 +438,6 @@ public class Notification extends Module {
             RenderUtil.drawRect(x + cardWidth - notch, y + cardHeight - 2.0F, x + cardWidth - 1.0F, y + cardHeight - 1.0F, darkBorder);
             RenderUtil.drawRect(x + cardWidth - 2.0F, y + cardHeight - notch, x + cardWidth - 1.0F, y + cardHeight - 2.0F, darkBorder);
 
-            // CRT scanlines.
             if (showScanlines) {
                 int scanColor = new Color(0, 0, 0, (int) (36.0F * alpha)).getRGB();
                 for (float ly = y + 3.0F; ly < y + cardHeight - 2.0F; ly += 3.0F) {
@@ -436,7 +445,6 @@ public class Notification extends Module {
                 }
             }
 
-            // Segmented progress bar along the bottom.
             float segW = 6.0F;
             float segGap = 2.0F;
             float segY = y + cardHeight - 6.0F;
@@ -504,7 +512,6 @@ public class Notification extends Module {
         RenderUtil.disableRenderState();
     }
 
-    /** Draws a ring segment (TRIANGLE_STRIP arc band). Angles in degrees, 0 = east, 90 = south. */
     private void drawArcRing(float cx, float cy, float radius, float thickness, float startDeg, float sweepDeg, int color) {
         float a = ((color >> 24) & 255) / 255.0F;
         float r = ((color >> 16) & 255) / 255.0F;
@@ -534,10 +541,6 @@ public class Notification extends Module {
         GlStateManager.disableBlend();
     }
 
-    /**
-     * AURA style: minimal-text flat card. A glowing countdown ring on the left
-     * replaces the progress bar; the only text is the module name.
-     */
     private void renderAura(ScaledResolution sr, long now, long dur) {
         float textScale = this.fontScale.getValue();
         float textHeight = FontManager.getFontHeight() * textScale;
@@ -581,13 +584,11 @@ public class Notification extends Module {
                 ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + cardWidth, by + cardHeight, radius, -1));
             }
 
-            // Flat, solid card with a soft offset shadow. No glass layers.
             RenderUtil.drawRoundedRectWithGl(x, y + 2.0F, x + cardWidth, y + cardHeight + 2.0F, radius,
                     new Color(0, 0, 0, (int) (55.0F * alpha)).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
                     new Color(20, 22, 27, (int) (225.0F * alpha)).getRGB());
 
-            // Countdown ring on the left (remaining time), glowing theme arc.
             float ringCX = x + 17.0F;
             float ringCY = y + cardHeight / 2.0F;
             float sweep = Math.max((1.0F - progress) * 360.0F, 2.0F);
@@ -598,7 +599,6 @@ public class Notification extends Module {
             drawArcRing(ringCX, ringCY, 8.0F, 3.5F, -90.0F, sweep, glowCol);
             drawArcRing(ringCX, ringCY, 8.0F, 1.75F, -90.0F, sweep, arcCol);
 
-            // Status dot in the ring center.
             GlStateManager.disableDepth();
             RenderUtil.fillCircle(ringCX, ringCY, 2.5D, 20, arcCol);
             GlStateManager.enableDepth();
@@ -607,7 +607,6 @@ public class Notification extends Module {
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
-            // Module name — the only text. Trimmed to fit beside the ring.
             String name = entry.text;
             float maxNameW = (cardWidth - 44.0F) / textScale;
             if (FontManager.getStringWidth(name) > maxNameW) {
@@ -648,15 +647,14 @@ public class Notification extends Module {
         boolean doBlur = this.blur.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
 
-        float cardHeight = 28.0F;
+        float cardHeight = 26.0F;
         float radius = 8.0F;
-        float dot = 6.0F;
-        float padLeft = 11.0F;
-        float padRight = 11.0F;
-        float minWidth = 104.0F;
-        float maxWidth = 210.0F;
+        float padLeft = 12.0F;
+        float padRight = 8.0F;
+        float minWidth = 96.0F;
+        float maxWidth = 200.0F;
         float textHeight = FontManager.getFontHeight() * textScale;
-        float step = cardHeight + 5.0F;
+        float step = cardHeight + 4.0F;
         float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
         float baseY = sr.getScaledHeight() - offY - cardHeight;
 
@@ -673,7 +671,7 @@ public class Notification extends Module {
             int ab = accent.getBlue();
 
             String name = entry.text;
-            float maxNameWidth = (maxWidth - padLeft - padRight - dot - 7.0F) / textScale;
+            float maxNameWidth = (maxWidth - padLeft - padRight) / textScale;
             if (FontManager.getStringWidth(name) > maxNameWidth) {
                 while (name.length() > 1 && FontManager.getStringWidth(name + "..") > maxNameWidth) {
                     name = name.substring(0, name.length() - 1);
@@ -681,8 +679,8 @@ public class Notification extends Module {
                 name = name + "..";
             }
 
-            float cardWidth = Math.max(minWidth, Math.min(maxWidth,
-                    padLeft + dot + 7.0F + FontManager.getStringWidth(name) * textScale + padRight));
+            float nameWidth = FontManager.getStringWidth(name) * textScale;
+            float cardWidth = Math.max(minWidth, Math.min(maxWidth, padLeft + nameWidth + padRight));
 
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
@@ -706,22 +704,20 @@ public class Notification extends Module {
                 ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1));
             }
 
-            RenderUtil.drawGlass(x, y, x + cardWidth, y + cardHeight, radius, alpha);
+            RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.8F, x + cardWidth + 0.5F, y + cardHeight + 1.8F,
+                    radius, new Color(16, 20, 30, (int) (24.0F * alpha)).getRGB());
+            RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
+                    new Color(255, 255, 255, (int) (140.0F * alpha)).getRGB());
 
-            float dotY = y + cardHeight / 2.0F;
-            RenderUtil.drawRoundedRectWithGl(x + padLeft - 1.0F, dotY - dot / 2.0F - 1.0F,
-                    x + padLeft + dot + 1.0F, dotY + dot / 2.0F + 1.0F, (dot + 2.0F) / 2.0F,
-                    new Color(ar, ag, ab, (int) (54.0F * alpha)).getRGB());
-            RenderUtil.drawRoundedRectWithGl(x + padLeft, dotY - dot / 2.0F,
-                    x + padLeft + dot, dotY + dot / 2.0F, dot / 2.0F,
+            RenderUtil.drawRoundedRectWithGl(x + 4.0F, y + 5.0F, x + 7.0F, y + cardHeight - 5.0F, 1.5F,
                     new Color(ar, ag, ab, (int) (250.0F * alpha)).getRGB());
 
-            float lineY = y + cardHeight - 4.0F;
+            float lineY = y + cardHeight - 3.6F;
             float lineLeft = x + padLeft;
             float lineRight = x + cardWidth - padRight;
             RenderUtil.drawRoundedRectWithGl(lineLeft, lineY, lineRight, lineY + 1.6F,
                     Math.min(0.8F, (lineRight - lineLeft) / 2.0F),
-                    new Color(20, 24, 34, (int) (24.0F * alpha)).getRGB());
+                    new Color(20, 24, 34, (int) (22.0F * alpha)).getRGB());
             float remain = 1.0F - progress;
             if (remain > 0.004F) {
                 float fillRight = lineLeft + (lineRight - lineLeft) * remain;
@@ -734,10 +730,11 @@ public class Notification extends Module {
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
+            float textX = x + padLeft + Math.max(0.0F, (cardWidth - padLeft - padRight - nameWidth) / 2.0F);
             GlStateManager.pushMatrix();
-            GlStateManager.translate(x + padLeft + dot + 7.0F, y + (cardHeight - textHeight) / 2.0F - 1.6F, 0.0F);
+            GlStateManager.translate(textX, y + (cardHeight - textHeight) / 2.0F - 1.0F, 0.0F);
             GlStateManager.scale(textScale, textScale, 1.0F);
-            FontManager.drawString(name, 0.0F, 0.0F, new Color(20, 24, 34, (int) (238.0F * alpha)).getRGB(), false);
+            FontManager.drawString(name, 0.0F, 0.0F, new Color(20, 24, 34, (int) (232.0F * alpha)).getRGB(), false);
             GlStateManager.popMatrix();
 
             GlStateManager.enableDepth();
@@ -747,6 +744,263 @@ public class Notification extends Module {
         GlStateManager.popMatrix();
     }
 
+    private Icon lucidIcon(NoticeMode noticeMode) {
+        switch (noticeMode) {
+            case Disable: return Icon.CLOSE;
+            case Info: return Icon.INFO;
+            default: return Icon.CHECK;
+        }
+    }
+
+    private void renderLucid(ScaledResolution sr, long now, long dur) {
+        float textScale = this.fontScale.getValue();
+        float offX = this.offsetX.getValue() + 6.0F;
+        float offY = this.offsetY.getValue() + 8.0F;
+        float localScale = this.scale.getValue();
+        float invScale = 1.0F / localScale;
+        boolean isRight = this.mode.getValue() == 0;
+        boolean doBlur = this.blur.getValue();
+        int max = Math.min(entries.size(), this.maxAlerts.getValue());
+
+        float radius = 4.5F;
+        float iconSize = 12.0F;
+        float iconX = 7.0F;
+        float padLeft = iconX + iconSize + 8.0F;
+        float padRight = 9.0F;
+        float minWidth = 90.0F;
+        float maxWidth = 220.0F;
+        float textHeight = FontManager.getFontHeight() * textScale;
+        float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(localScale, localScale, 1.0F);
+
+        for (int i = 0; i < max; i++) {
+            NotificationEntry entry = entries.get(i);
+            float progress = Math.min((float) (now - entry.startTime) / (float) dur, 1.0F);
+            float alpha = Math.max(0.0F, Math.min(1.0F, getAlpha(now, entry.startTime, dur)));
+
+            String title = entry.text;
+            String description = entry.description;
+            float maxTextWidth = (maxWidth - padLeft - padRight) / textScale;
+            if (FontManager.getStringWidth(title) > maxTextWidth) {
+                while (title.length() > 1 && FontManager.getStringWidth(title + "..") > maxTextWidth) {
+                    title = title.substring(0, title.length() - 1);
+                }
+                title = title + "..";
+            }
+            if (!description.isEmpty() && FontManager.getStringWidth(description) > maxTextWidth) {
+                while (description.length() > 1 && FontManager.getStringWidth(description + "..") > maxTextWidth) {
+                    description = description.substring(0, description.length() - 1);
+                }
+                description = description + "..";
+            }
+
+            float titleWidth = FontManager.getStringWidth("\u00a7l" + title) * textScale;
+            float descriptionWidth = FontManager.getStringWidth(description) * textScale;
+            float contentWidth = Math.max(titleWidth, descriptionWidth);
+            boolean twoLines = !description.isEmpty();
+            float cardHeight = twoLines ? 4.5F + textHeight + 2.0F + textHeight + 5.0F : textHeight + 10.0F;
+            float cardWidth = Math.max(minWidth, Math.min(maxWidth, padLeft + contentWidth + padRight));
+            float step = cardHeight + 4.0F;
+            float baseY = sr.getScaledHeight() - offY - cardHeight;
+
+            int idx = max - 1 - i;
+            float slide = (1.0F - alpha) * 14.0F;
+            float targetX = (isRight ? sr.getScaledWidth() - offX - cardWidth + slide : offX - slide) * invScale;
+            float targetY = (baseY - idx * step) * invScale;
+            if (Float.isNaN(entry.animX)) {
+                entry.animX = targetX;
+                entry.animY = targetY;
+            }
+            entry.animX += (targetX - entry.animX) * reflow;
+            entry.animY += (targetY - entry.animY) * reflow;
+            float x = entry.animX;
+            float y = entry.animY;
+
+            if (doBlur) {
+                final float bx = x;
+                final float by = y;
+                final float bw = cardWidth;
+                final float bh = cardHeight;
+                final float br = radius;
+                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1));
+            }
+
+            RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.8F, x + cardWidth + 0.5F, y + cardHeight + 1.8F,
+                    radius, new Color(0, 0, 0, (int) (60.0F * alpha)).getRGB());
+            RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
+                    new Color(48, 57, 103, (int) (242.0F * alpha)).getRGB());
+
+            float iconY = y + (cardHeight - iconSize) / 2.0F;
+            lucidIcon(entry.noticeMode).draw(x + iconX, iconY, iconSize, 0xFFFFFF, alpha);
+
+            float lineY = y + cardHeight - 3.2F;
+            float lineLeft = x + padLeft;
+            float lineRight = x + cardWidth - padRight;
+            float remain = 1.0F - progress;
+            if (remain > 0.004F) {
+                float fillRight = lineLeft + (lineRight - lineLeft) * remain;
+                RenderUtil.drawRoundedRectWithGl(lineLeft, lineY, fillRight, lineY + 1.4F,
+                        Math.min(0.7F, (fillRight - lineLeft) / 2.0F),
+                        new Color(255, 255, 255, (int) (70.0F * alpha)).getRGB());
+            }
+
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+            float textX = x + padLeft;
+            if (twoLines) {
+                GlStateManager.pushMatrix();
+                GlStateManager.translate(textX, y + 4.5F, 0.0F);
+                GlStateManager.scale(textScale, textScale, 1.0F);
+                FontManager.drawString("\u00a7l" + title, 0.0F, 0.0F,
+                        new Color(255, 255, 255, (int) (252.0F * alpha)).getRGB(), false);
+                GlStateManager.popMatrix();
+
+                GlStateManager.pushMatrix();
+                GlStateManager.translate(textX, y + 4.5F + textHeight + 2.0F, 0.0F);
+                GlStateManager.scale(textScale, textScale, 1.0F);
+                FontManager.drawString(description, 0.0F, 0.0F,
+                        new Color(255, 255, 255, (int) (185.0F * alpha)).getRGB(), false);
+                GlStateManager.popMatrix();
+            } else {
+                GlStateManager.pushMatrix();
+                GlStateManager.translate(textX, y + (cardHeight - textHeight) / 2.0F, 0.0F);
+                GlStateManager.scale(textScale, textScale, 1.0F);
+                FontManager.drawString("\u00a7l" + title, 0.0F, 0.0F,
+                        new Color(255, 255, 255, (int) (252.0F * alpha)).getRGB(), false);
+                GlStateManager.popMatrix();
+            }
+
+            GlStateManager.enableDepth();
+            GlStateManager.disableBlend();
+        }
+
+        GlStateManager.popMatrix();
+    }
+
+    /**
+     * SLATE style: compact two-line notification inspired by the supplied
+     * reference. The panel color follows HUD; LUCID remains separate.
+     */
+    private void renderSlate(ScaledResolution sr, long now, long dur) {
+        float textScale = this.fontScale.getValue();
+        float subScale = Math.max(0.74F, textScale * 0.82F);
+        float textHeight = FontManager.getFontHeight() * textScale;
+        float subHeight = FontManager.getFontHeight() * subScale;
+        float cardHeight = Math.max(30.0F, textHeight + subHeight + 9.0F);
+        float radius = 3.5F;
+        float iconWell = 27.0F;
+        float textXOffset = iconWell + 7.0F;
+        float padRight = 9.0F;
+        float minWidth = 116.0F;
+        float maxWidth = 220.0F;
+        float offX = this.offsetX.getValue() + 6.0F;
+        float offY = this.offsetY.getValue() + 8.0F;
+        float localScale = this.scale.getValue();
+        float invScale = 1.0F / localScale;
+        boolean isRight = this.mode.getValue() == 0;
+        boolean doBlur = this.blur.getValue();
+        int max = Math.min(entries.size(), this.maxAlerts.getValue());
+        float step = cardHeight + 4.0F;
+        float baseY = sr.getScaledHeight() - offY - cardHeight;
+        float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
+
+        HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
+        Color hudColor = hud != null ? hud.getColor(now) : new Color(92, 112, 210);
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(localScale, localScale, 1.0F);
+
+        for (int i = 0; i < max; i++) {
+            NotificationEntry entry = entries.get(i);
+            float progress = Math.min((float) (now - entry.startTime) / (float) dur, 1.0F);
+            float remain = 1.0F - progress;
+            float alpha = Math.max(0.0F, Math.min(1.0F, getAlpha(now, entry.startTime, dur)));
+
+            String title = entry.description.isEmpty() ? "Module" : entry.text;
+            String statePrefix = entry.noticeMode == NoticeMode.Enable ? "Enabled "
+                    : entry.noticeMode == NoticeMode.Disable ? "Disabled " : "";
+            String detail = entry.description.isEmpty() ? statePrefix + entry.text : entry.description;
+            float maxTextWidth = (maxWidth - textXOffset - padRight) / textScale;
+            if (FontManager.getStringWidth(title) > maxTextWidth) {
+                while (title.length() > 1 && FontManager.getStringWidth(title + "..") > maxTextWidth) {
+                    title = title.substring(0, title.length() - 1);
+                }
+                title += "..";
+            }
+            float maxDetailWidth = (maxWidth - textXOffset - padRight) / subScale;
+            if (FontManager.getStringWidth(detail) > maxDetailWidth) {
+                while (detail.length() > 1 && FontManager.getStringWidth(detail + "..") > maxDetailWidth) {
+                    detail = detail.substring(0, detail.length() - 1);
+                }
+                detail += "..";
+            }
+            float contentWidth = Math.max(FontManager.getStringWidth(title) * textScale,
+                    FontManager.getStringWidth(detail) * subScale);
+            float cardWidth = Math.max(minWidth, Math.min(maxWidth, textXOffset + contentWidth + padRight));
+
+            int idx = max - 1 - i;
+            float slide = (1.0F - alpha) * 14.0F;
+            float targetX = (isRight ? sr.getScaledWidth() - offX - cardWidth + slide : offX - slide) * invScale;
+            float targetY = (baseY - idx * step) * invScale;
+            if (Float.isNaN(entry.animX)) {
+                entry.animX = targetX;
+                entry.animY = targetY;
+            }
+            entry.animX += (targetX - entry.animX) * reflow;
+            entry.animY += (targetY - entry.animY) * reflow;
+            float x = entry.animX;
+            float y = entry.animY;
+
+            if (doBlur) {
+                final float bx = x;
+                final float by = y;
+                final float bw = cardWidth;
+                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + cardHeight, radius, -1));
+            }
+
+            int panelR = Math.max(32, (int) (hudColor.getRed() * 0.58F));
+            int panelG = Math.max(36, (int) (hudColor.getGreen() * 0.58F));
+            int panelB = Math.max(48, (int) (hudColor.getBlue() * 0.72F));
+            RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.5F, x + cardWidth + 0.5F, y + cardHeight + 1.5F,
+                    radius, new Color(0, 0, 0, (int) (55.0F * alpha)).getRGB());
+            RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight,
+                    radius, new Color(panelR, panelG, panelB, (int) (242.0F * alpha)).getRGB());
+            RenderUtil.drawRect(x + 2.0F, y + cardHeight - 2.0F,
+                    x + 2.0F + (cardWidth - 4.0F) * remain, y + cardHeight - 1.0F,
+                    new Color(255, 255, 255, (int) (70.0F * alpha)).getRGB());
+
+            // White state icon, matching the reference card.
+            lucidIcon(entry.noticeMode).drawCentered(x + iconWell / 2.0F, y + cardHeight / 2.0F,
+                    14.0F, 0xFFFFFF, alpha);
+
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(x + textXOffset, y + 4.0F, 0.0F);
+            GlStateManager.scale(textScale, textScale, 1.0F);
+            FontManager.drawString(title, 0.0F, 0.0F,
+                    new Color(255, 255, 255, (int) (252.0F * alpha)).getRGB(), false);
+            GlStateManager.popMatrix();
+
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(x + textXOffset, y + 5.0F + textHeight, 0.0F);
+            GlStateManager.scale(subScale, subScale, 1.0F);
+            FontManager.drawString(detail, 0.0F, 0.0F,
+                    new Color(255, 255, 255, (int) (220.0F * alpha)).getRGB(), false);
+            GlStateManager.popMatrix();
+
+            GlStateManager.enableDepth();
+            GlStateManager.disableBlend();
+        }
+
+        GlStateManager.popMatrix();
+    }
 
     private void drawStatusIcon(float x, float y, float iconSize, NoticeMode noticeMode, Color themeColor, float alpha) {
         GlStateManager.pushMatrix();
@@ -827,13 +1081,15 @@ public class Notification extends Module {
 
     private static class NotificationEntry {
         final String text;
+        final String description;
         final NoticeMode noticeMode;
         final long startTime;
         float animX = Float.NaN;
         float animY = Float.NaN;
 
-        NotificationEntry(String text, NoticeMode mode, long startTime) {
+        NotificationEntry(String text, String description, NoticeMode mode, long startTime) {
             this.text = text;
+            this.description = description == null ? "" : description;
             this.noticeMode = mode;
             this.startTime = startTime;
         }

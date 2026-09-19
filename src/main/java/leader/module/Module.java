@@ -62,7 +62,8 @@ public abstract class Module {
         boolean enabled = !this.enabled;
         this.setEnabled(enabled);
         if (this.enabled == enabled) {
-            Notification.addNotification(this.name, enabled ? NoticeMode.Enable : NoticeMode.Disable);
+            Notification.addNotification(this.name, enabled ? "Enabled" : "Disabled",
+                    enabled ? NoticeMode.Enable : NoticeMode.Disable);
             if (((HUD) Leader.moduleManager.modules.get(HUD.class)).toggleSound.getValue()) {
                 Leader.moduleManager.playSound();
             }
