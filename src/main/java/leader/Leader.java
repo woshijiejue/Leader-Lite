@@ -141,6 +141,7 @@ public class Leader {
         moduleManager.modules.put(SmartAttack.class, new SmartAttack());
         moduleManager.modules.put(AutoWeapon.class, new AutoWeapon());
         moduleManager.modules.put(TargetHUD.class, new TargetHUD());
+        moduleManager.modules.put(Shaders.class, new Shaders());
         moduleManager.modules.put(TargetESP.class, new TargetESP());
         moduleManager.modules.put(TargetStrafe.class, new TargetStrafe());
         moduleManager.modules.put(Tracers.class, new Tracers());

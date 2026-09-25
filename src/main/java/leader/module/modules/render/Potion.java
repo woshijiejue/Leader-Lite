@@ -1,11 +1,8 @@
 package leader.module.modules.render;
 
-import leader.Leader;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
 import leader.module.Module;
-import leader.module.modules.render.notification.Notification;
-import leader.property.properties.BooleanProperty;
 import leader.property.properties.FloatProperty;
 import leader.property.properties.IntProperty;
 import leader.property.properties.ModeProperty;
@@ -18,7 +15,6 @@ import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.resources.I18n;
-import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
@@ -43,10 +39,6 @@ public class Potion extends Module {
     public final IntProperty offsetY = new IntProperty("offset-y", 2, 0, 255);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
-    public final BooleanProperty blur = new BooleanProperty("blur", false);
-    public final IntProperty blurIterations = new IntProperty("blur-iterations", 2, 1, 8, blur::getValue);
-    public final IntProperty blurOffset = new IntProperty("blur-offset", 3, 1, 10, blur::getValue);
-    private Framebuffer stencilBlur;
 
     public Potion() {
         super("Potion", false);
@@ -119,28 +111,27 @@ public class Potion extends Module {
         GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
 
         int index = 0;
-        boolean doBlur = this.blur.getValue();
         float invScale = 1.0F / this.scale.getValue();
         boolean isRight = this.mode.getValue() == 0;
 
         if (this.displayMode.getValue() == 5) {
-            renderSlate(index, doBlur, invScale, isRight);
+            renderSlate(index, invScale, isRight);
         } else if (this.displayMode.getValue() == 4) {
-            renderLucid(index, doBlur, invScale, isRight);
+            renderLucid(index, invScale, isRight);
         } else if (this.displayMode.getValue() == 3) {
-            renderFrost(index, doBlur, invScale, isRight);
+            renderFrost(index, invScale, isRight);
         } else if (this.displayMode.getValue() == 2) {
-            renderModern(index, doBlur, invScale, isRight);
+            renderModern(index, invScale, isRight);
         } else if (this.displayMode.getValue() == 1) {
-            renderCircle(index, doBlur, invScale, isRight);
+            renderCircle(index, invScale, isRight);
         } else {
-            renderBar(index, doBlur, invScale, isRight);
+            renderBar(index, invScale, isRight);
         }
 
         GlStateManager.popMatrix();
     }
 
-    private void renderBar(int index, boolean doBlur, float invScale, boolean isRight) {
+    private void renderBar(int index, float invScale, boolean isRight) {
         float screenWidth = new ScaledResolution(mc).getScaledWidth();
         float cardWidth = 130.0F;
         float cardHeight = 28.0F;
@@ -169,15 +160,17 @@ public class Potion extends Module {
             float x = baseX;
             float y = baseY + index * step;
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                ShaderElement.addBlurTask(() -> {
-                    RenderUtil.enableRenderState();
-                    RenderUtil.drawRect(bx, by, bx + cardWidth, by + cardHeight, -1);
-                    RenderUtil.disableRenderState();
-                });
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.enableRenderState();
+                RenderUtil.drawRect(bx, by, bx + cardWidth, by + cardHeight, -1);
+                RenderUtil.disableRenderState();
+                GlStateManager.popMatrix();
+            });
 
             RenderUtil.enableRenderState();
             RenderUtil.drawRect(x, y, x + cardWidth, y + cardHeight, new Color(0, 0, 0, 0.45F).getRGB());
@@ -228,7 +221,7 @@ public class Potion extends Module {
         }
     }
 
-    private void renderCircle(int index, boolean doBlur, float invScale, boolean isRight) {
+    private void renderCircle(int index, float invScale, boolean isRight) {
         float cardWidth = 110.0F;
         float cardHeight = 30.0F;
         float gap = 3.0F;
@@ -258,15 +251,17 @@ public class Potion extends Module {
             float x = baseX;
             float y = baseY + index * step;
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                ShaderElement.addBlurTask(() -> {
-                    RenderUtil.enableRenderState();
-                    RenderUtil.drawRoundedRect(bx, by, bx + cardWidth, by + cardHeight, radius, -1);
-                    RenderUtil.disableRenderState();
-                });
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.enableRenderState();
+                RenderUtil.drawRoundedRect(bx, by, bx + cardWidth, by + cardHeight, radius, -1);
+                RenderUtil.disableRenderState();
+                GlStateManager.popMatrix();
+            });
 
             RenderUtil.enableRenderState();
             RenderUtil.drawRoundedRect(x, y, x + cardWidth, y + cardHeight, radius, new Color(0, 0, 0, 0.45F).getRGB());
@@ -316,7 +311,7 @@ public class Potion extends Module {
         }
     }
 
-    private void renderModern(int index, boolean doBlur, float invScale, boolean isRight) {
+    private void renderModern(int index, float invScale, boolean isRight) {
         float screenWidth = new ScaledResolution(mc).getScaledWidth();
         float cardWidth = 144.0F;
         float cardHeight = 36.0F;
@@ -348,11 +343,15 @@ public class Potion extends Module {
             float x = baseX;
             float y = baseY + index * step;
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + cardWidth, by + cardHeight, radius, -1));
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + cardWidth, by + cardHeight, radius, -1);
+                GlStateManager.popMatrix();
+            });
 
             int rimColor = new Color(255, 255, 255, 34).getRGB();
             int glassColor = new Color(13, 15, 21, 178).getRGB();
@@ -413,7 +412,7 @@ public class Potion extends Module {
         }
     }
 
-    private void renderFrost(int index, boolean doBlur, float invScale, boolean isRight) {
+    private void renderFrost(int index, float invScale, boolean isRight) {
         float screenWidth = new ScaledResolution(mc).getScaledWidth();
         float cardWidth = 124.0F;
         float cardHeight = 26.0F;
@@ -445,14 +444,18 @@ public class Potion extends Module {
             float x = baseX;
             float y = baseY + index * step;
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                final float bw = cardWidth;
-                final float bh = cardHeight;
-                final float br = radius;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1));
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            final float bw = cardWidth;
+            final float bh = cardHeight;
+            final float br = radius;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1);
+                GlStateManager.popMatrix();
+            });
 
             RenderUtil.drawGlass(x, y, x + cardWidth, y + cardHeight, radius, 1.0F);
 
@@ -503,7 +506,7 @@ public class Potion extends Module {
         }
     }
 
-    private void renderLucid(int index, boolean doBlur, float invScale, boolean isRight) {
+    private void renderLucid(int index, float invScale, boolean isRight) {
         float screenWidth = new ScaledResolution(mc).getScaledWidth();
         float cardWidth = 124.0F;
         float cardHeight = 26.0F;
@@ -534,14 +537,18 @@ public class Potion extends Module {
             float x = baseX;
             float y = baseY + index * step;
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                final float bw = cardWidth;
-                final float bh = cardHeight;
-                final float br = radius;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1));
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            final float bw = cardWidth;
+            final float bh = cardHeight;
+            final float br = radius;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1);
+                GlStateManager.popMatrix();
+            });
 
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
                     new Color(12, 14, 19, 51).getRGB());
@@ -586,80 +593,84 @@ public class Potion extends Module {
         }
     }
 
-    /**
-     * Slate: neutral gray potion capsule inspired by the supplied reference.
-     * The icon and compact duration marker follow the HUD accent color.
-     */
-    private void renderSlate(int index, boolean doBlur, float invScale, boolean isRight) {
+    private void renderSlate(int index, float invScale, boolean isRight) {
         float screenWidth = new ScaledResolution(mc).getScaledWidth();
-        float cardHeight = 26.0F;
-        float gap = 3.0F;
-        float radius = 5.0F;
-        float iconWell = 28.0F;
-        float timerWell = 19.0F;
+        float cardHeight = 20.0F;
+        float gap = 3.5F;
+        float radius = 4.5F;
+        float iconWell = 18.0F;
+        float wellY = (cardHeight - iconWell) / 2.0F;
         float textScale = this.fontScale.getValue();
         float textHeight = FontManager.getFontHeight() * textScale;
         float offX = this.offsetX.getValue() + 6.0F;
         float offY = this.offsetY.getValue() + 6.0F;
         float baseY = offY * invScale;
-        float step = (cardHeight + gap) * invScale;
+        float step = (cardHeight + 4.0F) * invScale;
+        int count = currentEffects.size();
+        float[] rectX = new float[count];
+        float[] rectY = new float[count];
+        float[] rectBarL = new float[count];
+        float[] rectBarR = new float[count];
+        String[] names = new String[count];
+        int slot = 0;
+        for (PotionEffect effect : currentEffects) {
+            names[slot] = fitText(getPotionName(effect), 132.0F, textScale);
+            float nameBarWidth = Math.max(72.0F, FontManager.getStringWidth(names[slot]) * textScale + 16.0F);
+            rectX[slot] = isRight ? (screenWidth - iconWell - gap - nameBarWidth - offX) * invScale : offX * invScale;
+            rectY[slot] = baseY + (index + slot) * step;
+            rectBarL[slot] = rectX[slot] + iconWell + gap;
+            rectBarR[slot] = rectBarL[slot] + nameBarWidth;
+            slot++;
+        }
 
-        HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
-        Color hudColor = hud != null ? hud.getColor(System.currentTimeMillis()) : new Color(126, 181, 255);
-
+        index = 0;
         for (PotionEffect effect : currentEffects) {
             int id = effect.getPotionID();
             int maxDur = potionMaxDurations.getOrDefault(id, Math.max(effect.getDuration(), 1));
             float ratio = Math.min((float) effect.getDuration() / (float) maxDur, 1.0F);
-            String durationStr = net.minecraft.potion.Potion.getDurationString(effect);
-            String name = getPotionName(effect);
+            String name = names[index];
+            net.minecraft.potion.Potion potion = id >= 0 && id < net.minecraft.potion.Potion.potionTypes.length
+                    ? net.minecraft.potion.Potion.potionTypes[id] : null;
+            int liquid = potion != null ? potion.getLiquidColor() : 0xFFFFFF;
+            float x = rectX[index];
+            float y = rectY[index];
+            float barX = rectBarL[index];
+            float barRight = rectBarR[index];
 
-            float maxNameWidth = 132.0F;
-            name = fitText(name, maxNameWidth, textScale);
-            float nameWidth = FontManager.getStringWidth(name) * textScale;
-            float namePanelWidth = Math.max(76.0F, nameWidth + 18.0F);
-            float cardWidth = Math.max(112.0F, Math.min(210.0F, iconWell + 4.0F + namePanelWidth));
-            float baseX = isRight ? (screenWidth - cardWidth - offX) * invScale : offX * invScale;
-            float x = baseX;
-            float y = baseY + index * step;
+            final float sc = this.scale.getValue();
+            final float rowX = x;
+            final float rowY = y;
+            final float barL = barX;
+            final float barR = barRight;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(rowX, rowY + wellY, rowX + iconWell, rowY + wellY + iconWell, radius, -1);
+                RenderUtil.drawRoundedRectWithGl(barL, rowY, barR, rowY + cardHeight, radius, -1);
+                GlStateManager.popMatrix();
+            });
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                final float bw = cardWidth;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + cardHeight, radius, -1));
+            RenderUtil.drawRoundedRectWithGl(x, y + wellY, x + iconWell, y + wellY + iconWell, radius,
+                    new Color(40, 40, 45, 205).getRGB());
+            RenderUtil.drawRoundedRectWithGl(barX, y, barRight, y + cardHeight, radius,
+                    new Color(40, 40, 45, 205).getRGB());
+
+            float fillRight = barX + (barRight - barX) * ratio;
+            if (fillRight - barX > 1.0F) {
+                RenderUtil.drawRoundedRectWithGl(barX, y, fillRight, y + cardHeight, radius,
+                        new Color(255, 255, 255, 184).getRGB());
             }
 
-            RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight,
-                    radius, new Color(93, 94, 101, 51).getRGB());
-
-            RenderUtil.drawRoundedRectWithGl(x, y, x + iconWell, y + cardHeight,
-                    radius, new Color(53, 54, 60, 51).getRGB());
-            RenderUtil.drawRect(x + iconWell - radius, y, x + iconWell, y + cardHeight,
-                    new Color(53, 54, 60, 51).getRGB());
-
-            float namePanelX = x + iconWell + 4.0F;
-            float namePanelRight = x + cardWidth;
-            // The name block itself is the duration visualization: a dark track
-            // remains visible while a HUD-colored layer recedes from right to left.
-            RenderUtil.drawRoundedRectWithGl(namePanelX, y, namePanelRight, y + cardHeight,
-                    radius, new Color(57, 58, 64, 51).getRGB());
-            float fillRight = namePanelX + (namePanelRight - namePanelX) * ratio;
-            RenderUtil.drawRoundedRectWithGl(namePanelX, y, fillRight, y + cardHeight,
-                    radius, new Color(hudColor.getRed(), hudColor.getGreen(), hudColor.getBlue(), 92).getRGB());
-
-            // HUD-colored potion icon in its independent dark well.
-            Icon.potion(id).drawCentered(x + iconWell / 2.0F, y + cardHeight / 2.0F,
-                    14.0F, hudColor.getRGB(), 1.0F);
+            Icon.potion(id).drawCentered(x + iconWell / 2.0F, y + cardHeight / 2.0F, 10.5F, liquid, 1.0F);
 
             GlStateManager.disableDepth();
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
             GlStateManager.pushMatrix();
-            GlStateManager.translate(namePanelX + 9.0F, y + (cardHeight - textHeight) / 2.0F, 0.0F);
+            GlStateManager.translate(barX + 7.0F, y + (cardHeight - textHeight) / 2.0F, 0.0F);
             GlStateManager.scale(textScale, textScale, 1.0F);
-            FontManager.drawString(name, 0.0F, 0.0F, new Color(250, 250, 252).getRGB(), false);
+            FontManager.drawString(name, 0.0F, 0.0F, new Color(255, 255, 255).getRGB(), false);
             GlStateManager.popMatrix();
 
             GlStateManager.enableDepth();
@@ -721,22 +732,4 @@ public class Potion extends Module {
         GL11.glEnd();
     }
 
-    public void drawBlur() {
-        if (!this.blur.getValue()) return;
-        HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
-        if (hud != null && hud.blur.getValue()) return;
-        Notification notification = (Notification) Leader.moduleManager.modules.get(Notification.class);
-        if (notification != null && notification.blur.getValue()) return;
-        if (stencilBlur == null) {
-            stencilBlur = ShaderElement.createFrameBuffer(null);
-        }
-        stencilBlur.framebufferClear();
-        stencilBlur.bindFramebuffer(false);
-        for (Runnable runnable : ShaderElement.getTasks()) {
-            runnable.run();
-        }
-        ShaderElement.getTasks().clear();
-        stencilBlur.unbindFramebuffer();
-        leader.util.shader.KawaseBlur.renderBlur(stencilBlur.framebufferTexture, blurIterations.getValue(), blurOffset.getValue());
-    }
 }

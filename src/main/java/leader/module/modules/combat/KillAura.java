@@ -153,7 +153,7 @@ public class KillAura extends Module {
                 "FullMode", 0, new String[]{"3TickFull", "4TickFull"}, () -> this.isLag() && this.lagClass.getValue() == 2
         );
         this.swapMode = new ModeProperty(
-                "SwapMode", 0, new String[]{"Swap", "TestPostSwap"}, () -> this.isLag() && this.lagClass.getValue() == 3
+                "SwapMode", 0, new String[]{"Swap", "TestPostSwap","Swap+"}, () -> this.isLag() && this.lagClass.getValue() == 3
         );
         this.autoBlockRequirePress = new BooleanProperty("AutoBlock Require Press", false);
         this.autoBlockCPS = new IntProperty("AutoBlock Aps", 10, 1, 20);
@@ -250,6 +250,8 @@ public class KillAura extends Module {
                             blockTick = 3;
                         } else if (getEffectiveLagMode() == 9) {
                             blockTick = 2;
+                        } else if (getEffectiveLagMode() == 14) {
+                            blockTick = 3;
                         } else {
                             blockTick = 4;
                         }
@@ -529,7 +531,7 @@ public class KillAura extends Module {
         return this.isLag() && this.getEffectiveLagMode() == 2;
     }
     public boolean isLag5Tick() {
-        return this.isLag() && (this.getEffectiveLagMode() == 3 || this.getEffectiveLagMode() == 4 || this.getEffectiveLagMode() == 5 || this.getEffectiveLagMode() ==  6 || this.getEffectiveLagMode() == 7 || this.getEffectiveLagMode() == 8);
+        return this.isLag() && (this.getEffectiveLagMode() == 3 || this.getEffectiveLagMode() == 4 || this.getEffectiveLagMode() == 5 || this.getEffectiveLagMode() ==  6 || this.getEffectiveLagMode() == 7 || this.getEffectiveLagMode() == 8 || this.getEffectiveLagMode() == 14);
     }
 
     public int getEffectiveLagMode() {
@@ -539,7 +541,7 @@ public class KillAura extends Module {
         switch (this.lagClass.getValue()) {
             case 1: return 3;
             case 2: return this.fullMode.getValue() == 0 ? 6 : 7;
-            case 3: return this.swapMode.getValue() == 0 ? 8 : 9;
+            case 3: return this.swapMode.getValue() == 0 ? 8 : this.swapMode.getValue() == 1 ? 9 : 14;
             case 4: return 10;
             case 5: return 13;
             default:
@@ -614,6 +616,9 @@ public class KillAura extends Module {
                             // TestPostSwap
                             case 9:
                                 return phase == 2 ? tick == 2 : tick == 0;
+                            // Swap+
+                            case 14:
+                                return phase == 2 ? tick == 3 : phase == 1 ? tick == 0 : (tick == 0 || tick == 3);
                             // 5TickStop
                             case 10:
                                 return phase == 2 ? tick == 4 : phase == 1 ? tick == 0 : (tick == 0 || tick == 4);
@@ -1421,6 +1426,60 @@ public class KillAura extends Module {
                                                 Velocity.extraAttacked = false;
                                             }
                                             break;
+                                        // Swap · Swap+
+                                        case 14:
+                                            if (this.hasValidTarget()) {
+                                                if (!Leader.playerStateManager.digging && !Leader.playerStateManager.placing) {
+                                                    switch (this.blockTick) {
+                                                        case 0:
+                                                            if (!this.isPlayerBlocking()) {
+                                                                swap = true;
+                                                            }
+                                                            this.blockTick = 1;
+                                                            break;
+                                                        case 1:
+                                                            Leader.blinkManager.setBlinkState(true,BlinkModules.AUTO_BLOCK);
+                                                            if (this.isPlayerBlocking()) {
+                                                                if (fullC09.getValue()) {
+                                                                    int handle = mc.thePlayer.inventory.currentItem;
+                                                                    PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(handle)));
+                                                                    PacketUtil.sendPacket(new C09PacketHeldItemChange(handle % 7 + 2));
+                                                                    PacketUtil.sendPacket(new C09PacketHeldItemChange(handle));
+                                                                }
+                                                                this.stopBlock();
+                                                            }
+                                                            attack = false;
+                                                            this.blockTick = 2;
+                                                            break;
+                                                        case 2:
+                                                            if (fullC09.getValue()) {
+                                                                int handle = mc.thePlayer.inventory.currentItem;
+                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(handle)));
+                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(handle % 7 + 2));
+                                                                PacketUtil.sendPacket(new C09PacketHeldItemChange(handle));
+                                                                this.stopBlock();
+                                                            }
+                                                            this.blockTick = 3;
+                                                            break;
+                                                        case 3:
+                                                            postBlink = true;
+                                                            if (this.attackDelayMS <= 50L) {
+                                                                this.blockTick = 0;
+                                                            }
+                                                            break;
+                                                        default:
+                                                            this.blockTick = 0;
+                                                    }
+                                                }
+                                                this.isBlocking = true;
+                                                this.fakeBlockState = alwaysRenderBlocking.getValue();
+                                            } else {
+                                                Leader.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+                                                this.isBlocking = false;
+                                                this.fakeBlockState = false;
+                                                Velocity.extraAttacked = false;
+                                            }
+                                            break;
                                         // Stop · 5TickStop
                                         case 10:
                                             if (this.hasValidTarget()) {
@@ -1812,8 +1871,8 @@ public class KillAura extends Module {
 
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
-        if (this.isEnabled()
-                && this.moveFix.getValue() == 3
+        if (!isEnabled())return;
+        if (this.moveFix.getValue() == 3
                 && this.target != null
                 && !this.strafeFacing
                 && !mc.thePlayer.isSprinting()) {

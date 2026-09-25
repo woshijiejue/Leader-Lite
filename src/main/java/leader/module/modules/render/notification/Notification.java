@@ -19,7 +19,6 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.opengl.GL11;
 
 import java.awt.*;
@@ -39,13 +38,9 @@ public class Notification extends Module {
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
     public final IntProperty offsetX = new IntProperty("offset-x", 2, 0, 255);
     public final IntProperty offsetY = new IntProperty("offset-y", 20, 0, 255);
-    public final BooleanProperty blur = new BooleanProperty("blur", false);
-    public final IntProperty blurIterations = new IntProperty("blur-iterations", 2, 1, 8, blur::getValue);
-    public final IntProperty blurOffset = new IntProperty("blur-offset", 3, 1, 10, blur::getValue);
     public final BooleanProperty pixelIcon = new BooleanProperty("pixel-icon", true, () -> this.style.getValue() == 2);
     public final BooleanProperty pixelBlink = new BooleanProperty("pixel-blink", true, () -> this.style.getValue() == 2);
     public final BooleanProperty scanlines = new BooleanProperty("scanlines", true, () -> this.style.getValue() == 2);
-    private Framebuffer stencilBlur;
 
     public Notification() {
         super("Notification", false);
@@ -125,7 +120,6 @@ public class Notification extends Module {
         float offX = this.offsetX.getValue() + 4.0F;
         float offY = this.offsetY.getValue() + 4.0F;
         boolean isRight = this.mode.getValue() == 0;
-        boolean doBlur = this.blur.getValue();
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
         float step = cardHeight + gap;
@@ -153,15 +147,17 @@ public class Notification extends Module {
                 case Info -> new Color(0xFF6D19);
             };
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                ShaderElement.addBlurTask(() -> {
-                    RenderUtil.enableRenderState();
-                    RenderUtil.drawRect(bx, by, bx + cardWidth, by + cardHeight, -1);
-                    RenderUtil.disableRenderState();
-                });
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.enableRenderState();
+                RenderUtil.drawRect(bx, by, bx + cardWidth, by + cardHeight, -1);
+                RenderUtil.disableRenderState();
+                GlStateManager.popMatrix();
+            });
 
             float bgAlpha = 0.4F * alpha;
             float fillWidth = cardWidth * progress;
@@ -250,7 +246,6 @@ public class Notification extends Module {
         float offX = this.offsetX.getValue() + 6.0F;
         float offY = this.offsetY.getValue() + 8.0F;
         boolean isRight = this.mode.getValue() == 0;
-        boolean doBlur = this.blur.getValue();
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
         float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
@@ -278,11 +273,16 @@ public class Notification extends Module {
                 case Info -> new Color(255, 243, 122);
             };
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + cardWidth, by + cardHeight, radius, -1));
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + cardWidth, by + cardHeight, radius, -1);
+                GlStateManager.popMatrix();
+            });
+
             int rimColor = new Color(255, 255, 255, (int) (30.0F * alpha)).getRGB();
             int glassColor = new Color(13, 15, 21, (int) (178.0F * alpha)).getRGB();
             int accent = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), (int) (235.0F * alpha)).getRGB();
@@ -367,7 +367,6 @@ public class Notification extends Module {
         float offX = this.offsetX.getValue() + 6.0F;
         float offY = this.offsetY.getValue() + 8.0F;
         boolean isRight = this.mode.getValue() == 0;
-        boolean doBlur = this.blur.getValue();
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
         float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
@@ -402,15 +401,17 @@ public class Notification extends Module {
             int themeG = themeColor.getGreen();
             int themeB = themeColor.getBlue();
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                ShaderElement.addBlurTask(() -> {
-                    RenderUtil.enableRenderState();
-                    RenderUtil.drawRect(bx, by, bx + cardWidth, by + cardHeight, -1);
-                    RenderUtil.disableRenderState();
-                });
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.enableRenderState();
+                RenderUtil.drawRect(bx, by, bx + cardWidth, by + cardHeight, -1);
+                RenderUtil.disableRenderState();
+                GlStateManager.popMatrix();
+            });
 
             RenderUtil.enableRenderState();
 
@@ -551,7 +552,6 @@ public class Notification extends Module {
         float offX = this.offsetX.getValue() + 6.0F;
         float offY = this.offsetY.getValue() + 8.0F;
         boolean isRight = this.mode.getValue() == 0;
-        boolean doBlur = this.blur.getValue();
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
         float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
@@ -578,11 +578,15 @@ public class Notification extends Module {
                     case Disable -> new Color(255, 110, 116);
                     case Info -> new Color(255, 245, 70);
             };
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + cardWidth, by + cardHeight, radius, -1));
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + cardWidth, by + cardHeight, radius, -1);
+                GlStateManager.popMatrix();
+            });
 
             RenderUtil.drawRoundedRectWithGl(x, y + 2.0F, x + cardWidth, y + cardHeight + 2.0F, radius,
                     new Color(0, 0, 0, (int) (55.0F * alpha)).getRGB());
@@ -644,7 +648,6 @@ public class Notification extends Module {
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
-        boolean doBlur = this.blur.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
 
         float cardHeight = 26.0F;
@@ -695,14 +698,18 @@ public class Notification extends Module {
             float x = entry.animX;
             float y = entry.animY;
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                final float bw = cardWidth;
-                final float bh = cardHeight;
-                final float br = radius;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1));
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            final float bw = cardWidth;
+            final float bh = cardHeight;
+            final float br = radius;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1);
+                GlStateManager.popMatrix();
+            });
 
             RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 1.8F, x + cardWidth + 0.5F, y + cardHeight + 1.8F,
                     radius, new Color(16, 20, 30, (int) (24.0F * alpha)).getRGB());
@@ -759,7 +766,6 @@ public class Notification extends Module {
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
-        boolean doBlur = this.blur.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
 
         float radius = 4.5F;
@@ -818,14 +824,18 @@ public class Notification extends Module {
             float x = entry.animX;
             float y = entry.animY;
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                final float bw = cardWidth;
-                final float bh = cardHeight;
-                final float br = radius;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1));
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            final float bw = cardWidth;
+            final float bh = cardHeight;
+            final float br = radius;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1);
+                GlStateManager.popMatrix();
+            });
 
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
                     new Color(48, 57, 103, (int) (51.0F * alpha)).getRGB());
@@ -879,10 +889,6 @@ public class Notification extends Module {
         GlStateManager.popMatrix();
     }
 
-    /**
-     * SLATE style: compact two-line notification inspired by the supplied
-     * reference. The panel color follows HUD; LUCID remains separate.
-     */
     private void renderSlate(ScaledResolution sr, long now, long dur) {
         float textScale = this.fontScale.getValue();
         float subScale = Math.max(0.74F, textScale * 0.82F);
@@ -900,7 +906,6 @@ public class Notification extends Module {
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
-        boolean doBlur = this.blur.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
         float step = cardHeight + 4.0F;
         float baseY = sr.getScaledHeight() - offY - cardHeight;
@@ -953,23 +958,25 @@ public class Notification extends Module {
             float x = entry.animX;
             float y = entry.animY;
 
-            if (doBlur) {
-                final float bx = x;
-                final float by = y;
-                final float bw = cardWidth;
-                ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + cardHeight, radius, -1));
-            }
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            final float bw = cardWidth;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + cardHeight, radius, -1);
+                GlStateManager.popMatrix();
+            });
 
-            // Transparent neutral-gray body; HUD color is reserved for the
-            // status icon and the thin lifetime bar at the bottom.
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight,
                     radius, new Color(105, 106, 112, (int) (51.0F * alpha)).getRGB());
+
             float barWidth = Math.max(1.5F, (cardWidth - 4.0F) * remain);
-            RenderUtil.drawRoundedRectWithGl(x + 2.0F, y + cardHeight - 3.0F,
-                    x + 2.0F + barWidth, y + cardHeight - 1.0F, 1.0F,
+            RenderUtil.drawRect(x + 2.0F, y + cardHeight - 1.0F,
+                    x + 2.0F + barWidth, y + cardHeight,
                     new Color(hudColor.getRed(), hudColor.getGreen(), hudColor.getBlue(), (int) (235.0F * alpha)).getRGB());
 
-            // White state icon, matching the reference card.
             lucidIcon(entry.noticeMode).drawCentered(x + iconWell / 2.0F, y + cardHeight / 2.0F,
                     14.0F, 0xFFFFFF, alpha);
 
@@ -1056,23 +1063,6 @@ public class Notification extends Module {
         GL11.glLineWidth(2.0F);
         GlStateManager.enableTexture2D();
         GlStateManager.popMatrix();
-    }
-
-    public void drawBlur() {
-        HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
-        if (hud != null && hud.blur.getValue()) return;
-        if (!this.blur.getValue()) return;
-        if (stencilBlur == null) {
-            stencilBlur = ShaderElement.createFrameBuffer(null);
-        }
-        stencilBlur.framebufferClear();
-        stencilBlur.bindFramebuffer(false);
-        for (Runnable runnable : ShaderElement.getTasks()) {
-            runnable.run();
-        }
-        ShaderElement.getTasks().clear();
-        stencilBlur.unbindFramebuffer();
-        leader.util.shader.KawaseBlur.renderBlur(stencilBlur.framebufferTexture, blurIterations.getValue(), blurOffset.getValue());
     }
 
     private static class NotificationEntry {

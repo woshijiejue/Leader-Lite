@@ -1,0 +1,144 @@
+package leader.util.shader;
+
+import leader.util.RenderUtil;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.shader.Framebuffer;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL20;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Bloom {
+
+    public static KawaseDownBloomShader kawaseDown = new KawaseDownBloomShader();
+    public static KawaseUpBloomShader kawaseUp = new KawaseUpBloomShader();
+
+    public static Framebuffer framebuffer = new Framebuffer(1, 1, true);
+    private static int currentIterations;
+    private static final List<Framebuffer> framebufferList = new ArrayList<>();
+
+    private static void initFramebuffers(int iterations) {
+        for (Framebuffer fb : framebufferList) {
+            if (fb != null) {
+                fb.deleteFramebuffer();
+            }
+        }
+        framebufferList.clear();
+        framebufferList.add(framebuffer = ShaderElement.createFrameBuffer(null));
+        Minecraft mc = Minecraft.getMinecraft();
+        for (int i = 1; i <= iterations; i++) {
+            Framebuffer currentBuffer = new Framebuffer((int) (mc.displayWidth / Math.pow(2, i)), (int) (mc.displayHeight / Math.pow(2, i)), true);
+            currentBuffer.setFramebufferFilter(GL11.GL_LINEAR);
+            int prevTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+            GlStateManager.bindTexture(currentBuffer.framebufferTexture);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL14.GL_MIRRORED_REPEAT);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL14.GL_MIRRORED_REPEAT);
+            GlStateManager.bindTexture(prevTexture);
+            framebufferList.add(currentBuffer);
+        }
+    }
+
+    public static void renderBloom(int maskTexture, int iterations, int offset) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (iterations < 1 || mc.displayWidth < 1 || mc.displayHeight < 1
+                || !kawaseDown.isUsable() || !kawaseUp.isUsable()) {
+            return;
+        }
+        if (currentIterations != iterations || framebuffer.framebufferWidth != mc.displayWidth || framebuffer.framebufferHeight != mc.displayHeight) {
+            initFramebuffers(iterations);
+            currentIterations = iterations;
+        }
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_ONE, GL11.GL_ONE);
+        RenderUtil.setAlphaLimit(0);
+        GL11.glClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+        renderFBO(framebufferList.get(1), maskTexture, kawaseDown, offset);
+        for (int i = 1; i < iterations; i++) {
+            renderFBO(framebufferList.get(i + 1), framebufferList.get(i).framebufferTexture, kawaseDown, offset);
+        }
+        for (int i = iterations; i > 1; i--) {
+            renderFBO(framebufferList.get(i - 1), framebufferList.get(i).framebufferTexture, kawaseUp, offset);
+        }
+        Framebuffer lastBuffer = framebufferList.get(0);
+        lastBuffer.framebufferClear();
+        lastBuffer.bindFramebuffer(false);
+        GL20.glUseProgram(kawaseUp.programId);
+        kawaseUp.setOffset(offset, offset);
+        kawaseUp.setInTexture(0);
+        kawaseUp.setCheck(1);
+        kawaseUp.setTextureToCheck(1);
+        kawaseUp.setHalfPixel(1.0f / lastBuffer.framebufferWidth, 1.0f / lastBuffer.framebufferHeight);
+        kawaseUp.setResolution(lastBuffer.framebufferWidth, lastBuffer.framebufferHeight);
+        GL13.glActiveTexture(GL13.GL_TEXTURE1);
+        int prevUnit1 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        RenderUtil.bindTexture(maskTexture);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        RenderUtil.bindTexture(framebufferList.get(1).framebufferTexture);
+        drawQuads();
+        GL20.glUseProgram(0);
+        GlStateManager.clearColor(0.0F, 0.0F, 0.0F, 0.0F);
+        mc.getFramebuffer().bindFramebuffer(false);
+        RenderUtil.bindTexture(framebufferList.get(0).framebufferTexture);
+        RenderUtil.setAlphaLimit(0);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        drawQuads();
+        GlStateManager.bindTexture(0);
+        GlStateManager.enableAlpha();
+        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
+        GlStateManager.resetColor();
+        GL13.glActiveTexture(GL13.GL_TEXTURE1);
+        RenderUtil.bindTexture(prevUnit1);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+    }
+
+    private static void renderFBO(Framebuffer framebuffer, int framebufferTexture, KawaseDownBloomShader shader, float offset) {
+        framebuffer.framebufferClear();
+        framebuffer.bindFramebuffer(false);
+        GL20.glUseProgram(shader.programId);
+        RenderUtil.bindTexture(framebufferTexture);
+        shader.setOffset(offset, offset);
+        shader.setInTexture(0);
+        shader.setHalfPixel(1.0f / framebuffer.framebufferWidth, 1.0f / framebuffer.framebufferHeight);
+        shader.setResolution(framebuffer.framebufferWidth, framebuffer.framebufferHeight);
+        drawQuads();
+        GL20.glUseProgram(0);
+    }
+
+    private static void renderFBO(Framebuffer framebuffer, int framebufferTexture, KawaseUpBloomShader shader, float offset) {
+        framebuffer.framebufferClear();
+        framebuffer.bindFramebuffer(false);
+        GL20.glUseProgram(shader.programId);
+        RenderUtil.bindTexture(framebufferTexture);
+        shader.setOffset(offset, offset);
+        shader.setInTexture(0);
+        shader.setCheck(0);
+        shader.setHalfPixel(1.0f / framebuffer.framebufferWidth, 1.0f / framebuffer.framebufferHeight);
+        shader.setResolution(framebuffer.framebufferWidth, framebuffer.framebufferHeight);
+        drawQuads();
+        GL20.glUseProgram(0);
+    }
+
+    private static void drawQuads() {
+        Minecraft mc = Minecraft.getMinecraft();
+        ScaledResolution sr = new ScaledResolution(mc);
+        float width = (float) sr.getScaledWidth_double();
+        float height = (float) sr.getScaledHeight_double();
+        GlStateManager.enableTexture2D();
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glTexCoord2f(0, 1);
+        GL11.glVertex2f(0, 0);
+        GL11.glTexCoord2f(0, 0);
+        GL11.glVertex2f(0, height);
+        GL11.glTexCoord2f(1, 0);
+        GL11.glVertex2f(width, height);
+        GL11.glTexCoord2f(1, 1);
+        GL11.glVertex2f(width, 0);
+        GL11.glEnd();
+    }
+}

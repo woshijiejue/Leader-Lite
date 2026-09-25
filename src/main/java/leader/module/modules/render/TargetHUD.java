@@ -15,7 +15,6 @@ import leader.util.ColorUtil;
 import leader.util.RenderUtil;
 import leader.util.TeamUtil;
 import leader.util.TimerUtil;
-import leader.util.shader.KawaseBlur;
 import leader.util.shader.ShaderElement;
 import leader.property.properties.*;
 import net.minecraft.client.Minecraft;
@@ -27,7 +26,6 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityArmorStand;
@@ -80,7 +78,6 @@ public class TargetHUD extends Module {
     public final BooleanProperty shadow = new BooleanProperty("shadow", false);
     public final BooleanProperty kaOnly = new BooleanProperty("ka-only", true);
     public final BooleanProperty chatPreview = new BooleanProperty("chat-preview", false);
-    public final BooleanProperty blur = new BooleanProperty("blur", false, () -> this.mode.getValue() >= 2);
     public final BooleanProperty frostEquip = new BooleanProperty("frost-equip", true, () -> this.mode.getValue() == 6);
     public final BooleanProperty frostLag = new BooleanProperty("frost-lag", true, () -> this.mode.getValue() == 6);
     public final BooleanProperty frostPop = new BooleanProperty("frost-pop", true, () -> this.mode.getValue() == 6);
@@ -92,9 +89,6 @@ public class TargetHUD extends Module {
     private int frostLastHurt = 0;
     private long frostLastFrame = 0L;
     private EntityLivingBase frostFadeTarget = null;
-    public final IntProperty blurIterations = new IntProperty("blur-iterations", 2, 1, 8, blur::getValue);
-    public final IntProperty blurOffset = new IntProperty("blur-offset", 3, 1, 10, blur::getValue);
-    private Framebuffer blurStencil;
 
     private EntityLivingBase resolveTarget() {
         KillAura killAura = (KillAura) Leader.moduleManager.modules.get(KillAura.class);
@@ -144,22 +138,6 @@ public class TargetHUD extends Module {
 
     public TargetHUD() {
         super("TargetHUD", false, true);
-    }
-
-    public void drawBlur() {
-        if (!this.blur.getValue()) {
-            return;
-        }
-
-        blurStencil = ShaderElement.createFrameBuffer(blurStencil);
-        blurStencil.framebufferClear();
-        blurStencil.bindFramebuffer(false);
-        for (Runnable runnable : ShaderElement.getTasks()) {
-            runnable.run();
-        }
-        ShaderElement.getTasks().clear();
-        blurStencil.unbindFramebuffer();
-        KawaseBlur.renderBlur(blurStencil.framebufferTexture, blurIterations.getValue(), blurOffset.getValue());
     }
 
     private int getBackgroundColor() {
@@ -311,7 +289,8 @@ public class TargetHUD extends Module {
             cardWidth = this.getFrostCardWidth(frostTopRow);
             cardHeight = this.getFrostCardHeight();
         } else if (this.mode.getValue() == 7) {
-            cardWidth = this.getSlateCardWidth(targetNameWidth);
+            String slateHealth = heal == Math.floor(heal) ? String.format("%.0f", heal) : healthFormat.format(heal);
+            cardWidth = this.getSlateCardWidth(targetNameWidth, this.getTextWidth(slateHealth));
             cardHeight = this.getSlateCardHeight();
         } else if (this.mode.getValue() == 2) {
             cardWidth = 150.0F;
@@ -361,7 +340,7 @@ public class TargetHUD extends Module {
         } else if (this.mode.getValue() == 6) {
             renderFrost(scaledResolution, targetNameText, healthText, statusText, healthDiffText, targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth, healthRatio, targetColor, healthBarColor, healthDeltaColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
         } else if (this.mode.getValue() == 7) {
-            renderSlate(scaledResolution, targetNameText, targetNameWidth, healthRatio);
+            renderSlate(scaledResolution, targetNameText, targetNameWidth, healthRatio, heal);
         } else if (this.mode.getValue() == 2) {
             renderBackground(scaledResolution, targetNameText, healthText, targetNameWidth, healthTextWidth, healthRatio, targetColor, healthBarColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
         } else if (this.mode.getValue() == 1) {
@@ -486,7 +465,7 @@ public class TargetHUD extends Module {
                             healthRatio, targetColor, healthBarColor, healthDeltaColor,
                             heal, health, abs);
                 } else if (this.mode.getValue() == 7) {
-                    renderSlate(scaledResolution, targetNameText, targetNameWidth, healthRatio);
+                    renderSlate(scaledResolution, targetNameText, targetNameWidth, healthRatio, heal);
                 } else if (this.mode.getValue() == 2) {
                     renderBackground(scaledResolution, targetNameText, healthText,
                             targetNameWidth, healthTextWidth,
@@ -595,7 +574,7 @@ public class TargetHUD extends Module {
             }
         }
 
-        if (this.blur.getValue() && !this.renderingFollow) {
+        if (!this.renderingFollow) {
             final float bx = posX;
             final float by = posY;
             final float bw = barWidth;
@@ -719,7 +698,7 @@ public class TargetHUD extends Module {
             }
         }
 
-        if (this.blur.getValue() && !this.renderingFollow) {
+        if (!this.renderingFollow) {
             final float bx = posX;
             final float by = posY;
             final float bw = cardWidth;
@@ -809,8 +788,7 @@ public class TargetHUD extends Module {
         if (size <= 0.05F || alpha <= 0.004F) {
             return;
         }
-        // Hard clip only. The previous feathered strip blended the skin edge
-        // with transparent pixels and made small heads look visibly blurred.
+
         float inner = size;
         float ix = x;
         float iy = y;
@@ -825,9 +803,7 @@ public class TargetHUD extends Module {
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GlStateManager.enableTexture2D();
-        // Minecraft's skin texture is usually linearly filtered. A 24-30px
-        // portrait makes that interpolation look blurry, so use nearest-neighbor
-        // for this clipped face and restore the texture's original filters.
+
         int oldMinFilter = GL11.glGetTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER);
         int oldMagFilter = GL11.glGetTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
@@ -936,7 +912,7 @@ public class TargetHUD extends Module {
             }
         }
 
-        if (this.blur.getValue() && !this.renderingFollow) {
+        if (!this.renderingFollow) {
             final float bx = posX;
             final float by = posY;
             final float bw = cardWidth;
@@ -1097,7 +1073,7 @@ public class TargetHUD extends Module {
             }
         }
 
-        if (this.blur.getValue() && !this.renderingFollow) {
+        if (!this.renderingFollow) {
             final float bx = posX;
             final float by = posY;
             final float bw = cardWidth;
@@ -1226,21 +1202,18 @@ public class TargetHUD extends Module {
         }
     }
 
-    private float getSlateCardWidth(float targetNameWidth) {
-        return Math.max(124.0F, 48.0F + targetNameWidth + 18.0F);
+    private float getSlateCardWidth(float targetNameWidth, float healthWidth) {
+        return Math.max(124.0F, 48.0F + targetNameWidth + 6.0F + healthWidth + 18.0F);
     }
 
     private float getSlateCardHeight() {
         return 38.0F;
     }
 
-    /**
-     * SLATE mode: compact neutral panel inspired by the supplied reference.
-     * It only shows the rounded portrait, target name and health progress.
-     */
     private void renderSlate(ScaledResolution scaledResolution, String targetNameText,
-                             float targetNameWidth, float healthRatio) {
-        final float cardWidth = this.getSlateCardWidth(targetNameWidth);
+                             float targetNameWidth, float healthRatio, float heal) {
+        String healthStr = heal == Math.floor(heal) ? String.format("%.0f", heal) : healthFormat.format(heal);
+        final float cardWidth = this.getSlateCardWidth(targetNameWidth, this.getTextWidth(healthStr));
         final float cardHeight = this.getSlateCardHeight();
         final float radius = 4.5F;
         final float headSize = 28.0F;
@@ -1277,7 +1250,7 @@ public class TargetHUD extends Module {
             }
         }
 
-        if (this.blur.getValue() && !this.renderingFollow) {
+        if (!this.renderingFollow) {
             final float bx = posX;
             final float by = posY;
             final float bw = cardWidth;
@@ -1300,28 +1273,29 @@ public class TargetHUD extends Module {
 
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
         Color accent = hud != null ? hud.getColor(System.currentTimeMillis()) : new Color(126, 181, 255);
-        // New reference-style panel stays lightweight instead of solid.
-        int panelAlpha = 51;
+        int ar = accent.getRed();
+        int ag = accent.getGreen();
+        int ab = accent.getBlue();
 
         RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, radius,
-                new Color(73, 75, 84, panelAlpha).getRGB());
-        // Straight accent bar attached to the far-left edge of the full panel.
-        RenderUtil.drawRect(0.0F, cardHeight / 2.0F - 4.0F, 2.0F, cardHeight / 2.0F + 4.0F,
-                new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 235).getRGB());
+                new Color(28 + (int) (ar * 0.08F), 30 + (int) (ag * 0.08F), 42 + (int) (ab * 0.08F), 168).getRGB());
+        RenderUtil.drawRoundedRectWithGl(0.0F, cardHeight / 2.0F - 4.0F, 2.0F, cardHeight / 2.0F + 4.0F, 1.0F,
+                new Color(ar, ag, ab, 245).getRGB());
         RenderUtil.drawRoundedRectWithGl(contentX, barY, contentRight, barY + barHeight, 2.0F,
-                new Color(48, 51, 59, 220).getRGB());
+                new Color(255, 255, 255, 30).getRGB());
 
         float fillWidth = Math.max(2.0F, (contentRight - contentX) * healthRatio);
+        Color fillColor = new Color(Math.min(255, ar + (int) ((255 - ar) * 0.3F)),
+                Math.min(255, ag + (int) ((255 - ag) * 0.3F)),
+                Math.min(255, ab + (int) ((255 - ab) * 0.3F)), 250);
         RenderUtil.drawRoundedRectWithGl(contentX, barY, contentX + fillWidth, barY + barHeight, 2.0F,
-                new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 245).getRGB());
-        RenderUtil.drawRoundedRectWithGl(contentX + 1.0F, barY + 1.0F,
-                contentX + Math.max(1.0F, fillWidth - 1.0F), barY + 2.0F, 0.5F,
-                new Color(255, 255, 255, 80).getRGB());
+                fillColor.getRGB());
 
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         this.drawText(targetNameText, contentX, textY, new Color(250, 250, 252).getRGB());
+        this.drawText(healthStr, contentX + targetNameWidth + 6.0F, textY, new Color(255, 255, 255, 175).getRGB());
 
         if (this.head.getValue() && this.headTexture != null) {
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
@@ -1473,7 +1447,7 @@ public class TargetHUD extends Module {
             }
         }
 
-        if (this.blur.getValue() && !this.renderingFollow) {
+        if (!this.renderingFollow) {
             final float bx = posX;
             final float by = posY;
             final float bw = cardWidth;
@@ -1498,7 +1472,7 @@ public class TargetHUD extends Module {
         int textColor = new Color(255, 255, 255, (int) (250.0F * fade)).getRGB();
         int textShadow = new Color(0, 0, 0, (int) (110.0F * fade)).getRGB();
         int trackColor = new Color(0, 0, 0, (int) (100.0F * fade)).getRGB();
-        int lagColor = new Color(99, 99, 99, (int) (120.0F * fade)).getRGB();
+        int lagColor = 0;
 
         if (glassBg) {
             RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, 5.0F,
@@ -1513,14 +1487,9 @@ public class TargetHUD extends Module {
         float fillW = Math.max(2.0F, contentW * healthRatio * fade);
         RenderUtil.drawRoundedRectWithGl(46.0F, barY, 46.0F + contentW, barY + 4.0F,
                 2.0F, trackColor);
-        if (this.frostLag.getValue()) {
-            RenderUtil.drawRoundedRectWithGl(46.0F, barY, 46.0F + lagW, barY + 4.0F,
-                    Math.min(2.0F, lagW / 2.0F), lagColor);
-        }
-        Color barA = new Color(0, 150, 255, (int) (255.0F * fade));
-        Color barB = new Color(0, 100, 255, (int) (255.0F * fade));
-        RenderUtil.drawRoundedRectGradientH(46.0F, barY, 46.0F + fillW, barY + 4.0F,
-                Math.min(2.0F, fillW / 2.0F), barA.getRGB(), barB.getRGB());
+        int frostBlue = new Color(0, 140, 255, (int) (255.0F * fade)).getRGB();
+        RenderUtil.drawRoundedRectWithGl(46.0F, barY, 46.0F + fillW, barY + 4.0F,
+                Math.min(2.0F, fillW / 2.0F), frostBlue);
 
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();

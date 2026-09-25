@@ -11,14 +11,12 @@ import leader.mixin.IAccessorGuiChat;
 import leader.module.Module;
 import leader.util.ColorUtil;
 import leader.util.RenderUtil;
-import leader.util.shader.KawaseBlur;
 import leader.util.shader.ShaderElement;
 import leader.property.properties.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.opengl.GL11;
 
 import java.awt.*;
@@ -57,12 +55,8 @@ public class HUD extends Module {
     public final BooleanProperty toggleAlerts = new BooleanProperty("toggle-alerts", false);
     public final BooleanProperty bgColor = new BooleanProperty("bg-color", false);
     public final BooleanProperty glow = new BooleanProperty("glow", false);
-    public final BooleanProperty blur = new BooleanProperty("blur", false);
-    public final IntProperty blurIterations = new IntProperty("blur-iterations", 2, 1, 8);
-    public final IntProperty blurOffset = new IntProperty("blur-offset", 3, 1, 10);
     public final IntProperty barless = new IntProperty("barless", 0, 0, 8, () -> this.showBar.getValue());
     public final ModeProperty barMode = new ModeProperty("bar-mode", 0, new String[]{"RIGHT", "LEFT", "TOP", "BOTTOM"}, () -> this.showBar.getValue());
-    private Framebuffer blurStencil;
 
     private String getModuleName(Module module) {
         String moduleName = module.getName();
@@ -189,22 +183,6 @@ public class HUD extends Module {
         }
     }
 
-    public void drawBlur() {
-        blurStencil = ShaderElement.createFrameBuffer(blurStencil);
-        blurStencil.framebufferClear();
-        blurStencil.bindFramebuffer(false);
-        for (Runnable runnable : ShaderElement.getTasks()) {
-            runnable.run();
-        }
-        ShaderElement.getTasks().clear();
-        blurStencil.unbindFramebuffer();
-        KawaseBlur.renderBlur(blurStencil.framebufferTexture, blurIterations.getValue(), blurOffset.getValue());
-    }
-
-    public void clearBlurTasks() {
-        ShaderElement.getTasks().clear();
-    }
-
     private void drawGlowText(String text, float x, float y, int color, int passes, float spread) {
         if (!FontManager.customFont.getValue()) return;
         GlStateManager.enableBlend();
@@ -299,15 +277,19 @@ public class HUD extends Module {
                 }
                 int glowColor = useThemeBg ? color : themeColor.getRGB();
 
-                if (hasBg && this.blur.getValue()) {
+                if (hasBg) {
                     final float blurX1 = bgX1;
                     final float blurY1 = bgY1;
                     final float blurX2 = bgX2;
                     final float blurY2 = bgY2;
+                    final float sc = this.scale.getValue();
                     ShaderElement.addBlurTask(() -> {
+                        GlStateManager.pushMatrix();
+                        GlStateManager.scale(sc, sc, 1.0F);
                         RenderUtil.enableRenderState();
                         RenderUtil.drawRect(blurX1, blurY1, blurX2, blurY2, -1);
                         RenderUtil.disableRenderState();
+                        GlStateManager.popMatrix();
                     });
                 }
 
