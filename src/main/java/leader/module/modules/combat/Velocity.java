@@ -82,7 +82,7 @@ public class Velocity extends Module {
     private int grimTick = 0;
     public static boolean hasReceivedVelocity;
     private int ticksSinceVelocity = -1;
-    private int airPushCount = 0;
+    private int airPushLeft = 0;
 
     private double knockbackX = 0;
     private float[] targetRotation = null;
@@ -116,7 +116,6 @@ public class Velocity extends Module {
     }
     @EventTarget
     public void onKnockback(KnockbackEvent event) {
-        this.airPushCount = 0;
         if (!allowNext || !(Boolean) fakeCheck.getValue()) {
             allowNext = true;
             if (pendingExplosion) {
@@ -240,9 +239,9 @@ public class Velocity extends Module {
         if (mode.getValue() == 1) {
             if (this.reduce.getValue() && this.airPush.getValue()
                     && event.getType() == EventType.PRE
-                    && reduceMode.getValue() != 3
+                    && (reduceMode.getValue() != 3 || !blinkingVelocity)
                     && hasReceivedVelocity) {
-                this.tryAirPush(event.getYaw(), event.getPitch());
+                this.tryAirPush(event);
             }
             if (reduce.getValue() && reduceMode.getValue() == 3 && event.getType() == EventType.PRE) {
                 if (knockbackTimer >= 0) {
@@ -250,7 +249,7 @@ public class Velocity extends Module {
                 }
                 if (blinkingVelocity) {
                     if (knockbackTimer >= startReleaseTicks.getValue()) {
-                        releaseVelocityBlink();
+                        releaseVelocityBlink(event);
                     }
                 } else if (knockback && mc.thePlayer.hurtTime == startBlinkHurtTime.getValue()) {
                     if (forceBlocking.getValue()) {
@@ -411,16 +410,15 @@ public class Velocity extends Module {
             return null;
         }
     }
-    private void tryAirPush(float yaw, float pitch) {
+    private void tryAirPush(UpdateEvent event) {
         if (!this.airPush.getValue()) return;
-        int limit = smartTimes.getValue() ? hitCount : attackTimes.getValue();
-        if (this.airPushCount >= limit) return;
-        RayCastUtil.RayCastResult ray = RayCastUtil.rayCast(new RotationUtil.RotationVec(yaw, pitch), 3);
-        if (ray != null && ray.entityHit instanceof EntityPlayer && ray.entityHit != mc.thePlayer) return;
         if (getKillAuraTarget() != null) return;
+        if (this.airPushLeft <= 0) return;
+        RayCastUtil.RayCastResult ray = RayCastUtil.rayCast(new RotationUtil.RotationVec(event.getYaw(), event.getPitch()), 3);
+        if (ray != null && ray.entityHit instanceof EntityPlayer && ray.entityHit != mc.thePlayer) return;
         EntityPlayer airTarget = this.getAirPushTarget();
         if (airTarget == null) return;
-        this.airPushCount++;
+        this.airPushLeft--;
         mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
         mc.getNetHandler().addToSendQueue(new C02PacketUseEntity(airTarget, C02PacketUseEntity.Action.ATTACK));
         applyHitSlowDown(true);
@@ -430,10 +428,10 @@ public class Velocity extends Module {
         KillAura killAura = (KillAura) Leader.moduleManager.modules.get(KillAura.class);
         double nearRange = killAura != null ? killAura.attackRange.getValue() : 3.0F;
         EntityPlayer farthest = null;
-        double farthestDistance = 6.0;
+        double farthestDistance = 11.0;
         for (EntityPlayer player : mc.theWorld.playerEntities) {
             if (player == mc.thePlayer || player.isDead || player.deathTime > 0) continue;
-            double distance = mc.thePlayer.getDistanceToEntity(player);
+            double distance = RotationUtil.distanceToEntity(player);
             if (distance <= nearRange) return null;
             if (distance < farthestDistance) continue;
             farthestDistance = distance;
@@ -450,7 +448,7 @@ public class Velocity extends Module {
         }
     }
 
-    private void releaseVelocityBlink() {
+    private void releaseVelocityBlink(UpdateEvent event) {
         if (!blinkingVelocity) return;
         boolean wasActive = blinkActive;
         blinkActive = false;
@@ -491,7 +489,7 @@ public class Velocity extends Module {
         blinkScheduled = false;
         knockback = false;
         knockbackTimer = -1;
-        this.tryAirPush(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
+        this.tryAirPush(event);
     }
 
     @EventTarget
@@ -500,6 +498,7 @@ public class Velocity extends Module {
             if (event.getPacket() instanceof S12PacketEntityVelocity) {
                 S12PacketEntityVelocity packet = (S12PacketEntityVelocity) event.getPacket();
                 if (packet.getEntityID() == mc.thePlayer.getEntityId()) {
+                    this.airPushLeft = computeReduceTicks(packet.getMotionX(), packet.getMotionZ());
                     if (!testMode.getValue()) {
                         if (!delay.getValue()) {
                             hasReceivedVelocity = true;
@@ -585,7 +584,7 @@ public class Velocity extends Module {
     public void onEnabled() {
         knockback = false;
         hasReceivedVelocity = false;
-        airPushCount = 0;
+        airPushLeft = 0;
         grimActive = false;
         grimTick = 0;
         this.rotateTickCounter = 0;
@@ -600,7 +599,7 @@ public class Velocity extends Module {
         stoppedBlock = false;
         allowNext = true;
         hasReceivedVelocity = false;
-        airPushCount = 0;
+        airPushLeft = 0;
         knockback = false;
         cancellingKillAuraAttack = false;
         grimActive = false;
