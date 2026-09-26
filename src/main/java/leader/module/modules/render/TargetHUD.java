@@ -11,10 +11,7 @@ import leader.mixin.IAccessorRenderManager;
 import leader.module.Module;
 import leader.module.modules.combat.KillAura;
 import leader.module.modules.render.HUD;
-import leader.util.ColorUtil;
-import leader.util.RenderUtil;
-import leader.util.TeamUtil;
-import leader.util.TimerUtil;
+import leader.util.*;
 import leader.util.shader.ShaderElement;
 import leader.property.properties.*;
 import net.minecraft.client.Minecraft;
@@ -82,6 +79,9 @@ public class TargetHUD extends Module {
     public final BooleanProperty frostLag = new BooleanProperty("frost-lag", true, () -> this.mode.getValue() == 6);
     public final BooleanProperty frostPop = new BooleanProperty("frost-pop", true, () -> this.mode.getValue() == 6);
     public final BooleanProperty frostGlass = new BooleanProperty("frost-glass", true, () -> this.mode.getValue() == 6);
+    private float slateLag = 0.0F;
+    private long slateLastFrame = 0L;
+    private EntityLivingBase slateTarget = null;
     private float frostLagRatio = -1.0F;
     private float frostFade = 0.0F;
     private float frostPopScale = 1.0F;
@@ -158,31 +158,44 @@ public class TargetHUD extends Module {
     }
 
     private void drawOutline(float x1, float y1, float x2, float y2, float width, int color) {
+        RenderUtil.enableRenderState();
         RenderUtil.drawLine(x1, y1, x2, y1, width, color);
         RenderUtil.drawLine(x2, y1, x2, y2, width, color);
         RenderUtil.drawLine(x2, y2, x1, y2, width, color);
         RenderUtil.drawLine(x1, y2, x1, y1, width, color);
+        RenderUtil.disableRenderState();
     }
 
     private float getTextScale() {
-        return this.fontScale.getValue();
+        return Math.max(8.0F, Math.min(32.0F, this.fontScale.getValue() * 12.0F));
     }
 
     private float getTextWidth(String text) {
-        return FontManager.getStringWidth(text) * this.getTextScale();
+        return FontManager.getStringWidth(this.stripFormat(text), this.getTextScale());
     }
 
     private float getTextHeight() {
-        return FontManager.getFontHeight() * this.getTextScale();
+        return FontManager.getFontHeight(this.getTextScale());
+    }
+
+    private String stripFormat(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        StringBuilder result = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\u00a7' && i + 1 < text.length()) {
+                i++;
+                continue;
+            }
+            result.append(c);
+        }
+        return result.toString();
     }
 
     private void drawText(String text, float x, float y, int color) {
-        float textScale = this.getTextScale();
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(x, y, 0.0F);
-        GlStateManager.scale(textScale, textScale, 1.0F);
-        FontManager.drawString(text, 0.0F, 0.0F, color, this.shadow.getValue());
-        GlStateManager.popMatrix();
+        FontManager.drawString(this.stripFormat(text), x, y, color, this.shadow.getValue(), this.getTextScale());
     }
 
     private float getCardHeight() {
@@ -256,7 +269,7 @@ public class TargetHUD extends Module {
 
     private void renderFollow(float partialTicks, EntityLivingBase targetEntity) {
         ScaledResolution scaledResolution = new ScaledResolution(mc);
-        String targetNameText = ChatColors.formatColor(String.format("&r%s&r", TeamUtil.stripName(targetEntity)));
+        String targetNameText = TeamUtil.stripName(targetEntity);
         float targetNameWidth = this.getTextWidth(targetNameText);
         float abs = targetEntity.getAbsorptionAmount() / 2.0F;
         float heal = targetEntity.getHealth() / 2.0F + abs;
@@ -289,8 +302,7 @@ public class TargetHUD extends Module {
             cardWidth = this.getFrostCardWidth(frostTopRow);
             cardHeight = this.getFrostCardHeight();
         } else if (this.mode.getValue() == 7) {
-            String slateHealth = heal == Math.floor(heal) ? String.format("%.0f", heal) : healthFormat.format(heal);
-            cardWidth = this.getSlateCardWidth(targetNameWidth, this.getTextWidth(slateHealth));
+            cardWidth = this.getSlateCardWidth(targetNameText, heal, abs);
             cardHeight = this.getSlateCardHeight();
         } else if (this.mode.getValue() == 2) {
             cardWidth = 150.0F;
@@ -340,7 +352,7 @@ public class TargetHUD extends Module {
         } else if (this.mode.getValue() == 6) {
             renderFrost(scaledResolution, targetNameText, healthText, statusText, healthDiffText, targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth, healthRatio, targetColor, healthBarColor, healthDeltaColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
         } else if (this.mode.getValue() == 7) {
-            renderSlate(scaledResolution, targetNameText, targetNameWidth, healthRatio, heal);
+            renderSlate(scaledResolution, targetNameText, healthRatio, heal, abs);
         } else if (this.mode.getValue() == 2) {
             renderBackground(scaledResolution, targetNameText, healthText, targetNameWidth, healthTextWidth, healthRatio, targetColor, healthBarColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
         } else if (this.mode.getValue() == 1) {
@@ -432,7 +444,7 @@ public class TargetHUD extends Module {
                 float healthDeltaRatio = Math.min(Math.max((health - heal + 1.0F) / 2.0F, 0.0F), 1.0F);
                 Color healthDeltaColor = ColorUtil.getHealthBlend(healthDeltaRatio);
                 ScaledResolution scaledResolution = new ScaledResolution(mc);
-                String targetNameText = ChatColors.formatColor(String.format("&r%s&r", TeamUtil.stripName(this.target)));
+                String targetNameText = TeamUtil.stripName(this.target);
                 float targetNameWidth = this.getTextWidth(targetNameText);
                 String healthText = ChatColors.formatColor(
                         String.format("&r&f%s%s❤&r", healthFormat.format(heal), abs > 0.0F ? "&6" : "&c")
@@ -465,7 +477,7 @@ public class TargetHUD extends Module {
                             healthRatio, targetColor, healthBarColor, healthDeltaColor,
                             heal, health, abs);
                 } else if (this.mode.getValue() == 7) {
-                    renderSlate(scaledResolution, targetNameText, targetNameWidth, healthRatio, heal);
+                    renderSlate(scaledResolution, targetNameText, healthRatio, heal, abs);
                 } else if (this.mode.getValue() == 2) {
                     renderBackground(scaledResolution, targetNameText, healthText,
                             targetNameWidth, healthTextWidth,
@@ -971,12 +983,7 @@ public class TargetHUD extends Module {
 
         float nameY = (cardHeight - (textHeight + 3.5F + textHeight * 1.15F)) / 2.0F;
         this.drawText(targetNameText, textX, nameY, -1);
-        float numScale = this.getTextScale() * 1.15F;
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(textX, nameY + textHeight + 3.5F, 0.0F);
-        GlStateManager.scale(numScale, numScale, 1.0F);
-        FontManager.drawString(healthFormat.format(heal), 0.0F, 0.0F, arcColor, this.shadow.getValue());
-        GlStateManager.popMatrix();
+        this.drawText(healthFormat.format(heal), textX, nameY + textHeight + 3.5F, arcColor);
 
         if (this.indicator.getValue()) {
 
@@ -1202,28 +1209,49 @@ public class TargetHUD extends Module {
         }
     }
 
-    private float getSlateCardWidth(float targetNameWidth, float healthWidth) {
-        return Math.max(124.0F, 48.0F + targetNameWidth + 6.0F + healthWidth + 18.0F);
+    private String getSlateHealthText(float heal) {
+        return heal == Math.floor(heal) ? String.format("%.0f", heal) : healthFormat.format(heal);
+    }
+
+    private float getSlateCardWidth(String targetNameText, float heal, float abs) {
+        float size = this.getTextScale();
+        float headW = this.head.getValue() && this.headTexture != null ? 38.0F : 0.0F;
+        float nameW = FontManager.getStringWidth(this.stripFormat(targetNameText), size);
+        float healthW = FontManager.getStringWidth(this.getSlateHealthText(heal), size * 1.3F)
+                + 2.0F + FontManager.getStringWidth("HP", size * 0.72F);
+        return Math.max(150.0F, 10.0F + headW + nameW + 14.0F + healthW + 10.0F);
     }
 
     private float getSlateCardHeight() {
-        return 38.0F;
+        float size = this.getTextScale();
+        float contentH = FontManager.getCapHeight(size) + FontManager.getCapHeight(size * 0.72F) + 15.0F;
+        return Math.max(44.0F, contentH + 14.0F);
+    }
+
+    private static int slateMix(Color a, Color b, float t, int alpha) {
+        t = Math.max(0.0F, Math.min(1.0F, t));
+        return new Color((int) (a.getRed() + (b.getRed() - a.getRed()) * t),
+                (int) (a.getGreen() + (b.getGreen() - a.getGreen()) * t),
+                (int) (a.getBlue() + (b.getBlue() - a.getBlue()) * t), alpha).getRGB();
     }
 
     private void renderSlate(ScaledResolution scaledResolution, String targetNameText,
-                             float targetNameWidth, float healthRatio, float heal) {
-        String healthStr = heal == Math.floor(heal) ? String.format("%.0f", heal) : healthFormat.format(heal);
-        final float cardWidth = this.getSlateCardWidth(targetNameWidth, this.getTextWidth(healthStr));
+                             float healthRatio, float heal, float abs) {
+        String name = this.stripFormat(targetNameText);
+        String healthStr = this.getSlateHealthText(heal);
+        float size = this.getTextScale();
+        float bigSize = size * 1.3F;
+        float subSize = size * 0.72F;
+        float nameCap = FontManager.getCapHeight(size);
+        float subCap = FontManager.getCapHeight(subSize);
+        final float cardWidth = this.getSlateCardWidth(targetNameText, heal, abs);
         final float cardHeight = this.getSlateCardHeight();
-        final float radius = 4.5F;
-        final float headSize = 28.0F;
-        final float headX = 5.0F;
-        final float headY = 5.0F;
-        final float contentX = 42.0F;
-        final float contentRight = cardWidth - 8.0F;
-        final float textY = 6.0F;
-        final float barY = 23.0F;
-        final float barHeight = 7.0F;
+        final float radius = 8.0F;
+        final float pad = 7.0F;
+        final float headSize = cardHeight - pad * 2.0F;
+        final boolean hasHead = this.head.getValue() && this.headTexture != null;
+        final float contentX = hasHead ? pad + headSize + 8.0F : pad + 3.0F;
+        final float contentRight = cardWidth - pad - 3.0F;
 
         float posX = this.renderingFollow ? 0.0F : this.offX.getValue().floatValue() / this.scale.getValue();
         if (!this.renderingFollow) {
@@ -1250,19 +1278,36 @@ public class TargetHUD extends Module {
             }
         }
 
+        HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
+        long now = System.currentTimeMillis();
+        Color accent = hud != null ? hud.getColor(now) : new Color(126, 181, 255);
+        Color accentHi = new Color(Math.min(255, accent.getRed() + 70), Math.min(255, accent.getGreen() + 70),
+                Math.min(255, accent.getBlue() + 70));
+
         if (!this.renderingFollow) {
             final float bx = posX;
             final float by = posY;
-            final float bw = cardWidth;
-            final float bh = cardHeight;
             final float sc = this.scale.getValue();
+            final int mask = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 255).getRGB();
             ShaderElement.addBlurTask(() -> {
                 GlStateManager.pushMatrix();
                 GlStateManager.scale(sc, sc, 1.0F);
                 GlStateManager.translate(bx, by, -450.0F);
-                RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, bw, bh, radius, -1);
+                RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, radius, mask);
                 GlStateManager.popMatrix();
             });
+        }
+
+        float dt = this.slateLastFrame == 0L ? 0.016F : Math.min(0.1F, (now - this.slateLastFrame) / 1000.0F);
+        this.slateLastFrame = now;
+        if (this.slateTarget != this.target) {
+            this.slateTarget = this.target;
+            this.slateLag = healthRatio;
+        }
+        if (this.slateLag < healthRatio) {
+            this.slateLag = healthRatio;
+        } else {
+            this.slateLag += (healthRatio - this.slateLag) * (1.0F - (float) Math.exp(-dt * 3.5F));
         }
 
         GlStateManager.pushMatrix();
@@ -1271,38 +1316,91 @@ public class TargetHUD extends Module {
         }
         GlStateManager.translate(posX, posY, this.renderingFollow ? 0.0F : -450.0F);
 
-        HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
-        Color accent = hud != null ? hud.getColor(System.currentTimeMillis()) : new Color(126, 181, 255);
-        int ar = accent.getRed();
-        int ag = accent.getGreen();
-        int ab = accent.getBlue();
+        if (this.renderingFollow) {
+            RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, radius, new Color(12, 13, 18, 150).getRGB());
+        }
+        if (this.outline.getValue()) {
+            RenderUtil.drawRoundedRectWithGl(0.0F, cardHeight / 2.0F - 7.0F, 2.0F, cardHeight / 2.0F + 7.0F, 1.0F,
+                    new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 240).getRGB());
+        }
 
-        RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, radius,
-                new Color(28 + (int) (ar * 0.08F), 30 + (int) (ag * 0.08F), 42 + (int) (ab * 0.08F), 168).getRGB());
-        RenderUtil.drawRoundedRectWithGl(0.0F, cardHeight / 2.0F - 4.0F, 2.0F, cardHeight / 2.0F + 4.0F, 1.0F,
-                new Color(ar, ag, ab, 245).getRGB());
-        RenderUtil.drawRoundedRectWithGl(contentX, barY, contentRight, barY + barHeight, 2.0F,
-                new Color(255, 255, 255, 30).getRGB());
+        float barH = 3.0F;
+        float contentH = nameCap + 6.0F + subCap + 6.0F + barH;
+        float top = (cardHeight - contentH) / 2.0F;
+        float nameBase = top + nameCap;
+        float subBase = nameBase + 6.0F + subCap;
+        float barY = top + contentH - barH;
 
-        float fillWidth = Math.max(2.0F, (contentRight - contentX) * healthRatio);
-        Color fillColor = new Color(Math.min(255, ar + (int) ((255 - ar) * 0.3F)),
-                Math.min(255, ag + (int) ((255 - ag) * 0.3F)),
-                Math.min(255, ab + (int) ((255 - ab) * 0.3F)), 250);
-        RenderUtil.drawRoundedRectWithGl(contentX, barY, contentX + fillWidth, barY + barHeight, 2.0F,
-                fillColor.getRGB());
+        int segments = 10;
+        float gap = 1.5F;
+        float barW = contentRight - contentX;
+        float segW = (barW - gap * (segments - 1)) / segments;
+        float lag = Math.max(0.0F, Math.min(1.0F, this.slateLag));
+        int trackColor = new Color(255, 255, 255, 30).getRGB();
+        int lagColor = new Color(255, 255, 255, 95).getRGB();
+        for (int i = 0; i < segments; i++) {
+            float sx = contentX + i * (segW + gap);
+            RenderUtil.drawRoundedRectWithGl(sx, barY, sx + segW, barY + barH, 1.0F, trackColor);
+            float lagFill = Math.max(0.0F, Math.min(1.0F, lag * segments - i));
+            if (lagFill > 0.01F) {
+                RenderUtil.drawRoundedRectWithGl(sx, barY, sx + segW * lagFill, barY + barH, 1.0F, lagColor);
+            }
+            float fill = Math.max(0.0F, Math.min(1.0F, healthRatio * segments - i));
+            if (fill > 0.01F) {
+                RenderUtil.drawRoundedRectWithGl(sx, barY, sx + segW * fill, barY + barH, 1.0F,
+                        slateMix(accent, accentHi, (i + 0.5F) / segments, 255));
+            }
+        }
+
+        boolean textShadow = this.shadow.getValue();
+        float hpW = FontManager.getStringWidth("HP", subSize);
+        float healthW = FontManager.getStringWidth(healthStr, bigSize);
+        float hpX = contentRight - hpW;
+        float healthX = hpX - 2.0F - healthW;
+        int muted = new Color(150, 156, 170).getRGB();
 
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        this.drawText(targetNameText, contentX, textY, new Color(250, 250, 252).getRGB());
-        this.drawText(healthStr, contentX + targetNameWidth + 6.0F, textY, new Color(255, 255, 255, 175).getRGB());
+        FontManager.drawString(name, contentX, nameBase - FontManager.getBaseline(size), new Color(246, 248, 252).getRGB(), textShadow, size);
+        FontManager.drawString(healthStr, healthX, nameBase - FontManager.getBaseline(bigSize), accentHi.getRGB(), textShadow, bigSize);
+        FontManager.drawString("HP", hpX, nameBase - FontManager.getBaseline(subSize),
+                abs > 0.0F ? new Color(255, 200, 70).getRGB() : muted, false, subSize);
 
-        if (this.head.getValue() && this.headTexture != null) {
+        float statusX = contentX;
+        if (this.indicator.getValue() && mc.thePlayer != null) {
+            float self = (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F;
+            String state = heal == self ? "EVEN" : (heal < self ? "WINNING" : "LOSING");
+            Color stateColor = heal == self ? new Color(170, 176, 188)
+                    : (heal < self ? new Color(96, 220, 140) : new Color(255, 96, 96));
+            RenderUtil.fillCircle(contentX + 2.0F, subBase - subCap / 2.0F, 2.0D, 16, stateColor.getRGB());
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            statusX += 7.0F;
+            FontManager.drawString(state, statusX, subBase - FontManager.getBaseline(subSize), stateColor.getRGB(), false, subSize);
+        }
+        if (this.target != null && mc.thePlayer != null && this.target != mc.thePlayer) {
+            String dist = String.format(Locale.US, "%.1fm", mc.thePlayer.getDistanceToEntity(this.target));
+            FontManager.drawString(dist, contentRight - FontManager.getStringWidth(dist, subSize),
+                    subBase - FontManager.getBaseline(subSize), muted, false, subSize);
+        }
+
+        if (hasHead) {
+            RenderUtil.drawRoundedRectWithGl(pad - 1.0F, pad - 1.0F, pad + headSize + 1.0F, pad + headSize + 1.0F, 7.0F,
+                    new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 210).getRGB());
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
             mc.getTextureManager().bindTexture(this.headTexture);
-            drawRoundedHead(headX, headY, headSize, 4.0F, 8.0F, 8.0F, 1.0F);
-            drawRoundedHead(headX, headY, headSize, 4.0F, 40.0F, 8.0F, 1.0F);
+            drawRoundedHead(pad, pad, headSize, 6.0F, 8.0F, 8.0F, 1.0F);
+            drawRoundedHead(pad, pad, headSize, 6.0F, 40.0F, 8.0F, 1.0F);
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            int hurt = this.target != null ? this.target.hurtTime : 0;
+            if (hurt > 0) {
+                RenderUtil.drawRoundedRectWithGl(pad, pad, pad + headSize, pad + headSize, 6.0F,
+                        new Color(255, 60, 60, (int) (hurt / 10.0F * 120.0F)).getRGB());
+            }
         }
 
         GlStateManager.disableBlend();

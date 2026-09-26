@@ -179,11 +179,12 @@ public class Potion extends Module {
             int fillColor = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), 60).getRGB();
             RenderUtil.drawRect(x, y, x + fillWidth, y + cardHeight, fillColor);
 
-            int borderColor = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), 50).getRGB();
-            RenderUtil.drawLine(x, y, x + cardWidth, y, 1.0F, borderColor);
-            RenderUtil.drawLine(x + cardWidth, y, x + cardWidth, y + cardHeight, 1.0F, borderColor);
-            RenderUtil.drawLine(x + cardWidth, y + cardHeight, x, y + cardHeight, 1.0F, borderColor);
-            RenderUtil.drawLine(x, y + cardHeight, x, y, 1.0F, borderColor);
+            int borderColor = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), 70).getRGB();
+            float line = 1.0F / new ScaledResolution(mc).getScaleFactor() / this.scale.getValue();
+            RenderUtil.drawRect(x, y, x + cardWidth, y + line, borderColor);
+            RenderUtil.drawRect(x, y + cardHeight - line, x + cardWidth, y + cardHeight, borderColor);
+            RenderUtil.drawRect(x, y + line, x + line, y + cardHeight - line, borderColor);
+            RenderUtil.drawRect(x + cardWidth - line, y + line, x + cardWidth, y + cardHeight - line, borderColor);
             RenderUtil.disableRenderState();
 
             if (potion.hasStatusIcon()) {
@@ -595,88 +596,96 @@ public class Potion extends Module {
 
     private void renderSlate(int index, float invScale, boolean isRight) {
         float screenWidth = new ScaledResolution(mc).getScaledWidth();
-        float cardHeight = 20.0F;
-        float gap = 3.5F;
-        float radius = 4.5F;
-        float iconWell = 18.0F;
-        float wellY = (cardHeight - iconWell) / 2.0F;
-        float textScale = this.fontScale.getValue();
-        float textHeight = FontManager.getFontHeight() * textScale;
+        float nameSize = 16.0F * this.fontScale.getValue();
+        float timeSize = 13.0F * this.fontScale.getValue();
+        float pad = 5.0F;
+        float well = 18.0F;
+        float radius = 5.0F;
+        float gap = 3.0F;
+        float capH = FontManager.getCapHeight(nameSize);
+        float cardHeight = pad * 2.0F + Math.max(well, capH + 8.0F);
         float offX = this.offsetX.getValue() + 6.0F;
         float offY = this.offsetY.getValue() + 6.0F;
-        float baseY = offY * invScale;
-        float step = (cardHeight + 4.0F) * invScale;
-        int count = currentEffects.size();
-        float[] rectX = new float[count];
-        float[] rectY = new float[count];
-        float[] rectBarL = new float[count];
-        float[] rectBarR = new float[count];
-        String[] names = new String[count];
-        int slot = 0;
-        for (PotionEffect effect : currentEffects) {
-            names[slot] = fitText(getPotionName(effect), 132.0F, textScale);
-            float nameBarWidth = Math.max(72.0F, FontManager.getStringWidth(names[slot]) * textScale + 16.0F);
-            rectX[slot] = isRight ? (screenWidth - iconWell - gap - nameBarWidth - offX) * invScale : offX * invScale;
-            rectY[slot] = baseY + (index + slot) * step;
-            rectBarL[slot] = rectX[slot] + iconWell + gap;
-            rectBarR[slot] = rectBarL[slot] + nameBarWidth;
-            slot++;
-        }
+        float step = (cardHeight + gap) * invScale;
 
-        index = 0;
+        float cardWidth = 110.0F;
+        for (PotionEffect effect : currentEffects) {
+            float w = pad + well + 7.0F + FontManager.getStringWidth(getPotionName(effect), nameSize) + 10.0F
+                    + FontManager.getStringWidth(net.minecraft.potion.Potion.getDurationString(effect), timeSize) + pad + 2.0F;
+            cardWidth = Math.max(cardWidth, Math.min(190.0F, w));
+        }
+        float baseX = isRight ? (screenWidth - cardWidth - offX) * invScale : offX * invScale;
+        float baseY = offY * invScale;
+
         for (PotionEffect effect : currentEffects) {
             int id = effect.getPotionID();
+            net.minecraft.potion.Potion potion = net.minecraft.potion.Potion.potionTypes[id];
             int maxDur = potionMaxDurations.getOrDefault(id, Math.max(effect.getDuration(), 1));
             float ratio = Math.min((float) effect.getDuration() / (float) maxDur, 1.0F);
-            String name = names[index];
-            net.minecraft.potion.Potion potion = id >= 0 && id < net.minecraft.potion.Potion.potionTypes.length
-                    ? net.minecraft.potion.Potion.potionTypes[id] : null;
-            int liquid = potion != null ? potion.getLiquidColor() : 0xFFFFFF;
-            float x = rectX[index];
-            float y = rectY[index];
-            float barX = rectBarL[index];
-            float barRight = rectBarR[index];
+            Color liquid = new Color((potion.getLiquidColor() & 0x00FFFFFF) | 0xFF000000, true);
+            Color tint = ColorUtil.interpolate(0.35F, liquid, Color.WHITE);
+            String duration = net.minecraft.potion.Potion.getDurationString(effect);
+            float timeW = FontManager.getStringWidth(duration, timeSize);
+            float textX = pad + well + 7.0F;
+            String name = fitSized(getPotionName(effect), cardWidth - textX - timeW - 10.0F - pad, nameSize);
+
+            float x = baseX;
+            float y = baseY + index * step;
+            float centerY = y + (cardHeight - 3.0F) / 2.0F;
+            float baseline = centerY + capH / 2.0F;
 
             final float sc = this.scale.getValue();
-            final float rowX = x;
-            final float rowY = y;
-            final float barL = barX;
-            final float barR = barRight;
+            final float bx = x;
+            final float by = y;
+            final float bw = cardWidth;
+            final float bh = cardHeight;
+            final int mask = liquid.getRGB();
             ShaderElement.addBlurTask(() -> {
                 GlStateManager.pushMatrix();
                 GlStateManager.scale(sc, sc, 1.0F);
-                RenderUtil.drawRoundedRectWithGl(rowX, rowY + wellY, rowX + iconWell, rowY + wellY + iconWell, radius, -1);
-                RenderUtil.drawRoundedRectWithGl(barL, rowY, barR, rowY + cardHeight, radius, -1);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, radius, mask);
                 GlStateManager.popMatrix();
             });
 
-            RenderUtil.drawRoundedRectWithGl(x, y + wellY, x + iconWell, y + wellY + iconWell, radius,
-                    new Color(40, 40, 45, 205).getRGB());
-            RenderUtil.drawRoundedRectWithGl(barX, y, barRight, y + cardHeight, radius,
-                    new Color(40, 40, 45, 205).getRGB());
+            RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius, new Color(14, 15, 20, 120).getRGB());
+            RenderUtil.drawRoundedRectWithGl(x + 0.5F, y + 0.5F, x + cardWidth - 0.5F, y + cardHeight * 0.5F, radius - 0.5F,
+                    new Color(255, 255, 255, 8).getRGB());
 
-            float fillRight = barX + (barRight - barX) * ratio;
-            if (fillRight - barX > 1.0F) {
-                RenderUtil.drawRoundedRectWithGl(barX, y, fillRight, y + cardHeight, radius,
-                        new Color(255, 255, 255, 184).getRGB());
-            }
+            float wellX = x + pad;
+            float wellY = centerY - well / 2.0F;
+            RenderUtil.drawRoundedRectWithGl(wellX, wellY, wellX + well, wellY + well, 4.5F,
+                    new Color(liquid.getRed(), liquid.getGreen(), liquid.getBlue(), 42).getRGB());
+            Icon.potion(id).drawCentered(wellX + well / 2.0F, centerY, 11.0F, tint.getRGB(), 1.0F);
 
-            Icon.potion(id).drawCentered(x + iconWell / 2.0F, y + cardHeight / 2.0F, 10.5F, liquid, 1.0F);
+            float lineL = x + textX;
+            float lineR = x + cardWidth - pad;
+            float lineY = y + cardHeight - pad - 1.0F;
+            RenderUtil.drawRoundedRectWithGl(lineL, lineY, lineR, lineY + 1.5F, 0.75F, new Color(255, 255, 255, 24).getRGB());
+            float fillW = Math.max(1.5F, (lineR - lineL) * ratio);
+            RenderUtil.drawRoundedRectWithGl(lineL, lineY, lineL + fillW, lineY + 1.5F, 0.75F,
+                    new Color(tint.getRed(), tint.getGreen(), tint.getBlue(), 235).getRGB());
 
             GlStateManager.disableDepth();
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-
-            GlStateManager.pushMatrix();
-            GlStateManager.translate(barX + 7.0F, y + (cardHeight - textHeight) / 2.0F, 0.0F);
-            GlStateManager.scale(textScale, textScale, 1.0F);
-            FontManager.drawString(name, 0.0F, 0.0F, new Color(255, 255, 255).getRGB(), false);
-            GlStateManager.popMatrix();
-
+            FontManager.drawString(name, x + textX, baseline - FontManager.getBaseline(nameSize),
+                    new Color(244, 246, 250).getRGB(), false, nameSize);
+            FontManager.drawString(duration, x + cardWidth - pad - timeW, baseline - FontManager.getBaseline(timeSize),
+                    new Color(tint.getRed(), tint.getGreen(), tint.getBlue(), 230).getRGB(), false, timeSize);
             GlStateManager.enableDepth();
             GlStateManager.disableBlend();
             index++;
         }
+    }
+
+    private String fitSized(String text, float maxWidth, float size) {
+        if (FontManager.getStringWidth(text, size) <= maxWidth) return text;
+        String result = text;
+        float dots = FontManager.getStringWidth("...", size);
+        while (result.length() > 0 && FontManager.getStringWidth(result, size) + dots > maxWidth) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result + "...";
     }
 
     private void drawProgressRing(float cx, float cy, float r, float thickness, float ratio, Color color) {

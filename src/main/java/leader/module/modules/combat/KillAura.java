@@ -132,7 +132,7 @@ public class KillAura extends Module {
     private boolean postBlink = false;
     private boolean postBlinkReset = false;
 
-    public KillAura(){
+    public KillAura() {
         super("KillAura", false);
         this.mode = new ModeProperty("Mode", 0, new String[]{"Single", "Switch"});
         this.sort = new ModeProperty("Sort", 0, new String[]{"Distance", "Health", "Hurt Time", "FOV"});
@@ -141,7 +141,7 @@ public class KillAura extends Module {
                 "AutoBlock", 0, new String[]{"None", "Vanilla", "Hypixel", "Legit", "Fake"}
         );
         this.hypixelMode = new ModeProperty(
-                "HypixelMode", 0, new String[]{"OldHypixel", "Without NoSlow", "Custom", "Lag","Predict"}, () -> this.autoBlock.getValue() == 2
+                "HypixelMode", 0, new String[]{"OldHypixel", "Without NoSlow", "Custom", "Lag", "Predict"}, () -> this.autoBlock.getValue() == 2
         );
         this.lagClass = new ModeProperty(
                 "LagClass", 0, new String[]{"Tick", "Combo", "Full", "Swap", "Stop", "Click"}, () -> this.autoBlock.getValue() == 2 && this.hypixelMode.getValue() == 3
@@ -153,7 +153,7 @@ public class KillAura extends Module {
                 "FullMode", 0, new String[]{"3TickFull", "4TickFull"}, () -> this.isLag() && this.lagClass.getValue() == 2
         );
         this.swapMode = new ModeProperty(
-                "SwapMode", 0, new String[]{"Swap", "TestPostSwap","Swap+"}, () -> this.isLag() && this.lagClass.getValue() == 3
+                "SwapMode", 0, new String[]{"Swap", "TestPostSwap", "Swap+"}, () -> this.isLag() && this.lagClass.getValue() == 3
         );
         this.autoBlockRequirePress = new BooleanProperty("AutoBlock Require Press", false);
         this.autoBlockCPS = new IntProperty("AutoBlock Aps", 10, 1, 20);

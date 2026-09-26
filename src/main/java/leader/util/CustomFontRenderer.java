@@ -36,6 +36,8 @@ public class CustomFontRenderer {
     private int fontHeight;
     private int textureWidth;
     private int textureHeight;
+    private int ascent = -1;
+    private float capHeight = -1.0F;
 
     private static class CodePointGlyph {
         final int textureId;
@@ -61,7 +63,7 @@ public class CustomFontRenderer {
         } catch (Exception ignored) {
         }
         if (font == null) {
-            font = new Font("SansSerif", Font.PLAIN, (int) size);
+            font = new Font("SansSerif", Font.PLAIN, Math.max(1, Math.round(size)));
         }
         context = new FontRenderContext(font.getTransform(), antiAlias, antiAlias);
         Rectangle2D maxBounds = font.getMaxCharBounds(context);
@@ -97,45 +99,79 @@ public class CustomFontRenderer {
     }
 
     public void drawString(String text, float x, float y, int color, boolean darken) {
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-        x *= 2.0F;
-        y *= 2.0F;
-        y -= 2.0F;
-        if (darken) {
-            color = (color & 0xFCFCFC) >> 2 | color & 0xFF000000;
+        if (text == null || text.isEmpty()) {
+            return;
         }
-        float r = (float) (color >> 16 & 0xFF) / 255.0F;
-        float g = (float) (color >> 8 & 0xFF) / 255.0F;
-        float b = (float) (color & 0xFF) / 255.0F;
-        float a = (float) (color >> 24 & 0xFF) / 255.0F;
-        if (a == 0.0F) a = 1.0F;
-        GlStateManager.color(r, g, b, a);
-        GL11.glPushMatrix();
-        GL11.glScaled(0.5, 0.5, 0.5);
-        int[] mcColors = ((FontRendererAccessor) mc.fontRendererObj).getColorCode();
-        int offset = 0;
-        int i = 0;
-        int len = text.length();
-        while (i < len) {
-            int cp = text.codePointAt(i);
-            i += Character.charCount(cp);
-            if (cp == '\u00a7' && i < len) {
-                int ci = text.codePointAt(i);
-                i += Character.charCount(ci);
-                int colorIndex = "0123456789abcdef".indexOf(ci);
-                if (colorIndex != -1) {
-                    if (darken) colorIndex |= 0x10;
-                    int mcColor = mcColors[colorIndex];
-                    r = (float) (mcColor >> 16 & 0xFF) / 255.0F;
-                    g = (float) (mcColor >> 8 & 0xFF) / 255.0F;
-                    b = (float) (mcColor & 0xFF) / 255.0F;
-                    GlStateManager.color(r, g, b, a);
-                }
-                continue;
+        boolean depth = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+        boolean blend = GL11.glIsEnabled(GL11.GL_BLEND);
+        boolean texture = GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
+        boolean matrix = false;
+        try {
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.enableTexture2D();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            x *= 2.0F;
+            y *= 2.0F;
+            y -= 2.0F;
+            if (darken) {
+                color = (color & 0xFCFCFC) >> 2 | color & 0xFF000000;
             }
-            offset += drawChar(cp, x + offset, y);
+            float r = (float) (color >> 16 & 0xFF) / 255.0F;
+            float g = (float) (color >> 8 & 0xFF) / 255.0F;
+            float b = (float) (color & 0xFF) / 255.0F;
+            float a = (float) (color >> 24 & 0xFF) / 255.0F;
+            if (a == 0.0F) a = 1.0F;
+            GlStateManager.color(r, g, b, a);
+            GL11.glPushMatrix();
+            matrix = true;
+            GL11.glScaled(0.5, 0.5, 0.5);
+            int[] mcColors = ((FontRendererAccessor) mc.fontRendererObj).getColorCode();
+            int offset = 0;
+            int i = 0;
+            int len = text.length();
+            while (i < len) {
+                int cp = text.codePointAt(i);
+                i += Character.charCount(cp);
+                if (cp == '\u00a7' && i < len) {
+                    int ci = text.codePointAt(i);
+                    i += Character.charCount(ci);
+                    int colorIndex = "0123456789abcdef".indexOf(ci);
+                    if (colorIndex != -1) {
+                        if (darken) colorIndex |= 0x10;
+                        int mcColor = mcColors[colorIndex];
+                        r = (float) (mcColor >> 16 & 0xFF) / 255.0F;
+                        g = (float) (mcColor >> 8 & 0xFF) / 255.0F;
+                        b = (float) (mcColor & 0xFF) / 255.0F;
+                        GlStateManager.color(r, g, b, a);
+                    }
+                    continue;
+                }
+                offset += drawChar(cp, x + offset, y);
+            }
+        } finally {
+            if (matrix) {
+                GL11.glPopMatrix();
+            }
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.bindTexture(0);
+            if (depth && !GL11.glIsEnabled(GL11.GL_DEPTH_TEST)) {
+                GlStateManager.enableDepth();
+            } else if (!depth && GL11.glIsEnabled(GL11.GL_DEPTH_TEST)) {
+                GlStateManager.disableDepth();
+            }
+            if (blend && !GL11.glIsEnabled(GL11.GL_BLEND)) {
+                GlStateManager.enableBlend();
+            } else if (!blend && GL11.glIsEnabled(GL11.GL_BLEND)) {
+                GlStateManager.disableBlend();
+            }
+            if (texture && !GL11.glIsEnabled(GL11.GL_TEXTURE_2D)) {
+                GlStateManager.enableTexture2D();
+            } else if (!texture && GL11.glIsEnabled(GL11.GL_TEXTURE_2D)) {
+                GlStateManager.disableTexture2D();
+            }
         }
-        GL11.glPopMatrix();
     }
 
     public int drawStringInternal(String text, float posX, float posY, int color, boolean shadowColors) {
@@ -219,6 +255,28 @@ public class CustomFontRenderer {
         return fontHeight / 2;
     }
 
+    public float getBaseline() {
+        if (ascent < 0) {
+            Graphics2D g = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics();
+            if (antiAlias) {
+                g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            }
+            g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+            g.setFont(font);
+            ascent = g.getFontMetrics().getAscent();
+            g.dispose();
+        }
+        return ascent / 2.0F - 1.0F;
+    }
+
+    public float getCapHeight() {
+        if (capHeight < 0.0F) {
+            capHeight = (float) font.createGlyphVector(context, "H").getVisualBounds().getHeight();
+        }
+        return capHeight / 2.0F;
+    }
+
     public Font getFont() {
         return font;
     }
@@ -229,6 +287,8 @@ public class CustomFontRenderer {
         Arrays.fill(charWidths, null);
         glyphCache.clear();
         fallbackFontCache.clear();
+        this.ascent = -1;
+        this.capHeight = -1.0F;
         Rectangle2D maxBounds = font.getMaxCharBounds(context);
         this.fontWidth = Math.max(1, (int) Math.ceil(maxBounds.getWidth()));
         this.fontHeight = Math.max(1, (int) Math.ceil(maxBounds.getHeight()));
@@ -283,7 +343,6 @@ public class CustomFontRenderer {
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         }
-        // Stable integer glyph placement avoids uneven stems and shimmering at GUI scale.
         g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
         g.setFont(renderFont);
         g.setColor(Color.WHITE);

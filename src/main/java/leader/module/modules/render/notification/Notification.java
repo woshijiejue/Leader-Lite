@@ -171,10 +171,11 @@ public class Notification extends Module {
             RenderUtil.drawRect(x, y, x + fillWidth, y + cardHeight, fillColor);
 
             int borderColor = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), (int) (borderAlpha * 255.0F)).getRGB();
-            RenderUtil.drawLine(x, y, x + cardWidth, y, 1.0F, borderColor);
-            RenderUtil.drawLine(x, y + cardHeight, x + cardWidth, y + cardHeight, 1.0F, borderColor);
-            RenderUtil.drawLine(x, y, x, y + cardHeight, 1.0F, borderColor);
-            RenderUtil.drawLine(x + cardWidth, y, x + cardWidth, y + cardHeight, 1.0F, borderColor);
+            float px = 1.0F / (sr.getScaleFactor() * this.scale.getValue());
+            RenderUtil.drawRect(x, y, x + cardWidth, y + px, borderColor);
+            RenderUtil.drawRect(x, y + cardHeight - px, x + cardWidth, y + cardHeight, borderColor);
+            RenderUtil.drawRect(x, y + px, x + px, y + cardHeight - px, borderColor);
+            RenderUtil.drawRect(x + cardWidth - px, y + px, x + cardWidth, y + cardHeight - px, borderColor);
             RenderUtil.disableRenderState();
 
             GlStateManager.disableDepth();

@@ -42,9 +42,9 @@ public class Stuck extends Module {
                 S12PacketEntityVelocity s12PacketEntityVelocity = (S12PacketEntityVelocity) event.getPacket();
                 if (s12PacketEntityVelocity.getEntityID() == mc.thePlayer.getEntityId()){
                     Leader.delayManager.setDelayState(true, DelayModules.VELOCITY);
-                    tick = 11;
                     Leader.delayManager.delayedPacket.offer(s12PacketEntityVelocity);
                     event.setCancelled(true);
+                    tick = 11;
                 }
             }
         }
@@ -106,11 +106,12 @@ public class Stuck extends Module {
     public void onDisabled() {
         if (mc.thePlayer != null) {
             using = false;
+            Leader.delayManager.setDelayState(false, DelayModules.VELOCITY);
             Leader.blinkManager.setBlinkState(false, BlinkModules.BLINK);
             mc.thePlayer.motionX = savedMotionX;
             mc.thePlayer.motionZ = savedMotionZ;
             mc.thePlayer.motionY = savedMotionY;
-            Leader.delayManager.setDelayState(false, DelayModules.VELOCITY);
+
             ((IAccessorMinecraft)mc).getTimer().timerSpeed = 1.0F;
         }
     }

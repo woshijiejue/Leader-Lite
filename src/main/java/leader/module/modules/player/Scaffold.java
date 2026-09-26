@@ -4,11 +4,13 @@ import leader.Leader;
 import leader.module.modules.movement.Stuck;
 import leader.module.modules.render.FontManager;
 import leader.module.modules.render.HUD;
+import leader.util.shader.ShaderElement;
 import org.lwjgl.opengl.GL11;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
@@ -43,6 +45,7 @@ public class Scaffold extends Module {
     public final ModeProperty rotationMode = new ModeProperty("Rotate Mode", 3, new String[]{"None", "Vanilla", "Backwards", "Prediction", "Strict", "GodBridge"});
     public final BooleanProperty noUpdateWhenCanPlace = new BooleanProperty("Do Not Update Rotation When Can Place", false, () -> rotationMode.getValue() == 5);
     public final BooleanProperty edgeLimit = new BooleanProperty("Edge Limit", false, () -> rotationMode.getValue() == 5);
+    public final FloatProperty godBridgeTolerance = new FloatProperty("GodBridge Yaw Tolerance", 5.0F, 0.0F, 10.0F, () -> rotationMode.getValue() == 5);
     public final ModeProperty moveFix = new ModeProperty("Move Fix", 1, new String[]{"None", "Silent"});
     public final IntProperty jumpDelay = new IntProperty("Jump Delay", 2, 0, 5, () -> mode.getValue() == 1 || mode.getValue() == 4);
     public final IntProperty placeDelay = new IntProperty("Place Delay", 1, 0, 5);
@@ -93,6 +96,9 @@ public class Scaffold extends Module {
     private double prevBpsX, prevBpsZ;
     private float currentBps;
     private int counterMax = 0;
+    private float animBps = 0.0F;
+    private float animPercent = 0.0F;
+    private long lastHudFrame = 0L;
     private boolean snapForward = true;
     private int snapForwardTimer = 0;
     private boolean snapLocked = false;
@@ -619,22 +625,43 @@ public class Scaffold extends Module {
                         }
                     } else if (this.rotationMode.getValue() == 5) {
                         float diagYaw = this.quantizeDiagonal(this.getCurrentYaw() + 180.0F);
+                        float tolerance = this.godBridgeTolerance.getValue();
                         double centerX = blockData.blockPos().getX() + 0.5 + blockData.facing().getDirectionVec().getX() * 0.5;
                         double centerY = blockData.blockPos().getY() + 0.5 + blockData.facing().getDirectionVec().getY() * 0.5;
                         double centerZ = blockData.blockPos().getZ() + 0.5 + blockData.facing().getDirectionVec().getZ() * 0.5;
                         float[] centerRot = RotationUtil.getRotations(centerX, centerY, centerZ);
                         float centerPitch = Math.max(-89.0F, Math.min(89.0F, centerRot[1]));
+
+                        float lastOff = MathHelper.wrapAngleTo180_float(this.yaw - diagYaw);
+                        if (Math.abs(lastOff) > tolerance) {
+                            lastOff = (float) ((Math.random() * 2.0D - 1.0D) * tolerance * 0.8D);
+                        }
+                        float realOff = MathHelper.wrapAngleTo180_float(mc.thePlayer.rotationYaw - diagYaw);
+                        ArrayList<Float> yawCandidates = new ArrayList<>();
+                        if (Math.abs(realOff) <= tolerance) yawCandidates.add(diagYaw + realOff);
+                        yawCandidates.add(diagYaw + lastOff);
+                        for (float step = 1.0F; step <= tolerance * 2.0F; step += 1.0F) {
+                            float up = lastOff + step;
+                            float down = lastOff - step;
+                            if (Math.abs(up) <= tolerance) yawCandidates.add(diagYaw + up);
+                            if (Math.abs(down) <= tolerance) yawCandidates.add(diagYaw + down);
+                        }
+
                         float bestPitch = Float.NaN;
-                        double bestScore = Double.MAX_VALUE;
+                        float bestYaw = diagYaw;
                         Vec3 bestHitVec = null;
-                        for (float p = centerPitch + 30.0F; p >= centerPitch - 30.0F; p -= 0.5F) {
-                            if (p > 89.0F || p < -89.0F) continue;
-                            MovingObjectPosition mop = RotationUtil.rayTrace(diagYaw, p, mc.playerController.getBlockReachDistance(), 1.0F);
-                            if (mop != null && mop.typeOfHit == MovingObjectType.BLOCK
-                                    && mop.getBlockPos().equals(blockData.blockPos()) && mop.sideHit == blockData.facing()) {
-                                double score = Math.abs(p - centerPitch);
-                                if (score < bestScore) { bestScore = score; bestPitch = p; bestHitVec = mop.hitVec; }
+                        for (float candidateYaw : yawCandidates) {
+                            double bestScore = Double.MAX_VALUE;
+                            for (float p = centerPitch + 30.0F; p >= centerPitch - 30.0F; p -= 0.5F) {
+                                if (p > 89.0F || p < -89.0F) continue;
+                                MovingObjectPosition mop = RotationUtil.rayTrace(candidateYaw, p, mc.playerController.getBlockReachDistance(), 1.0F);
+                                if (mop != null && mop.typeOfHit == MovingObjectType.BLOCK
+                                        && mop.getBlockPos().equals(blockData.blockPos()) && mop.sideHit == blockData.facing()) {
+                                    double score = Math.abs(p - centerPitch);
+                                    if (score < bestScore) { bestScore = score; bestPitch = p; bestHitVec = mop.hitVec; bestYaw = candidateYaw; }
+                                }
                             }
+                            if (bestHitVec != null) break;
                         }
                         if (bestHitVec != null) {
                             hitVec = bestHitVec;
@@ -651,8 +678,7 @@ public class Scaffold extends Module {
                                 updateRotation = false;
                             }
                             if (updateRotation) {
-                                float yawDiff = MathHelper.wrapAngleTo180_float(diagYaw - mc.thePlayer.rotationYaw);
-                                this.yaw = Math.abs(yawDiff) <= 5.0F ? mc.thePlayer.rotationYaw : diagYaw;
+                                this.yaw = bestYaw;
                                 this.pitch = bestPitch;
                             } else {
                                 this.yaw = mc.thePlayer.rotationYaw;
@@ -892,147 +918,175 @@ public class Scaffold extends Module {
     public void onRender(Render2DEvent event) {
         if (!this.isEnabled()) return;
         int count = 0;
+        ItemStack iconStack = null;
         for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
             if (stack != null && stack.stackSize > 0) {
                 Item item = stack.getItem();
                 if (item instanceof ItemBlock) {
                     Block block = ((ItemBlock) item).getBlock();
-                    if (!BlockUtil.isInteractable(block) && BlockUtil.isSolid(block)) count += stack.stackSize;
+                    if (!BlockUtil.isInteractable(block) && BlockUtil.isSolid(block)) {
+                        count += stack.stackSize;
+                        if (iconStack == null || i == mc.thePlayer.inventory.currentItem) iconStack = stack;
+                    }
                 }
             }
         }
         Scaffold.count = count;
-
-        if (bPSRender.getValue()) {
-            ScaledResolution sr = new ScaledResolution(mc);
-            int barWidth = 100, barHeight = 4;
-            int barX = sr.getScaledWidth() / 2 - barWidth / 2;
-            int barY = (int) (sr.getScaledHeight() / 2f);
-            float maxDisplayBps = 10.0F;
-            float fillWidth = Math.min(barWidth, (currentBps / maxDisplayBps) * barWidth);
-            GlStateManager.pushMatrix();
-            RenderUtil.enableRenderState();
-            RenderUtil.drawRect(barX, barY, barX + barWidth, barY + barHeight, new Color(0, 0, 0, 120).getRGB());
-            int fgColor = currentBps > 5.92F ? new Color(255, 50, 50, 200).getRGB() : new Color(0, 200, 255, 200).getRGB();
-            RenderUtil.drawRect(barX, barY, barX + fillWidth, barY + barHeight, fgColor);
-            float markerX = barX + (5.92F / maxDisplayBps) * barWidth;
-            RenderUtil.drawRect(markerX - 0.5F, barY - 2, markerX + 0.5F, barY + barHeight + 2, 0xFFFFFFFF);
-            RenderUtil.disableRenderState();
-            GlStateManager.disableDepth();
-            mc.fontRendererObj.drawStringWithShadow("5.92", (int) (markerX - (float) mc.fontRendererObj.getStringWidth("5.92") / 2), barY - 12, -1);
-            String bpsText = String.format("%.2f BPS", currentBps);
-            mc.fontRendererObj.drawStringWithShadow(bpsText, barX + barWidth + 2, barY - 2, -1);
-            GlStateManager.enableDepth();
-            GlStateManager.popMatrix();
-        }
-        if (blockCounter.getValue()) {
-            renderBlockCounter();
-        }
-    }
-
-    private void renderBlockCounter() {
-        long now = System.currentTimeMillis();
-        String countText = String.valueOf(Scaffold.count);
         if (Scaffold.count > this.counterMax) this.counterMax = Scaffold.count;
         if (Scaffold.count <= 0) this.counterMax = 0;
-        int percent = this.counterMax > 0
-                ? (int) Math.round(Scaffold.count * 100.0D / (double) this.counterMax) : 100;
-        String bpsText = String.format("%.1f BPS", this.currentBps);
-        String remainText = percent + "% remaining";
+
+        long now = System.currentTimeMillis();
+        float dt = this.lastHudFrame == 0L ? 0.016F : Math.min(0.1F, (now - this.lastHudFrame) / 1000.0F);
+        this.lastHudFrame = now;
+        float k = 1.0F - (float) Math.exp(-dt * 12.0F);
+        float percent = this.counterMax > 0 ? Scaffold.count / (float) this.counterMax : 0.0F;
+        this.animBps += (this.currentBps - this.animBps) * k;
+        this.animPercent += (percent - this.animPercent) * k;
 
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
-        Color tc = hud != null ? hud.getColor(now) : new Color(0, 190, 255);
-
-        float textScale = 1.0F;
-        float subScale = 0.72F;
-        float lineHeight = FontManager.getFontHeight() * textScale;
-        float subHeight = FontManager.getFontHeight() * subScale;
-        float icon = 30.0F;
-        float iconGap = 9.0F;
-        float padLeft = 7.0F;
-        float padRight = 11.0F;
-        float padY = 7.0F;
-
-        float textW = Math.max(FontManager.getStringWidth("Blocks") * textScale,
-                Math.max(FontManager.getStringWidth(bpsText) * textScale,
-                        FontManager.getStringWidth(remainText) * subScale));
-        float cardW = padLeft + icon + iconGap + textW + padRight;
-        float cardH = padY * 2.0F + lineHeight * 2.0F + subHeight + 3.0F;
-
+        Color accent = hud != null ? hud.getColor(now) : new Color(0, 190, 255);
         ScaledResolution sr = new ScaledResolution(mc);
-        float x = sr.getScaledWidth() / 2.0F - cardW / 2.0F;
-        float y = sr.getScaledHeight() / 2.0F - cardH - 12.0F;
+        float cx = sr.getScaledWidth() / 2.0F;
+        float y = sr.getScaledHeight() / 2.0F + 16.0F;
 
-        GlStateManager.pushMatrix();
-        RenderUtil.drawRoundedRectWithGl(x, y + 2.0F, x + cardW, y + cardH + 2.0F, 12.0F,
-                new Color(0, 0, 0, 72).getRGB());
-        RenderUtil.drawRoundedRectWithGl(x, y, x + cardW, y + cardH, 12.0F,
-                new Color(10, 11, 14, 216).getRGB());
-
-        this.drawCounterIcon(x + padLeft, y + (cardH - icon) / 2.0F, icon, tc, countText, percent);
-
-        GlStateManager.disableDepth();
-        GlStateManager.enableBlend();
-        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-
-        float textX = x + padLeft + icon + iconGap;
-        float lineY = y + padY;
-        int white = new Color(244, 247, 252, 246).getRGB();
-        int gray = new Color(168, 174, 186, 210).getRGB();
-        int accent = new Color(tc.getRed(), tc.getGreen(), tc.getBlue(), 245).getRGB();
-
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(textX, lineY, 0.0F);
-        GlStateManager.scale(textScale, textScale, 1.0F);
-        FontManager.drawString("Blocks", 0.0F, 0.0F, white, false);
-        GlStateManager.popMatrix();
-
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(textX, lineY + lineHeight + 1.5F, 0.0F);
-        GlStateManager.scale(textScale, textScale, 1.0F);
-        FontManager.drawString(bpsText, 0.0F, 0.0F, accent, false);
-        GlStateManager.popMatrix();
-
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(textX, lineY + lineHeight * 2.0F + 3.0F, 0.0F);
-        GlStateManager.scale(subScale, subScale, 1.0F);
-        FontManager.drawString(remainText, 0.0F, 0.0F, gray, false);
-        GlStateManager.popMatrix();
-
-        GlStateManager.enableDepth();
-        GlStateManager.disableBlend();
-        GlStateManager.popMatrix();
+        if (blockCounter.getValue()) {
+            y += this.renderBlockCounter(cx, y, accent, iconStack) + 4.0F;
+        }
+        if (bPSRender.getValue()) {
+            this.renderBpsBar(cx, y, accent);
+        }
     }
 
-    private void drawCounterIcon(float x, float y, float size, Color accent, String countText, int percent) {
-        float cx = x + size / 2.0F;
-        float cy = y + size / 2.0F;
-        float radius = size / 2.0F - 1.5F;
-        float thickness = 3.0F;
-        int clamped = Math.max(0, Math.min(100, percent));
-        float sweep = 360.0F * clamped / 100.0F;
+    private int getCardAlpha() {
+        return 120;
+    }
 
-        int track = new Color(255, 255, 255, 38).getRGB();
-        int glow = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 42).getRGB();
-        int arc = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 255).getRGB();
+    private void drawBaselineText(String text, float x, float baseline, int color, float size) {
+        FontManager.drawString(text, x, baseline - FontManager.getBaseline(size), color, false, size);
+    }
 
-        RenderUtil.drawArcRing(cx, cy, radius, thickness, -90.0F, 360.0F, track);
-        if (sweep > 0.5F) {
-            RenderUtil.drawArcRing(cx, cy, radius, thickness * 2.4F, -90.0F, sweep, glow);
-            RenderUtil.drawArcRing(cx, cy, radius, thickness, -90.0F, sweep, arc);
-        }
+    private void addShaderMask(float x1, float y1, float x2, float y2, float radius, Color accent) {
+        final int maskColor = new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 255).getRGB();
+        ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(x1, y1, x2, y2, radius, maskColor));
+    }
+
+    private float renderBlockCounter(float cx, float y, Color accent, ItemStack iconStack) {
+        final float pad = 6.0F;
+        final float icon = 16.0F;
+        final float radius = 6.0F;
+        final float valueSize = 18.0F;
+        final float labelSize = 13.0F;
+
+        String countText = String.valueOf(Scaffold.count);
+        String labelText = Scaffold.count == 1 ? "block" : "blocks";
+        float countW = FontManager.getStringWidth(countText, valueSize);
+        float labelW = FontManager.getStringWidth(labelText, labelSize);
+        float capH = FontManager.getCapHeight(valueSize);
+
+        float contentX = pad + icon + 6.0F;
+        float w = Math.max(84.0F, contentX + countW + 3.0F + labelW + pad);
+        float zoneH = Math.max(icon, capH + 4.0F);
+        float h = pad + zoneH + 4.0F + 2.0F + pad;
+        float x = cx - w / 2.0F;
+        float centerY = y + pad + zoneH / 2.0F;
+        float baseline = centerY + capH / 2.0F;
+
+        Color state = Scaffold.count <= 16 ? new Color(255, 84, 84)
+                : Scaffold.count <= 48 ? new Color(255, 176, 64) : accent;
+
+        this.addShaderMask(x, y, x + w, y + h, radius, state);
+
+        RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, radius, new Color(12, 13, 17, this.getCardAlpha()).getRGB());
+        float iconY = centerY - icon / 2.0F;
+        RenderUtil.drawRoundedRectWithGl(x + pad, iconY, x + pad + icon, iconY + icon, 4.0F,
+                new Color(state.getRed(), state.getGreen(), state.getBlue(), 36).getRGB());
+
+        float barX1 = x + pad;
+        float barX2 = x + w - pad;
+        float barY = y + h - pad - 2.0F;
+        float fill = Math.max(2.0F, (barX2 - barX1) * Math.max(0.0F, Math.min(1.0F, this.animPercent)));
+        RenderUtil.drawRoundedRectWithGl(barX1, barY, barX2, barY + 2.0F, 1.0F, new Color(255, 255, 255, 28).getRGB());
+        RenderUtil.drawRoundedRectWithGl(barX1, barY, barX1 + fill, barY + 2.0F, 1.0F,
+                new Color(state.getRed(), state.getGreen(), state.getBlue(), 240).getRGB());
 
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(cx - FontManager.getStringWidth(countText) / 2.0F + 0.5F,
-                cy - FontManager.getFontHeight() / 2.0F + 1.0F, 0.0F);
-        FontManager.drawString(countText, 0.0F, 0.0F, new Color(255, 255, 255, 250).getRGB(), false);
-        GlStateManager.popMatrix();
+        this.drawBaselineText(countText, x + contentX, baseline, new Color(244, 247, 252).getRGB(), valueSize);
+        this.drawBaselineText(labelText, x + contentX + countW + 3.0F, baseline, new Color(160, 166, 180).getRGB(), labelSize);
         GlStateManager.enableDepth();
         GlStateManager.disableBlend();
+
+        if (iconStack != null) {
+            this.drawBlockIcon(iconStack, x + pad, iconY);
+        }
+        return h;
+    }
+
+    private void renderBpsBar(float cx, float y, Color accent) {
+        final float pad = 6.0F;
+        final float radius = 6.0F;
+        final float w = 110.0F;
+        final float valueSize = 16.0F;
+        final float labelSize = 12.0F;
+        final float maxBps = 10.0F;
+        final float limitBps = 5.92F;
+
+        float capH = FontManager.getCapHeight(valueSize);
+        float zoneH = capH + 4.0F;
+        float h = pad + zoneH + 4.0F + 2.0F + pad;
+        float x = cx - w / 2.0F;
+        float baseline = y + pad + zoneH / 2.0F + capH / 2.0F;
+
+        boolean over = this.animBps > limitBps;
+        Color state = over ? new Color(255, 84, 84) : accent;
+
+        this.addShaderMask(x, y, x + w, y + h, radius, state);
+
+        RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, radius, new Color(12, 13, 17, this.getCardAlpha()).getRGB());
+
+        float barX1 = x + pad;
+        float barX2 = x + w - pad;
+        float barY = y + h - pad - 2.0F;
+        float ratio = Math.max(0.0F, Math.min(1.0F, this.animBps / maxBps));
+        float fill = Math.max(2.0F, (barX2 - barX1) * ratio);
+        float markerX = barX1 + (barX2 - barX1) * (limitBps / maxBps);
+        RenderUtil.drawRoundedRectWithGl(barX1, barY, barX2, barY + 2.0F, 1.0F, new Color(255, 255, 255, 28).getRGB());
+        RenderUtil.drawRoundedRectWithGl(barX1, barY, barX1 + fill, barY + 2.0F, 1.0F,
+                new Color(state.getRed(), state.getGreen(), state.getBlue(), 240).getRGB());
+        RenderUtil.enableRenderState();
+        RenderUtil.drawRect(markerX - 0.5F, barY - 2.0F, markerX + 0.5F, barY + 4.0F, new Color(255, 255, 255, 200).getRGB());
+        RenderUtil.disableRenderState();
+
+        GlStateManager.disableDepth();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        String valueText = String.format("%.2f", this.animBps);
+        String unitText = "b/s";
+        float unitW = FontManager.getStringWidth(unitText, labelSize);
+        float valueW = FontManager.getStringWidth(valueText, valueSize);
+        int dim = new Color(160, 166, 180).getRGB();
+        this.drawBaselineText("SPEED", x + pad, baseline, dim, labelSize);
+        this.drawBaselineText(unitText, x + w - pad - unitW, baseline, dim, labelSize);
+        this.drawBaselineText(valueText, x + w - pad - unitW - 3.0F - valueW, baseline,
+                over ? state.getRGB() : new Color(244, 247, 252).getRGB(), valueSize);
+        GlStateManager.enableDepth();
+        GlStateManager.disableBlend();
+    }
+
+    private void drawBlockIcon(ItemStack stack, float x, float y) {
+        GlStateManager.pushMatrix();
+        GlStateManager.clear(GL11.GL_DEPTH_BUFFER_BIT);
+        GlStateManager.enableDepth();
+        GlStateManager.enableRescaleNormal();
+        RenderHelper.enableGUIStandardItemLighting();
+        mc.getRenderItem().renderItemAndEffectIntoGUI(stack, Math.round(x), Math.round(y));
+        RenderHelper.disableStandardItemLighting();
+        GlStateManager.disableRescaleNormal();
+        GlStateManager.disableDepth();
+        GlStateManager.enableAlpha();
+        GlStateManager.popMatrix();
     }
 
     @EventTarget
@@ -1063,6 +1117,7 @@ public class Scaffold extends Module {
         this.yaw = -180.0F; this.pitch = 0.0F; this.canRotate = false; this.towering = false;
         this.placeDelayCounter = 0;
         this.prevBpsX = mc.thePlayer.posX; this.prevBpsZ = mc.thePlayer.posZ; this.currentBps = 0.0F;
+        this.animBps = 0.0F; this.animPercent = 0.0F; this.lastHudFrame = 0L;
         this.snapForward = true; this.snapForwardTimer = 0; this.snapLocked = false; this.airTicks = 0;
         this.pendingSpeedLimitRot = false; this.forwardRotateTicksLeft = 0;
         this.legitEdgeState = 0; this.legitEdgeTimer = 0; this.legitWasOnEdge = false;

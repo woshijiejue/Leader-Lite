@@ -3,9 +3,9 @@ package leader.ui.components;
 import leader.module.Module;
 import leader.ui.AnimationValue;
 import leader.ui.Component;
+import leader.ui.GuiText;
 import leader.util.RenderUtil;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
 import org.lwjgl.opengl.GL11;
@@ -33,8 +33,11 @@ public class CategoryComponent {
     private int height = 0;
     private float displayHeight = 0.0F;
     private float renderScale = 1.0F;
+    private boolean layoutOverride;
+    private int layoutX;
+    private int layoutY;
+    private int layoutWidth;
     private final int titleHeight;
-    private static final float EDGE_FADE_HEIGHT = 8.0F;
 
     public CategoryComponent(String category, List<Module> modules) {
         this.categoryName = category;
@@ -59,6 +62,15 @@ public class CategoryComponent {
     public ArrayList<Component> getModules() { return this.modulesInCategory; }
     public void setX(int n) { this.x = n; }
     public void setY(int y) { this.y = y; }
+    public void setRenderBounds(int x, int y, int width) {
+        this.layoutOverride = true;
+        this.layoutX = x;
+        this.layoutY = y;
+        this.layoutWidth = Math.max(100, width);
+    }
+    public void clearRenderBounds() {
+        this.layoutOverride = false;
+    }
     public void mousePressed(boolean d) { this.dragging = d; }
     public boolean isPin() { return this.pin; }
     public void setPin(boolean on) { this.pin = on; }
@@ -67,19 +79,26 @@ public class CategoryComponent {
 
     public void render(float uiScale) {
         renderScale = uiScale;
+        int oldX = this.x;
+        int oldY = this.y;
+        int oldWidth = this.width;
+        if (this.layoutOverride) {
+            this.x = this.layoutX;
+            this.y = this.layoutY;
+            this.width = this.layoutWidth;
+        }
         float animatedScroll = scrollAnimation.get();
         float displayH = displayHeight;
         float totalH = titleHeight + displayH + (displayH > 0.0F ? 4.0F : 0.0F);
 
-        // Frosted-glass panel: soft white rim, translucent dark pane, title shine.
         RenderUtil.drawRoundedRectWithGl(x, y, x + width, y + totalH, 8, new Color(255, 255, 255, 30).getRGB());
         RenderUtil.drawRoundedRectWithGl(x + 1, y + 1, x + width - 1, y + totalH - 1, 7, new Color(15, 17, 23, 208).getRGB());
         RenderUtil.drawRoundedRectWithGl(x + 2, y + 2, x + width - 2, y + titleHeight, 6, new Color(255, 255, 255, 14).getRGB());
         RenderUtil.drawRoundedRectWithGl(x + 8, y + titleHeight - 1, x + width - 8, y + titleHeight, 0.75F,
                 new Color(255, 255, 255, 16).getRGB());
 
-        Minecraft.getMinecraft().fontRendererObj.drawString(trimText(categoryName, width - 32), x + 9, y + 6, new Color(232, 235, 242).getRGB(), false);
-        Minecraft.getMinecraft().fontRendererObj.drawString(categoryOpened ? "−" : "+", x + width - 14, y + 6, new Color(125, 172, 238).getRGB(), false);
+        GuiText.draw(trimText(categoryName, width - 32), x + 9, y + 6, new Color(232, 235, 242).getRGB(), 12.0F);
+        GuiText.draw(categoryOpened ? "−" : "+", x + width - 14, y + 6, new Color(125, 172, 238).getRGB(), 12.0F);
 
         if (displayH > 0 && !modulesInCategory.isEmpty()) {
             int renderHeight = 0;
@@ -104,16 +123,6 @@ public class CategoryComponent {
             }
             GL11.glDisable(GL11.GL_SCISSOR_TEST);
 
-            // Soften the hard viewport boundary when a category reaches its
-            // maximum height. The small stacked alpha bands preserve context
-            // while making the clipped row feel intentional.
-            boolean fadeTop = animatedScroll > 0.5F;
-            boolean fadeBottom = animatedScroll + displayH < height - 0.5F;
-            float fadeHeight = Math.min(EDGE_FADE_HEIGHT, Math.max(1.0F, displayH));
-            if (fadeTop) drawEdgeFade(x + 1, y + titleHeight, x + width - 1, fadeHeight, true);
-            if (fadeBottom) drawEdgeFade(x + 1, y + titleHeight + displayH - fadeHeight,
-                    x + width - 1, fadeHeight, false);
-
             if (height > displayH) {
                 float scrollY = y + titleHeight + animatedScroll * displayH / height;
                 float barH = Math.max( (float)displayH * displayH / height, 10);
@@ -122,17 +131,10 @@ public class CategoryComponent {
                 RenderUtil.drawRoundedRectWithGl(x + width - 5, scrollY, x + width - 2, scrollY + barH, 2.5F, new Color(255, 255, 255, 90).getRGB());
             }
         }
-    }
-
-    private void drawEdgeFade(float left, float top, float right, float height, boolean fromTop) {
-        int bands = 6;
-        float bandHeight = height / bands;
-        for (int i = 0; i < bands; i++) {
-            int distance = fromTop ? bands - 1 - i : i;
-            int alpha = 10 + distance * 12;
-            float y1 = top + i * bandHeight;
-            float y2 = top + (i + 1) * bandHeight + 0.25F;
-            RenderUtil.drawRect(left, y1, right, y2, new Color(15, 17, 23, alpha).getRGB());
+        if (this.layoutOverride) {
+            this.x = oldX;
+            this.y = oldY;
+            this.width = oldWidth;
         }
     }
 
@@ -166,9 +168,9 @@ public class CategoryComponent {
                 && mouseY >= y + titleHeight && mouseY <= y + titleHeight + displayHeight;
     }
 
-    public int getX() { return this.x; }
-    public int getY() { return this.y; }
-    public int getWidth() { return this.width; }
+    public int getX() { return this.layoutOverride ? this.layoutX : this.x; }
+    public int getY() { return this.layoutOverride ? this.layoutY : this.y; }
+    public int getWidth() { return this.layoutOverride ? this.layoutWidth : this.width; }
     public void setWidth(int width) { this.width = Math.max(100, width); }
 
     public int getVisualHeight() {
@@ -180,10 +182,7 @@ public class CategoryComponent {
     public float getRenderScale() { return renderScale; }
 
     private String trimText(String text, int maxWidth) {
-        FontRenderer font = Minecraft.getMinecraft().fontRendererObj;
-        if (font.getStringWidth(text) <= maxWidth) return text;
-        String suffix = "...";
-        return font.trimStringToWidth(text, Math.max(0, maxWidth - font.getStringWidth(suffix))) + suffix;
+        return GuiText.trim(text, maxWidth, 12.0F);
     }
 
     public void handleDrag(int x, int y) {

@@ -151,6 +151,7 @@ public class RenderUtil {
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
         GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
 
         Tessellator tessellator = Tessellator.getInstance();
         WorldRenderer wr = tessellator.getWorldRenderer();
@@ -177,6 +178,7 @@ public class RenderUtil {
             tessellator.draw();
         }
 
+        GlStateManager.shadeModel(GL11.GL_FLAT);
         GlStateManager.enableTexture2D();
         GlStateManager.disableBlend();
         if (cull) {
@@ -667,6 +669,7 @@ public class RenderUtil {
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
         GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
 
         RenderUtil.setColor(color);
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
@@ -692,6 +695,7 @@ public class RenderUtil {
             GL11.glEnd();
         }
 
+        GlStateManager.shadeModel(GL11.GL_FLAT);
         GlStateManager.enableTexture2D();
         GlStateManager.disableBlend();
 

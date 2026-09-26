@@ -21,8 +21,8 @@ import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ModuleComponent implements Component {
-    private static final int TITLE_HEIGHT = 18;
-    private static final int SETTINGS_TOP_GAP = 6;
+    private static final int TITLE_HEIGHT = 24;
+    private static final int SETTINGS_TOP_GAP = 8;
     private static final float ROW_STAGGER = 0.10F;
     private static final float ROW_MIN_SCALE = 0.72F;
     private static final float ROW_ANIMATION_EPSILON = 0.999F;
@@ -69,11 +69,8 @@ public class ModuleComponent implements Component {
         int y = category.getY() + offsetY;
         int width = category.getWidth();
         int titleH = TITLE_HEIGHT;
-        // Sample the animation once per frame so the row, divider and chevron
-        // stay in sync even when the frame rate fluctuates.
         float expandProgress = expandAnimation.get();
         if (mod.isEnabled()) {
-            // Soft row highlight plus a glowing accent bar.
             RenderUtil.drawRoundedRectWithGl(x + 5, y + 2.5F, x + width - 5, y + titleH - 2.5F, 6, new Color(255, 255, 255, 9).getRGB());
             RenderUtil.drawRoundedRectWithGl(x + 7, y + 4.5F, x + 12.5F, y + titleH - 4.5F, 2.75F, new Color(110, 170, 255, 60).getRGB());
             RenderUtil.drawRoundedRectWithGl(x + 8, y + 5.5F, x + 11.5F, y + titleH - 5.5F, 1.75F, new Color(120, 175, 255).getRGB());
@@ -83,13 +80,13 @@ public class ModuleComponent implements Component {
                     new Color(255, 255, 255, 18).getRGB());
         }
         int textColor = mod.isEnabled() ? new Color(245, 248, 252).getRGB() : new Color(180, 184, 193).getRGB();
-        String displayName = trimText(mod.getName(), width - 34);
-        // Center the label vertically regardless of the active font height.
-        float textY = y + (TITLE_HEIGHT - GuiText.height()) / 2.0F;
-        GuiText.drawShadow(displayName, x + 17, textY, textColor);
+        float textSize = 14.0F;
+        String displayName = GuiText.trim(mod.getName(), width - 44, textSize);
+        float textY = y + (TITLE_HEIGHT - GuiText.height(textSize)) / 2.0F + 1.0F;
+        GuiText.drawShadow(displayName, x + 20, textY, textColor, textSize);
         if (!settings.isEmpty()) {
             String arrow = expandProgress > 0.5F ? "v" : ">";
-            GuiText.drawShadow(arrow, x + width - 16, textY, new Color(175, 185, 201).getRGB());
+            GuiText.drawShadow(arrow, x + width - 18, textY + 1.0F, new Color(175, 185, 201).getRGB(), 13.0F);
         }
         if (expandProgress > 0.001F) {
             drawAnimatedSettings(offset, expandProgress);
@@ -159,11 +156,7 @@ public class ModuleComponent implements Component {
     }
 
     private boolean isHovered(int x, int y) {
-        return x > category.getX() + 5 && x < category.getX() + category.getWidth() - 5 && y > category.getY() + offsetY && y < category.getY() + 18 + offsetY;
-    }
-
-    private String trimText(String text, int maxWidth) {
-        return GuiText.trim(text, maxWidth);
+        return x > category.getX() + 5 && x < category.getX() + category.getWidth() - 5 && y > category.getY() + offsetY && y < category.getY() + TITLE_HEIGHT + offsetY;
     }
 
     private int getSettingsHeight() {
@@ -196,9 +189,6 @@ public class ModuleComponent implements Component {
         for (Component c : settings) if (c.isVisible()) visibleCount++;
         int rowIndex = 0;
         int rowOffset = 0;
-        // Reserve a minimum per-row animation window, then distribute the
-        // remaining time across the stagger. This guarantees the final row
-        // reaches scale 1.0 exactly when the parent animation completes.
         float rowStagger = visibleCount > 1
                 ? Math.min(ROW_STAGGER, 0.82F / (visibleCount - 1))
                 : 0.0F;
@@ -209,9 +199,6 @@ public class ModuleComponent implements Component {
                 float rowCenter = rowTop + c.getHeight() * 0.5F;
                 float centerX = category.getX() + category.getWidth() * 0.5F;
                 float rowProgress = clamp01((progress - rowIndex * rowStagger) / rowDuration);
-                // A row is absent until its own stagger begins, then scales in.
-                // Once settled, bypass the matrix transform completely so no
-                // permanent sub-pixel scaling remains on the text or controls.
                 if (rowProgress > 0.0F) {
                     if (rowProgress >= ROW_ANIMATION_EPSILON) {
                         c.draw(offset);
