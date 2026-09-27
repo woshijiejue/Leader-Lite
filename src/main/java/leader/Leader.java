@@ -92,6 +92,7 @@ public class Leader {
         moduleManager.modules.put(Eagle.class, new Eagle());
         moduleManager.modules.put(ESP.class, new ESP());
         moduleManager.modules.put(FastPlace.class, new FastPlace());
+        moduleManager.modules.put(FreeLook.class, new FreeLook());
         moduleManager.modules.put(Stuck.class, new Stuck());
         moduleManager.modules.put(Fly.class, new Fly());
         moduleManager.modules.put(FontManager.class, new FontManager());
