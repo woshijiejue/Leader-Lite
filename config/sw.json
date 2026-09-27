@@ -21,8 +21,10 @@
     "toggled": true,
     "key": 0,
     "hidden": false,
-    "MaxRange": 8.0,
+    "MaxRange": 6.0,
     "MinRange": 3.6,
+    "Target": "Nearest",
+    "KillAura Fallback": true,
     "Smart Delay": false,
     "Throw Delay Ticks": 2,
     "Prediction": true,
@@ -32,7 +34,7 @@
     "Inv Check": true,
     "Bot Check": true,
     "Rod": true,
-    "Rod Hold Ticks": 1
+    "Rod Hold Ticks": 2
   },
   "AimAssist": {
     "toggled": false,
@@ -164,11 +166,11 @@
     "toggled": true,
     "key": 0,
     "hidden": false,
-    "Min Range": 1.0,
+    "Min Range": 2.8,
     "Max Range": 3.2,
     "Delay": 150,
     "Chance": 100,
-    "Reset On Velocity": false,
+    "Reset On Velocity": true,
     "Render": true
   },
   "BedESP": {
@@ -318,6 +320,13 @@
     "skip-obsidian": true,
     "skip-interactable": true
   },
+  "FreeLook": {
+    "toggled": false,
+    "key": 48,
+    "hidden": true,
+    "AutoF5": true,
+    "Hold": true
+  },
   "Stuck": {
     "toggled": false,
     "key": 44,
@@ -335,8 +344,7 @@
     "key": 0,
     "hidden": true,
     "CustomFont": true,
-    "Font": "NotoSansSC",
-    "FontSize": 18.0
+    "Font": "ProductSans"
   },
   "Fullbright": {
     "toggled": true,
@@ -393,8 +401,8 @@
     "blink-timer": true,
     "toggle-sounds": true,
     "toggle-alerts": false,
-    "bg-color": true,
-    "glow": true,
+    "bg-color": false,
+    "glow": false,
     "barless": 0,
     "bar-mode": "RIGHT"
   },
@@ -480,7 +488,7 @@
     "DisSprint": true,
     "open-delay": 0,
     "close-delay": 4,
-    "lock-move-dey": true
+    "lock-move-dey": false
   },
   "ItemESP": {
     "toggled": false,
@@ -507,7 +515,7 @@
     "toggled": false,
     "key": 0,
     "hidden": false,
-    "Mode": "Buffer",
+    "Mode": "Vanilla",
     "OnHurt": false,
     "Slowdown": 100,
     "Ground Only": false,
@@ -681,7 +689,7 @@
     "toggled": true,
     "key": 0,
     "hidden": true,
-    "mode": "CLASSIC",
+    "mode": "MODERN",
     "scale": 1.0,
     "font-scale": 1.0,
     "offset-x": 4,
@@ -692,7 +700,7 @@
     "key": 0,
     "hidden": true,
     "mode": "LEFT",
-    "display-mode": "Lucid",
+    "display-mode": "Slate",
     "offset-x": 0,
     "offset-y": 209,
     "scale": 1.0,
@@ -724,7 +732,7 @@
     "hidden": true
   },
   "NoHurtCam": {
-    "toggled": false,
+    "toggled": true,
     "key": 0,
     "hidden": true,
     "multiplier": 0
@@ -816,20 +824,23 @@
     "Rotate Mode": "GodBridge",
     "Do Not Update Rotation When Can Place": false,
     "Edge Limit": false,
+    "GodBridge Yaw Tolerance": 5.0,
     "Move Fix": "Silent",
     "Jump Delay": 0,
     "Place Delay": 0,
     "Start Rotate Speed": 180.0,
     "Normal Rotate Speed": 180.0,
     "Normal Mode Speed": 180.0,
-    "Legit Mode Speed": 112.9,
+    "Legit Mode Speed": 180.0,
     "Swing": true,
     "Item Spoof": true,
     "Clutch": true,
-    "Only Void": false,
-    "Render BPS": false,
+    "Only Void": true,
+    "Render BPS": true,
     "Block Counter": false,
     "Air Rescue": true,
+    "Strict Raytrace": true,
+    "Ctrl To Switch Telly": true,
     "Edge Threshold": 0.01,
     "Ticks Limit": false,
     "Limit Ticks": 1,
@@ -916,7 +927,7 @@
     "position-x": "RIGHT",
     "position-y": "MIDDLE",
     "scale": 1.0,
-    "font-scale": 1.0,
+    "font-scale": 1.2,
     "offset-x": 255,
     "offset-y": -68,
     "background": 52,
@@ -939,14 +950,14 @@
     "key": 0,
     "hidden": false,
     "blur": true,
-    "blur-radius": 2,
+    "blur-radius": 3,
     "blur-offset": 3,
     "shadow": true,
     "shadow-radius": 8,
-    "shadow-offset": 2,
+    "shadow-offset": 3,
     "bloom": false,
-    "bloom-radius": 1,
-    "bloom-offset": 10
+    "bloom-radius": 3,
+    "bloom-offset": 8
   },
   "TargetESP": {
     "toggled": true,
@@ -991,12 +1002,12 @@
     "pearls": true
   },
   "Velocity": {
-    "toggled": true,
+    "toggled": false,
     "key": 0,
     "hidden": false,
     "Mode": "Prediction",
     "Reduce": true,
-    "ReduceMode": "ReleaseWhenCanAttack",
+    "ReduceMode": "ReleaseBeforeCanAttack",
     "StartBlinkHurtTime": 4,
     "StartReleaseTicks": 1,
     "ForceBlocking": true,
@@ -1019,7 +1030,7 @@
     "Ground Delay": false,
     "Rotate": true,
     "Rotate Ticks": 1,
-    "Auto Move": true,
+    "Auto Move": false,
     "Chance": 100,
     "Horizontal": 100,
     "Vertical": 100,

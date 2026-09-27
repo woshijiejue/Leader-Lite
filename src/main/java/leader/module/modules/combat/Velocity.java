@@ -114,8 +114,34 @@ public class Velocity extends Module {
 
         return ticks;
     }
+    private boolean isStuckActive() {
+        Stuck stuck = (Stuck) Leader.moduleManager.getModule(Stuck.class);
+        return stuck != null && stuck.isStuckActive();
+    }
+
+    private void resetForStuck() {
+        pendingExplosion = false;
+        allowNext = true;
+        hasReceivedVelocity = false;
+        airPushLeft = 0;
+        rotateTickCounter = 0;
+        targetRotation = null;
+        jumpFlag = false;
+        velocityAttacked = false;
+        grimActive = false;
+        cancellingKillAuraAttack = false;
+        blinkScheduled = false;
+        knockback = false;
+        knockbackTimer = -1;
+        delayFlag = false;
+    }
+
     @EventTarget
     public void onKnockback(KnockbackEvent event) {
+        if (isStuckActive()) {
+            resetForStuck();
+            return;
+        }
         if (!allowNext || !(Boolean) fakeCheck.getValue()) {
             allowNext = true;
             if (pendingExplosion) {
@@ -182,6 +208,7 @@ public class Velocity extends Module {
 
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
+        if (isStuckActive()) return;
         if (this.isEnabled() && this.jumpFlag) {
             if (mc.thePlayer.onGround && MoveUtil.isForwardPressed() && !mc.thePlayer.isPotionActive(Potion.jump) && !this.isInLiquidOrWeb() && mc.thePlayer.isSprinting()) {
                 mc.thePlayer.movementInput.jump = true;
@@ -191,7 +218,7 @@ public class Velocity extends Module {
     }
     @EventTarget
     public void onTick(TickEvent event){
-        if (this.isEnabled()){
+        if (this.isEnabled() && !isStuckActive()){
             if (testMode.getValue() && this.mode.getValue() == 1 && this.reduce.getValue() && reduceMode.getValue() == 0){
                 if (ticksSinceVelocity >= stopBlockHurtTime.getValue()){
                     hasReceivedVelocity = true;
@@ -209,6 +236,10 @@ public class Velocity extends Module {
     @EventTarget
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled()) return;
+        if (isStuckActive()) {
+            resetForStuck();
+            return;
+        }
         if (event.getType() == EventType.PRE) {
             cancellingKillAuraAttack = false;
             int maxTick = this.rotateTick.getValue();
@@ -494,6 +525,7 @@ public class Velocity extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
+        if (isStuckActive()) return;
         if (isEnabled() && event.getType() == EventType.RECEIVE && !event.isCancelled()) {
             if (event.getPacket() instanceof S12PacketEntityVelocity) {
                 S12PacketEntityVelocity packet = (S12PacketEntityVelocity) event.getPacket();
@@ -554,7 +586,7 @@ public class Velocity extends Module {
     }
     @EventTarget
     public void onMove(MoveInputEvent event) {
-        if (this.isEnabled() && this.rotateTickCounter > 0 && this.rotateTickCounter <= this.rotateTick.getValue()) {
+        if (this.isEnabled() && !isStuckActive() && this.rotateTickCounter > 0 && this.rotateTickCounter <= this.rotateTick.getValue()) {
             if (this.autoMove.getValue()) {
                 mc.thePlayer.movementInput.moveForward = 1.0F;
             }

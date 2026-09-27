@@ -8,8 +8,6 @@ import leader.event.types.EventType;
 import leader.events.*;
 import leader.mixin.IAccessorMinecraft;
 import leader.module.Module;
-import leader.property.properties.BooleanProperty;
-import leader.property.properties.IntProperty;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.network.Packet;
@@ -25,14 +23,10 @@ public class Stuck extends Module {
     private double savedMotionZ;
     private int tick;
     private boolean using = false;
-    private volatile boolean velocityPending = false;
-    private int releaseWait = -1;
-    private int releaseTicksLeft = 0;
-    private boolean internalToggle = false;
 
-    public final BooleanProperty velocityRelease = new BooleanProperty("Velocity Release", true);
-    public final IntProperty releaseDelay = new IntProperty("Release Delay", 0, 0, 5, this.velocityRelease::getValue);
-    public final IntProperty releaseTicks = new IntProperty("Release Ticks", 1, 1, 5, this.velocityRelease::getValue);
+    private boolean knockbackRelease = false;
+    private boolean internalToggle = false;
+    private boolean releasing = false;
 
     public Stuck() {
         super("Stuck",false,false);
@@ -40,11 +34,13 @@ public class Stuck extends Module {
 
     @Override
     public void setEnabled(boolean enabled) {
-        if (this.releaseTicksLeft > 0 && !this.internalToggle) {
-            if (!enabled) this.releaseTicksLeft = 0;
-            return;
-        }
+        if (enabled && this.knockbackRelease && !this.internalToggle) return;
+        if (!enabled && !this.internalToggle) this.knockbackRelease = false;
         super.setEnabled(enabled);
+    }
+
+    public boolean isStuckActive() {
+        return this.isEnabled() || this.using || this.knockbackRelease || this.releasing;
     }
 
     private void setEnabledInternal(boolean enabled) {
@@ -70,55 +66,30 @@ public class Stuck extends Module {
     public void onPacket(PacketEvent event) {
         if (this.isEnabled() && event.getType() == EventType.RECEIVE && mc.thePlayer != null) {
             boolean knockback = false;
-            if (event.getPacket() instanceof S12PacketEntityVelocity) {
-                knockback = ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == mc.thePlayer.getEntityId();
-            } else if (event.getPacket() instanceof S27PacketExplosion) {
-                S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
-                knockback = explosion.func_149149_c() != 0.0F || explosion.func_149144_d() != 0.0F || explosion.func_149147_e() != 0.0F;
+            if (event.getPacket() instanceof S12PacketEntityVelocity s12) {
+                knockback = s12.getEntityID() == mc.thePlayer.getEntityId();
+            } else if (event.getPacket() instanceof S27PacketExplosion s27) {
+                knockback = s27.func_149149_c() != 0.0F || s27.func_149144_d() != 0.0F || s27.func_149147_e() != 0.0F;
             }
             if (knockback) {
                 Leader.delayManager.setDelayState(true, DelayModules.VELOCITY);
                 Leader.delayManager.delayedPacket.offer((Packet<INetHandlerPlayClient>) event.getPacket());
                 event.setCancelled(true);
-                if (this.velocityRelease.getValue()) {
-                    this.velocityPending = true;
-                } else {
-                    tick = 11;
-                }
+                this.knockbackRelease = true;
+                tick = 10;
             }
         }
     }
     @EventTarget
     public void onTick(TickEvent event){
-        if (event.getType() != EventType.PRE) return;
-        if (this.velocityPending) {
-            this.velocityPending = false;
-            if (this.isEnabled() && this.releaseWait < 0) this.releaseWait = this.releaseDelay.getValue();
-        }
-        if (this.releaseWait >= 0) {
-            if (!this.isEnabled()) {
-                this.releaseWait = -1;
-            } else if (this.releaseWait == 0) {
-                this.releaseWait = -1;
-                this.setEnabledInternal(false);
-                this.releaseTicksLeft = this.releaseTicks.getValue();
-                return;
-            } else {
-                this.releaseWait--;
-            }
-        }
-        if (this.releaseTicksLeft > 0) {
-            this.releaseTicksLeft--;
-            if (this.releaseTicksLeft == 0) this.setEnabledInternal(true);
-            return;
-        }
-        if (using) {
+        if (using && event.getType() == EventType.PRE) {
             if (tick == 10){
-                this.setEnabled(false);
+                this.setEnabledInternal(false);
                 using = true;
             }
             if (tick == 11){
-                this.setEnabled(true);
+                this.knockbackRelease = false;
+                this.setEnabledInternal(true);
                 tick = 0;
             }
             tick++;
@@ -167,11 +138,16 @@ public class Stuck extends Module {
     public void onDisabled() {
         if (mc.thePlayer != null) {
             using = false;
-            Leader.delayManager.setDelayState(false, DelayModules.VELOCITY);
-            Leader.blinkManager.setBlinkState(false, BlinkModules.BLINK);
             mc.thePlayer.motionX = savedMotionX;
             mc.thePlayer.motionZ = savedMotionZ;
             mc.thePlayer.motionY = savedMotionY;
+            this.releasing = true;
+            try {
+                Leader.delayManager.setDelayState(false, DelayModules.VELOCITY);
+                Leader.blinkManager.setBlinkState(false, BlinkModules.BLINK);
+            } finally {
+                this.releasing = false;
+            }
             ((IAccessorMinecraft)mc).getTimer().timerSpeed = 1.0F;
         }
     }
