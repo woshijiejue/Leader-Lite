@@ -4,7 +4,10 @@ import leader.Leader;
 import leader.module.modules.movement.Stuck;
 import leader.module.modules.render.FontManager;
 import leader.module.modules.render.HUD;
+import leader.module.modules.render.notification.NoticeMode;
+import leader.module.modules.render.notification.Notification;
 import leader.util.shader.ShaderElement;
+import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
@@ -60,6 +63,8 @@ public class Scaffold extends Module {
     public final BooleanProperty bPSRender = new BooleanProperty("Render BPS", true);
     public final BooleanProperty blockCounter = new BooleanProperty("Block Counter", false);
     public final BooleanProperty airRescue = new BooleanProperty("Air Rescue", true);
+    public final BooleanProperty strictRaytrace = new BooleanProperty("Strict Raytrace", false);
+    public final BooleanProperty ctrlToSwitchTelly = new BooleanProperty("Ctrl To Switch Telly", false);
     public final FloatProperty edgeThreshold = new FloatProperty("Edge Threshold", 0.15F, 0.01F, 0.5F, () -> mode.getValue() == 2);
     public final BooleanProperty ticksLimit = new BooleanProperty("Ticks Limit", false, () -> mode.getValue() == 2);
     public final IntProperty limitTicks = new IntProperty("Limit Ticks", 10, 1, 40, () -> mode.getValue() == 2 && ticksLimit.getValue());
@@ -115,6 +120,10 @@ public class Scaffold extends Module {
     private float legitTellySilentYaw;
     private float legitTellySilentPitch;
     private BlockData legitTellyLockedBlockData;
+    private UpdateEvent currentEvent;
+    private boolean ctrlTellyActive = false;
+    private int ctrlSavedMode = -1;
+    private int ctrlSavedRotationMode = -1;
 
     public Scaffold() {
         super("Scaffold", false);
@@ -154,45 +163,48 @@ public class Scaffold extends Module {
         return enumFacing;
     }
 
-    private Vec3 applyRescueRotation(BlockData blockData, UpdateEvent event) {
-        double[] fx = {0.1, 0.3, 0.5, 0.7, 0.9};
-        double[] fy = {0.1, 0.3, 0.5, 0.7, 0.9};
-        double[] fz = {0.1, 0.3, 0.5, 0.7, 0.9};
-        switch (blockData.facing()) {
-            case NORTH: fz = new double[]{0.02}; break;
-            case EAST: fx = new double[]{0.98}; break;
-            case SOUTH: fz = new double[]{0.98}; break;
-            case WEST: fx = new double[]{0.02}; break;
-            case DOWN: fy = new double[]{0.02}; break;
-            case UP: fy = new double[]{0.98}; break;
+    private static final double FACE_DEPTH = 0.001;
+
+    private boolean isValidHit(MovingObjectPosition mop, BlockPos blockPos, EnumFacing facing) {
+        return mop != null && mop.typeOfHit == MovingObjectType.BLOCK
+                && mop.getBlockPos().equals(blockPos) && mop.sideHit == facing;
+    }
+
+    private Vec3 facePoint(BlockPos blockPos, EnumFacing facing, double a, double b) {
+        double n = facing.getAxisDirection() == EnumFacing.AxisDirection.POSITIVE ? 1.0 - FACE_DEPTH : FACE_DEPTH;
+        switch (facing.getAxis()) {
+            case X: return new Vec3(blockPos.getX() + n, blockPos.getY() + a, blockPos.getZ() + b);
+            case Y: return new Vec3(blockPos.getX() + a, blockPos.getY() + n, blockPos.getZ() + b);
+            default: return new Vec3(blockPos.getX() + a, blockPos.getY() + b, blockPos.getZ() + n);
         }
+    }
+
+    private Vec3 applyRescueRotation(BlockData blockData, UpdateEvent event) {
+        BlockPos pos = blockData.blockPos();
+        EnumFacing facing = blockData.facing();
         float bestYaw = -180.0F, bestPitch = 0.0F;
         double bestDist = Double.MAX_VALUE;
         Vec3 bestHit = null;
-        for (double dx : fx) {
-            for (double dy : fy) {
-                for (double dz : fz) {
-                    double tx = blockData.blockPos().getX() + dx;
-                    double ty = blockData.blockPos().getY() + dy;
-                    double tz = blockData.blockPos().getZ() + dz;
-                    float[] rot = RotationUtil.getRotations(tx, ty, tz);
-                    MovingObjectPosition mop = RotationUtil.rayTrace(rot[0], rot[1], mc.playerController.getBlockReachDistance(), 1.0F);
-                    if (mop != null && mop.typeOfHit == MovingObjectType.BLOCK
-                            && mop.getBlockPos().equals(blockData.blockPos()) && mop.sideHit == blockData.facing()) {
-                        float yawDiff = Math.abs(MathHelper.wrapAngleTo180_float(rot[0] - event.getYaw()));
-                        double dist = yawDiff * yawDiff + (rot[1] - event.getPitch()) * (rot[1] - event.getPitch());
-                        if (dist < bestDist) {
-                            bestDist = dist;
-                            bestYaw = rot[0];
-                            bestPitch = rot[1];
-                            bestHit = mop.hitVec;
-                        }
-                    }
+        for (double a : placeOffsets) {
+            for (double b : placeOffsets) {
+                Vec3 target = this.facePoint(pos, facing, a, b);
+                float[] rot = RotationUtil.getRotations(target.xCoord, target.yCoord, target.zCoord);
+                rot[1] = Math.max(-90.0F, Math.min(90.0F, rot[1]));
+                MovingObjectPosition mop = RotationUtil.rayTrace(rot[0], rot[1], mc.playerController.getBlockReachDistance(), 1.0F);
+                if (!this.isValidHit(mop, pos, facing)) continue;
+                float yawDiff = Math.abs(MathHelper.wrapAngleTo180_float(rot[0] - event.getYaw()));
+                float pitchDiff = rot[1] - event.getPitch();
+                double dist = yawDiff * yawDiff + pitchDiff * pitchDiff;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestYaw = rot[0];
+                    bestPitch = rot[1];
+                    bestHit = mop.hitVec;
                 }
             }
         }
         if (bestHit == null) return null;
-        this.yaw = bestYaw;
+        this.yaw = RotationUtil.wrapAngleDiff(bestYaw, event.getYaw());
         this.pitch = bestPitch;
         this.canRotate = true;
         return bestHit;
@@ -235,6 +247,13 @@ public class Scaffold extends Module {
 
     private boolean place(BlockPos blockPos, EnumFacing enumFacing, Vec3 vec3) {
         if (!ItemUtil.isHoldingBlock() || this.blockCount <= 0) return false;
+        if (this.strictRaytrace.getValue()) {
+            float aimYaw = this.currentEvent != null ? this.currentEvent.getNewYaw() : mc.thePlayer.rotationYaw;
+            float aimPitch = this.currentEvent != null ? this.currentEvent.getNewPitch() : mc.thePlayer.rotationPitch;
+            MovingObjectPosition mop = RotationUtil.rayTrace(aimYaw, aimPitch, mc.playerController.getBlockReachDistance(), 1.0F);
+            if (!this.isValidHit(mop, blockPos, enumFacing)) return false;
+            vec3 = mop.hitVec;
+        }
         if (!mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, mc.thePlayer.inventory.getCurrentItem(), blockPos, enumFacing, vec3)) {
             return false;
         }
@@ -459,8 +478,7 @@ public class Scaffold extends Module {
     }
 
     private float quantizeDiagonal(float yaw) {
-        float diag = 45.0F + 90.0F * Math.round((yaw - 45.0F) / 90.0F);
-        return ((diag % 360.0F) + 360.0F) % 360.0F;
+        return 45.0F + 90.0F * Math.round((yaw - 45.0F) / 90.0F);
     }
 
     private void updateClutch() {
@@ -503,6 +521,7 @@ public class Scaffold extends Module {
     @EventTarget(Priority.HIGH)
     public void onUpdate(UpdateEvent event) {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
+            this.currentEvent = event;
             boolean tellyMode = this.mode.getValue() == 1;
             boolean legitTellyMode = this.isLegitTellyMode();
             boolean tellyLikeMode = tellyMode || legitTellyMode;
@@ -601,7 +620,7 @@ public class Scaffold extends Module {
                         case 1: this.yaw = this.yaw == -180.0F && this.pitch == 0.0F ? RotationUtil.quantizeAngle(diagonalYaw) : RotationUtil.quantizeAngle(diagonalYaw); break;
                         case 2: if (this.yaw == -180.0F && this.pitch == 0.0F) { this.yaw = RotationUtil.quantizeAngle(yawDiffTo180); this.pitch = RotationUtil.quantizeAngle(85.0F); } else this.yaw = RotationUtil.quantizeAngle(yawDiffTo180); break;
                         case 3: if (this.yaw == -180.0F && this.pitch == 0.0F) { this.yaw = RotationUtil.quantizeAngle(diagonalYaw); this.pitch = RotationUtil.quantizeAngle(85.0F); } break;
-                        case 5: if (this.yaw == -180.0F && this.pitch == 0.0F) { this.yaw = RotationUtil.quantizeAngle(this.quantizeDiagonal(currentYaw + 180.0F)); this.pitch = RotationUtil.quantizeAngle(85.0F); } break;
+                        case 5: if (this.yaw == -180.0F && this.pitch == 0.0F) { this.yaw = RotationUtil.quantizeAngle(RotationUtil.wrapAngleDiff(this.quantizeDiagonal(currentYaw + 180.0F), event.getYaw())); this.pitch = RotationUtil.quantizeAngle(85.0F); } break;
                     }
                 }
 
@@ -618,7 +637,7 @@ public class Scaffold extends Module {
                         MovingObjectPosition strictMop = RotationUtil.rayTrace(strictRot[0], strictRot[1], mc.playerController.getBlockReachDistance(), 1.0F);
                         if (strictMop != null && strictMop.typeOfHit == MovingObjectType.BLOCK
                                 && strictMop.getBlockPos().equals(blockData.blockPos()) && strictMop.sideHit == blockData.facing()) {
-                            this.yaw = strictRot[0];
+                            this.yaw = RotationUtil.wrapAngleDiff(strictRot[0], event.getYaw());
                             this.pitch = strictRot[1];
                             this.canRotate = true;
                             hitVec = strictMop.hitVec;
@@ -678,7 +697,7 @@ public class Scaffold extends Module {
                                 updateRotation = false;
                             }
                             if (updateRotation) {
-                                this.yaw = bestYaw;
+                                this.yaw = RotationUtil.wrapAngleDiff(bestYaw, event.getYaw());
                                 this.pitch = bestPitch;
                             } else {
                                 this.yaw = mc.thePlayer.rotationYaw;
@@ -722,7 +741,7 @@ public class Scaffold extends Module {
                         if (bestYaw != -180.0F || bestPitch != 0.0F) {
                             bestYaw += RandomUtil.nextFloat(-0.5F, 0.5F);
                             bestPitch += RandomUtil.nextFloat(-0.3F, 0.3F);
-                            this.yaw = bestYaw; this.pitch = bestPitch; this.canRotate = true; hitVec = bestHitVec;
+                            this.yaw = RotationUtil.wrapAngleDiff(bestYaw, event.getYaw()); this.pitch = bestPitch; this.canRotate = true; hitVec = bestHitVec;
                         }
                     } else {
                         double[] x = placeOffsets, y = placeOffsets, z = placeOffsets;
@@ -1105,6 +1124,34 @@ public class Scaffold extends Module {
     }
 
     @EventTarget
+    public void onKey(KeyEvent event) {
+        if (!this.isEnabled() || !this.ctrlToSwitchTelly.getValue()) return;
+        if (event.getKey() != Keyboard.KEY_LCONTROL && event.getKey() != Keyboard.KEY_RCONTROL) return;
+        if (!this.ctrlTellyActive) {
+            this.ctrlSavedMode = this.mode.getValue();
+            this.ctrlSavedRotationMode = this.rotationMode.getValue();
+            this.mode.setValue(1);
+            this.rotationMode.setValue(4);
+            this.ctrlTellyActive = true;
+            Notification.addNotification("Scaffold", "Telly / Strict", NoticeMode.Info);
+        } else {
+            this.restoreCtrlTelly();
+            Notification.addNotification("Scaffold", this.mode.getModeString() + " / " + this.rotationMode.getModeString(), NoticeMode.Info);
+        }
+        this.yaw = -180.0F; this.pitch = 0.0F; this.canRotate = false;
+        this.stage = 0; this.rotationTick = 1;
+    }
+
+    private void restoreCtrlTelly() {
+        if (!this.ctrlTellyActive) return;
+        if (this.ctrlSavedMode >= 0) this.mode.setValue(this.ctrlSavedMode);
+        if (this.ctrlSavedRotationMode >= 0) this.rotationMode.setValue(this.ctrlSavedRotationMode);
+        this.ctrlTellyActive = false;
+        this.ctrlSavedMode = -1;
+        this.ctrlSavedRotationMode = -1;
+    }
+
+    @EventTarget
     public void onSwap(SwapItemEvent event) {
         if (this.isEnabled()) { this.lastSlot = event.setSlot(this.lastSlot); event.setCancelled(true); }
     }
@@ -1132,6 +1179,7 @@ public class Scaffold extends Module {
     @Override
     public void onDisabled() {
         this.clutchReset();
+        this.restoreCtrlTelly();
         if (mc.thePlayer != null && this.lastSlot != -1) mc.thePlayer.inventory.currentItem = this.lastSlot;
     }
 

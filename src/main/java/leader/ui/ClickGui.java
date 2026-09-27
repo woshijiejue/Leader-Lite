@@ -200,10 +200,20 @@ public class ClickGui extends GuiScreen {
         ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(mx, my, mx + W, my + H, 12.0F,
                 new Color(18, 20, 28, 255).getRGB()));
 
-        RenderUtil.drawRoundedRectWithGl(x - 0.5F, y - 0.5F, x + W + 0.5F, y + H + 0.5F, 12.5F, col(255, 255, 255, 18));
-        RenderUtil.drawRoundedRectWithGl(x, y, x + W, y + H, 12.0F, col(14, 15, 20, 200));
+        for (int i = 6; i >= 1; i--) {
+            float s = i * 2.0F;
+            RenderUtil.drawRoundedRectWithGl(x - s, y - s + 3.0F, x + W + s, y + H + s + 3.0F, 12.0F + s, col(0, 0, 0, 7));
+        }
+        RenderUtil.drawRoundedRectWithGl(x - 0.5F, y - 0.5F, x + W + 0.5F, y + H + 0.5F, 12.5F, col(255, 255, 255, 22));
+        RenderUtil.drawRoundedRectGradient(x, y, x + W, y + H, 12.0F, col(18, 19, 26, 214), col(11, 12, 16, 222));
+        scissor(x, y, SIDEBAR, H);
+        RenderUtil.drawRoundedRectWithGl(x, y, x + SIDEBAR + 24.0F, y + H, 12.0F, col(255, 255, 255, 5));
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        float hlMid = x + W / 2.0F;
+        RenderUtil.drawRoundedRectGradientH(x + 28.0F, y + 0.5F, hlMid, y + 1.0F, 0.0F, col(255, 255, 255, 0), col(255, 255, 255, 30));
+        RenderUtil.drawRoundedRectGradientH(hlMid, y + 0.5F, x + W - 28.0F, y + 1.0F, 0.0F, col(255, 255, 255, 30), col(255, 255, 255, 0));
         RenderUtil.enableRenderState();
-        RenderUtil.drawRect(x + SIDEBAR, y + 12.0F, x + SIDEBAR + 0.5F, y + H - 12.0F, col(255, 255, 255, 14));
+        RenderUtil.drawRect(x + SIDEBAR, y, x + SIDEBAR + 0.5F, y + H, col(255, 255, 255, 16));
         RenderUtil.drawRect(x + SIDEBAR + 12.0F, y + HEADER, x + W - 12.0F, y + HEADER + 0.5F, col(255, 255, 255, 12));
         RenderUtil.disableRenderState();
 
@@ -324,24 +334,38 @@ public class ClickGui extends GuiScreen {
                 moduleScroll = moduleScrollTarget = 0.0F;
             }
         });
+        RenderUtil.drawRoundedRectWithGl(sx - 0.5F, sy - 0.5F, sx + sw + 0.5F, sy + sh + 0.5F, 7.5F, col(255, 255, 255, 14));
         if (focus > 0.01F) {
-            RenderUtil.drawRoundedRectWithGl(sx - 0.75F, sy - 0.75F, sx + sw + 0.75F, sy + sh + 0.75F, 7.5F, col(accent, (int) (120 * focus)));
+            RenderUtil.drawRoundedRectWithGl(sx - 2.5F, sy - 2.5F, sx + sw + 2.5F, sy + sh + 2.5F, 9.5F, col(accent, (int) (26 * focus)));
+            RenderUtil.drawRoundedRectWithGl(sx - 0.75F, sy - 0.75F, sx + sw + 0.75F, sy + sh + 0.75F, 7.5F, col(accent, (int) (140 * focus)));
         }
-        RenderUtil.drawRoundedRectWithGl(sx, sy, sx + sw, sy + sh, 7.0F, col(22, 24, 31, 255));
+        RenderUtil.drawRoundedRectWithGl(sx, sy, sx + sw, sy + sh, 7.0F, col(20, 22, 29, 255));
         boolean caret = (System.currentTimeMillis() / 500L) % 2L == 0L;
         if (active) {
             String shown = search;
             while (shown.length() > 0 && width(shown, 14.0F) > sw - 22.0F) shown = shown.substring(1);
-            text(shown, sx + 9.0F, cy, col(240, 243, 248, 255), 14.0F);
+            text(shown, sx + 22.0F, cy, col(240, 243, 248, 255), 14.0F);
             if (caret && searchFocused) {
-                float cx = sx + 9.0F + width(shown, 14.0F) + 1.0F;
+                float cx = sx + 22.0F + width(shown, 14.0F) + 1.0F;
                 RenderUtil.enableRenderState();
                 RenderUtil.drawRect(cx, cy - 4.5F, cx + 0.75F, cy + 4.5F, col(accent, 255));
                 RenderUtil.disableRenderState();
             }
         } else {
-            text("Search  Ctrl+F", sx + 9.0F, cy, col(105, 112, 128, 255), 14.0F);
+            text("Search", sx + 22.0F, cy, col(105, 112, 128, 255), 14.0F);
+            String hint = "Ctrl F";
+            float hw = width(hint, 10.0F) + 8.0F;
+            float kx = sx + sw - 5.0F - hw;
+            RenderUtil.drawRoundedRectWithGl(kx, cy - 6.0F, kx + hw, cy + 6.0F, 3.5F, col(255, 255, 255, 12));
+            text(hint, kx + 4.0F, cy, col(125, 132, 148, 255), 10.0F);
         }
+        float gx = sx + 11.0F;
+        int glass = mixCol(new Color(110, 117, 133), accent, focus, 255);
+        RenderUtil.drawRoundedRectWithGl(gx - 3.5F, cy - 4.5F, gx + 3.5F, cy + 2.5F, 3.5F, glass);
+        RenderUtil.drawRoundedRectWithGl(gx - 2.25F, cy - 3.25F, gx + 2.25F, cy + 1.25F, 2.25F, col(20, 22, 29, 255));
+        RenderUtil.enableRenderState();
+        RenderUtil.drawLine(gx + 2.2F, cy + 1.7F, gx + 4.6F, cy + 4.1F, 1.6F, glass);
+        RenderUtil.disableRenderState();
     }
 
     private void drawModuleList(float x, float y, int mouseX, int mouseY) {
@@ -379,18 +403,23 @@ public class ClickGui extends GuiScreen {
             float sel = anim("ms" + key, selected ? 1.0F : 0.0F, 14.0F);
             float on = anim("me" + key, module.isEnabled() ? 1.0F : 0.0F, 14.0F);
 
-            RenderUtil.drawRoundedRectWithGl(lx, ry, lx + lw - 4.0F, ry + ROW, 7.0F, col(255, 255, 255, (int) (6 + 6 * hover)));
+            float rowX2 = lx + lw - 6.0F;
+            RenderUtil.drawRoundedRectWithGl(lx, ry, rowX2, ry + ROW, 7.0F, col(255, 255, 255, (int) (4 + 7 * hover)));
             if (sel > 0.01F) {
-                RenderUtil.drawRoundedRectWithGl(lx, ry, lx + lw - 4.0F, ry + ROW, 7.0F, col(accent, (int) (38 * sel)));
+                RenderUtil.drawRoundedRectGradientH(lx, ry, rowX2, ry + ROW, 7.0F, col(accent, (int) (52 * sel)), col(accent, (int) (12 * sel)));
+                float barH = (ROW - 12.0F) * sel;
+                float cyBar = ry + ROW / 2.0F;
+                RenderUtil.drawRoundedRectWithGl(lx + 1.5F, cyBar - barH / 2.0F, lx + 3.5F, cyBar + barH / 2.0F, 1.0F, col(accent, 255));
             }
             float cy = ry + ROW / 2.0F;
             float swW = 20.0F;
-            float swX = lx + lw - 4.0F - 9.0F - swW;
-            text(GuiText.trim(module.getName(), (int) (swX - lx - 18.0F), 15.0F), lx + 10.0F, cy,
-                    mixCol(new Color(160, 167, 183), new Color(246, 248, 252), Math.max(on, sel), 255), 15.0F);
+            float swX = rowX2 - 8.0F - swW;
+            float nameX = lx + 10.0F + 2.0F * sel;
+            text(GuiText.trim(module.getName(), (int) (swX - nameX - 8.0F), 15.0F), nameX, cy,
+                    mixCol(new Color(150, 157, 173), new Color(246, 248, 252), Math.max(on, sel), 255), 15.0F);
             drawSwitch(swX, cy, swW, 11.0F, on);
 
-            addHit(swX - 4.0F, ry, lx + lw - 4.0F, ry + ROW, (button, mX, mY) -> {
+            addHit(swX - 4.0F, ry, rowX2, ry + ROW, (button, mX, mY) -> {
                 if (button == 0 || button == 1) module.toggle();
             });
             addHit(lx, ry, swX - 4.0F, ry + ROW, (button, mX, mY) -> {
@@ -410,7 +439,16 @@ public class ClickGui extends GuiScreen {
         if (total > lh) {
             float thumbH = Math.max(20.0F, lh * lh / total);
             float thumbY = ly + (lh - thumbH) * (moduleScroll / Math.max(1.0F, maxScroll));
-            RenderUtil.drawRoundedRectWithGl(lx + lw - 2.0F, thumbY, lx + lw, thumbY + thumbH, 1.0F, col(255, 255, 255, 50));
+            boolean overBar = inside(mouseX, mouseY, lx + lw - 8.0F, ly, lx + lw + 2.0F, ly + lh);
+            float barHover = anim("mlbar", overBar ? 1.0F : 0.0F, 14.0F);
+            RenderUtil.drawRoundedRectWithGl(lx + lw - 2.5F, ly, lx + lw, ly + lh, 1.25F, col(255, 255, 255, (int) (8 * barHover)));
+            RenderUtil.drawRoundedRectWithGl(lx + lw - 2.5F, thumbY, lx + lw, thumbY + thumbH, 1.25F, col(255, 255, 255, (int) (45 + 45 * barHover)));
+        }
+        if (moduleScroll > 1.0F) {
+            RenderUtil.drawRoundedRectGradient(lx, ly, lx + lw - 6.0F, ly + 10.0F, 0.0F, col(14, 15, 20, 180), col(14, 15, 20, 0));
+        }
+        if (moduleScroll < maxScroll - 1.0F) {
+            RenderUtil.drawRoundedRectGradient(lx, ly + lh - 10.0F, lx + lw - 6.0F, ly + lh, 0.0F, col(12, 13, 17, 0), col(12, 13, 17, 180));
         }
     }
 
@@ -423,7 +461,8 @@ public class ClickGui extends GuiScreen {
         setY1 = sy;
         setX2 = sx + sw;
         setY2 = sy + sh;
-        RenderUtil.drawRoundedRectWithGl(sx, sy, sx + sw, sy + sh, 9.0F, col(255, 255, 255, 5));
+        RenderUtil.drawRoundedRectWithGl(sx - 0.5F, sy - 0.5F, sx + sw + 0.5F, sy + sh + 0.5F, 9.5F, col(255, 255, 255, 10));
+        RenderUtil.drawRoundedRectGradient(sx, sy, sx + sw, sy + sh, 9.0F, col(255, 255, 255, 7), col(255, 255, 255, 3));
 
         final Module module = selectedModule;
         if (module == null) {
@@ -471,7 +510,16 @@ public class ClickGui extends GuiScreen {
         if (maxScroll > 0.0F) {
             float thumbH = Math.max(20.0F, ch * ch / offset);
             float thumbY = cy + (ch - thumbH) * (settingScroll / maxScroll);
-            RenderUtil.drawRoundedRectWithGl(sx + sw - 4.0F, thumbY, sx + sw - 2.0F, thumbY + thumbH, 1.0F, col(255, 255, 255, 50));
+            boolean overBar = inside(mouseX, mouseY, sx + sw - 10.0F, cy, sx + sw, cy + ch);
+            float barHover = anim("setbar", overBar ? 1.0F : 0.0F, 14.0F);
+            RenderUtil.drawRoundedRectWithGl(sx + sw - 5.0F, cy, sx + sw - 2.5F, cy + ch, 1.25F, col(255, 255, 255, (int) (8 * barHover)));
+            RenderUtil.drawRoundedRectWithGl(sx + sw - 5.0F, thumbY, sx + sw - 2.5F, thumbY + thumbH, 1.25F, col(255, 255, 255, (int) (45 + 45 * barHover)));
+            if (settingScroll > 1.0F) {
+                RenderUtil.drawRoundedRectGradient(sx + 1.0F, cy, sx + sw - 7.0F, cy + 10.0F, 0.0F, col(16, 17, 23, 170), col(16, 17, 23, 0));
+            }
+            if (settingScroll < maxScroll - 1.0F) {
+                RenderUtil.drawRoundedRectGradient(sx + 1.0F, cy + ch - 10.0F, sx + sw - 7.0F, cy + ch, 0.0F, col(13, 14, 18, 0), col(13, 14, 18, 170));
+            }
         }
     }
 
@@ -519,12 +567,27 @@ public class ClickGui extends GuiScreen {
         rowBackground(id + "h", rx, ry, rw, h, mouseX, mouseY);
         float cy = ry + h / 2.0F;
         String value = property.getModeString().replace("_", " ");
-        float pillW = Math.min(rw * 0.55F, width(value, 13.0F) + 16.0F);
-        String shown = GuiText.trim(value, (int) (pillW - 12.0F), 13.0F);
+        int modeCount = property.getModes() != null ? property.getModes().length : 0;
+        float dotsW = modeCount > 1 && modeCount <= 8 ? modeCount * 4.0F + 4.0F : 0.0F;
+        float pillW = Math.min(rw * 0.6F, width(value, 13.0F) + 18.0F + dotsW);
+        String shown = GuiText.trim(value, (int) (pillW - 14.0F - dotsW), 13.0F);
         float px = rx + rw - pillW;
         text(GuiText.trim(label(property), (int) (px - rx - 6.0F), 14.0F), rx, cy, col(205, 210, 222, 255), 14.0F);
-        RenderUtil.drawRoundedRectWithGl(px, cy - 8.0F, rx + rw, cy + 8.0F, 5.0F, col(accent, 34));
-        text(shown, px + (pillW - width(shown, 13.0F)) / 2.0F, cy, col(accent, 255), 13.0F);
+        Float hoverState = anims.get(id + "h");
+        float hover = hoverState == null ? 0.0F : hoverState;
+        RenderUtil.drawRoundedRectWithGl(px - 0.5F, cy - 8.5F, rx + rw + 0.5F, cy + 8.5F, 5.5F, col(accent, (int) (40 + 40 * hover)));
+        RenderUtil.drawRoundedRectWithGl(px, cy - 8.0F, rx + rw, cy + 8.0F, 5.0F, col(20, 22, 30, 255));
+        RenderUtil.drawRoundedRectWithGl(px, cy - 8.0F, rx + rw, cy + 8.0F, 5.0F, col(accent, 26));
+        text(shown, px + 9.0F, cy, col(accent, 255), 13.0F);
+        if (dotsW > 0.0F) {
+            float dx = rx + rw - 8.0F - (modeCount - 1) * 4.0F;
+            for (int i = 0; i < modeCount; i++) {
+                boolean current = i == property.getValue();
+                float r = current ? 1.5F : 1.0F;
+                RenderUtil.drawRoundedRectWithGl(dx + i * 4.0F - r, cy - r, dx + i * 4.0F + r, cy + r, r,
+                        current ? col(accent, 255) : col(255, 255, 255, 60));
+            }
+        }
         addHit(rx - 4.0F, ry, rx + rw + 4.0F, ry + h, (button, mX, mY) -> {
             if (button == 0) property.nextMode();
             else if (button == 1) property.previousMode();
@@ -543,15 +606,20 @@ public class ClickGui extends GuiScreen {
 
         float ratio = anim(id, sliderRatio(property), draggingSlider == property ? 40.0F : 16.0F);
         float trackY = ry + 21.0F;
-        RenderUtil.drawRoundedRectWithGl(rx, trackY - 1.5F, rx + rw, trackY + 1.5F, 1.5F, col(255, 255, 255, 22));
+        boolean overTrack = inside(mouseX, mouseY, rx - 4.0F, Math.max(ry + 14.0F, clipTop), rx + rw + 4.0F, Math.min(ry + h, clipBottom));
+        float active = anim(id + "k", draggingSlider == property ? 1.0F : (overTrack ? 0.6F : 0.0F), 16.0F);
+        float half = 1.5F + 0.5F * active;
+        RenderUtil.drawRoundedRectWithGl(rx, trackY - half, rx + rw, trackY + half, half, col(255, 255, 255, 22));
         float fx = rx + rw * clamp01(ratio);
         if (fx - rx > 0.5F) {
-            RenderUtil.drawRoundedRectGradientH(rx, trackY - 1.5F, fx, trackY + 1.5F, 1.5F,
-                    col(accent, 170), col(accent, 255));
+            RenderUtil.drawRoundedRectGradientH(rx, trackY - half, fx, trackY + half, half,
+                    col(accent, 150), col(accent, 255));
         }
-        float knob = draggingSlider == property ? 4.5F : 4.0F;
-        RenderUtil.drawRoundedRectWithGl(fx - knob - 1.0F, trackY - knob - 1.0F, fx + knob + 1.0F, trackY + knob + 1.0F, knob + 1.0F, col(accent, 60));
+        float knob = 3.5F + 1.0F * active;
+        RenderUtil.drawRoundedRectWithGl(fx - knob - 2.0F, trackY - knob - 2.0F, fx + knob + 2.0F, trackY + knob + 2.0F, knob + 2.0F, col(accent, (int) (30 + 50 * active)));
+        RenderUtil.drawRoundedRectWithGl(fx - knob - 0.5F, trackY - knob + 0.5F, fx + knob + 0.5F, trackY + knob + 1.5F, knob + 0.5F, col(0, 0, 0, 60));
         RenderUtil.drawRoundedRectWithGl(fx - knob, trackY - knob, fx + knob, trackY + knob, knob, col(245, 247, 252, 255));
+        RenderUtil.drawRoundedRectWithGl(fx - 1.25F, trackY - 1.25F, fx + 1.25F, trackY + 1.25F, 1.25F, col(accent, 255));
 
         final float tx = rx;
         final float tw = rw;
@@ -665,11 +733,15 @@ public class ClickGui extends GuiScreen {
 
     private void drawSwitch(float x, float centerY, float w, float h, float progress) {
         float y1 = centerY - h / 2.0F;
-        Color off = new Color(58, 62, 74);
+        Color off = new Color(44, 47, 58);
+        RenderUtil.drawRoundedRectWithGl(x - 0.5F, y1 - 0.5F, x + w + 0.5F, y1 + h + 0.5F, h / 2.0F + 0.5F,
+                mixCol(new Color(255, 255, 255), accent, progress, (int) (20 + 40 * progress)));
         RenderUtil.drawRoundedRectWithGl(x, y1, x + w, y1 + h, h / 2.0F, mixCol(off, accent, progress, 255));
         float knob = h - 3.0F;
         float kx = x + 1.5F + (w - 3.0F - knob) * progress;
-        RenderUtil.drawRoundedRectWithGl(kx, y1 + 1.5F, kx + knob, y1 + 1.5F + knob, knob / 2.0F, col(248, 249, 252, 255));
+        RenderUtil.drawRoundedRectWithGl(kx - 0.5F, y1 + 1.5F, kx + knob + 0.5F, y1 + 2.5F + knob, knob / 2.0F + 0.5F, col(0, 0, 0, 50));
+        RenderUtil.drawRoundedRectWithGl(kx, y1 + 1.5F, kx + knob, y1 + 1.5F + knob, knob / 2.0F,
+                mixCol(new Color(196, 200, 212), new Color(250, 251, 253), progress, 255));
     }
 
     private void updateDrags(int mouseX) {
