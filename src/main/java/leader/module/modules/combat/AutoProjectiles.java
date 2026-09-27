@@ -26,6 +26,7 @@ import leader.module.Module;
 import leader.property.properties.BooleanProperty;
 import leader.property.properties.FloatProperty;
 import leader.property.properties.IntProperty;
+import leader.property.properties.ModeProperty;
 import leader.util.MoveUtil;
 import leader.util.PacketUtil;
 import leader.util.RotationUtil;
@@ -38,6 +39,8 @@ public class AutoProjectiles extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     public final FloatProperty range = new FloatProperty("MaxRange", 8.0F, 3.0F, 20.0F);
     public final FloatProperty minRange = new FloatProperty("MinRange", 5.0F, 3.0F, 20.0F);
+    public final ModeProperty targetMode = new ModeProperty("Target", 0, new String[]{"Nearest", "Priority", "KillAura", "Health", "FOV"});
+    public final BooleanProperty kaFallback = new BooleanProperty("KillAura Fallback", true, () -> this.targetMode.getValue() == 2);
 
     public final BooleanProperty smartDelay = new BooleanProperty("Smart Delay", false);
     public final IntProperty throwDelay = new IntProperty("Throw Delay Ticks", 3, 1, 15, () -> !smartDelay.getValue());
@@ -88,6 +91,12 @@ public class AutoProjectiles extends Module {
     }
 
     private EntityLivingBase getTarget() {
+        if (this.targetMode.getValue() == 2) {
+            KillAura aura = (KillAura) Leader.moduleManager.modules.get(KillAura.class);
+            EntityLivingBase auraTarget = aura.isEnabled() ? aura.getTarget() : null;
+            if (auraTarget != null && this.isValidTarget(auraTarget)) return auraTarget;
+            if (!this.kaFallback.getValue()) return null;
+        }
         ArrayList<EntityLivingBase> targets = new ArrayList<>();
         for (Object obj : mc.theWorld.loadedEntityList) {
             if (obj instanceof EntityLivingBase) {
@@ -96,7 +105,21 @@ public class AutoProjectiles extends Module {
             }
         }
         if (targets.isEmpty()) return null;
-        targets.sort(Comparator.comparingDouble(RotationUtil::distanceToEntity));
+        if (this.targetMode.getValue() == 1 && targets.stream().anyMatch(e -> TeamUtil.isTarget((EntityPlayer) e))) {
+            targets.removeIf(e -> !TeamUtil.isTarget((EntityPlayer) e));
+        }
+        Comparator<EntityLivingBase> byDistance = Comparator.comparingDouble(RotationUtil::distanceToEntity);
+        switch (this.targetMode.getValue()) {
+            case 3:
+                targets.sort(Comparator.comparingDouble((EntityLivingBase e) -> TeamUtil.getHealthScore(e)).thenComparing(byDistance));
+                break;
+            case 4:
+                targets.sort(Comparator.comparingDouble((EntityLivingBase e) -> RotationUtil.angleToEntity(e)).thenComparing(byDistance));
+                break;
+            default:
+                targets.sort(byDistance);
+                break;
+        }
         return targets.get(0);
     }
 
@@ -104,7 +127,7 @@ public class AutoProjectiles extends Module {
         if (!smartDelay.getValue()) {
             return throwDelay.getValue();
         }
-        EntityLivingBase t = getTarget();
+        EntityLivingBase t = this.target != null ? this.target : getTarget();
         if (t == null) return throwDelay.getValue();
         if (mc.gameSettings.keyBindBack.isKeyDown()) return 1;
         double dist = RotationUtil.distanceToEntity(t);
