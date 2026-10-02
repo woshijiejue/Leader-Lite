@@ -36,14 +36,47 @@ public class Notification extends Module {
     public final IntProperty maxAlerts = new IntProperty("max-alerts", 5, 1, 10);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
-    public final IntProperty offsetX = new IntProperty("offset-x", 2, 0, 255);
-    public final IntProperty offsetY = new IntProperty("offset-y", 20, 0, 255);
     public final BooleanProperty pixelIcon = new BooleanProperty("pixel-icon", true, () -> this.style.getValue() == 2);
     public final BooleanProperty pixelBlink = new BooleanProperty("pixel-blink", true, () -> this.style.getValue() == 2);
     public final BooleanProperty scanlines = new BooleanProperty("scanlines", true, () -> this.style.getValue() == 2);
 
     public Notification() {
         super("Notification", false);
+    }
+
+    public static int count() {
+        return entries.size();
+    }
+
+    public static boolean hasLatest() {
+        return !entries.isEmpty();
+    }
+
+    public static String latestText() {
+        return entries.isEmpty() ? "" : entries.get(entries.size() - 1).text;
+    }
+
+    public static int latestColor() {
+        if (entries.isEmpty()) return 0xFFFFFF;
+        switch (entries.get(entries.size() - 1).noticeMode) {
+            case Enable:
+                return 0x00FF00;
+            case Disable:
+                return 0xFF4444;
+            default:
+                return 0xFF6D19;
+        }
+    }
+
+    public static float latestProgress() {
+        if (entries.isEmpty()) return 0.0F;
+        Notification notification = (Notification) Leader.moduleManager.modules.get(Notification.class);
+        if (notification == null) return 0.0F;
+        NotificationEntry entry = entries.get(entries.size() - 1);
+        float dur = notification.duration.getValue();
+        float elapsed = System.currentTimeMillis() - entry.startTime;
+        float progress = 1.0F - elapsed / dur;
+        return Math.max(0.0F, Math.min(1.0F, progress));
     }
 
     public static void addNotification(String text, NoticeMode noticeMode) {
@@ -77,6 +110,7 @@ public class Notification extends Module {
     @EventTarget
     public void onRender2D(Render2DEvent event) {
         if (!this.isEnabled()) return;
+        if (Leader.hudElementManager.isSuppressed("Notification")) return;
         ScaledResolution sr = new ScaledResolution(mc);
         float screenWidth = sr.getScaledWidth();
         float screenHeight = sr.getScaledHeight();
@@ -117,16 +151,16 @@ public class Notification extends Module {
         float textHeight = FontManager.getFontHeight() * textScale;
         float textY = (cardHeight - textHeight) / 2.0F;
 
-        float offX = this.offsetX.getValue() + 4.0F;
-        float offY = this.offsetY.getValue() + 4.0F;
+        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 4.0F;
+        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 4.0F;
         boolean isRight = this.mode.getValue() == 0;
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
         float step = cardHeight + gap;
         float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
 
-        float baseX = isRight ? screenWidth - cardWidth - offX : offX;
-        float baseY = screenHeight - offY - cardHeight;
+        float baseX = offX;
+        float baseY = offY;
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
@@ -135,8 +169,8 @@ public class Notification extends Module {
             NotificationEntry entry = entries.get(i);
             float progress = Math.min((float) (now - entry.startTime) / (float) dur, 1.0F);
             float alpha = getAlpha(now, entry.startTime, dur);
-            int idx = max - 1 - i;
-            float targetY = (baseY - idx * step) * invScale;
+            int idx = i;
+            float targetY = (baseY + idx * step) * invScale;
             if (Float.isNaN(entry.animY)) entry.animY = targetY;
             entry.animY += (targetY - entry.animY) * reflow;
             float y = entry.animY;
@@ -165,7 +199,7 @@ public class Notification extends Module {
             float borderAlpha = 0.25F * alpha;
 
             RenderUtil.enableRenderState();
-            RenderUtil.drawRect(x, y, x + cardWidth, y + cardHeight, new Color(0.0F, 0.0F, 0.0F, bgAlpha).getRGB());
+            RenderUtil.drawRect(x, y, x + cardWidth, y + cardHeight, Leader.hudElementManager.background("Notification", 2.0F, 20.0F, bgAlpha));
 
             int fillColor = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), (int) (fillAlpha * 255.0F)).getRGB();
             RenderUtil.drawRect(x, y, x + fillWidth, y + cardHeight, fillColor);
@@ -244,13 +278,13 @@ public class Notification extends Module {
         float gap = 5.0F;
         float radius = 6.0F;
         float textScale = this.fontScale.getValue();
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 8.0F;
+        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
         boolean isRight = this.mode.getValue() == 0;
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
-        float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
-        float baseY = sr.getScaledHeight() - offY - cardHeight;
+        float baseX = offX;
+        float baseY = offY;
         float step = cardHeight + gap;
         float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
 
@@ -264,7 +298,7 @@ public class Notification extends Module {
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 18.0F;
             float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY - idx * step) * invScale;
+            float targetY = (baseY + idx * step) * invScale;
             if (Float.isNaN(entry.animY)) entry.animY = targetY;
             entry.animY += (targetY - entry.animY) * reflow;
             float y = entry.animY;
@@ -285,7 +319,7 @@ public class Notification extends Module {
             });
 
             int rimColor = new Color(255, 255, 255, (int) (30.0F * alpha)).getRGB();
-            int glassColor = new Color(13, 15, 21, (int) (178.0F * alpha)).getRGB();
+            int glassColor = Leader.hudElementManager.background("Notification", 2.0F, 20.0F, 178.0F * alpha / 255.0F);
             int accent = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), (int) (235.0F * alpha)).getRGB();
             int accentSoft = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), (int) (42.0F * alpha)).getRGB();
             int track = new Color(255, 255, 255, (int) (26.0F * alpha)).getRGB();
@@ -365,13 +399,13 @@ public class Notification extends Module {
         boolean showScanlines = this.scanlines.getValue();
         float cardHeight = Math.max(26.0F, textHeight + 14.0F);
         float gap = 4.0F;
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 8.0F;
+        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
         boolean isRight = this.mode.getValue() == 0;
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
-        float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
-        float baseY = sr.getScaledHeight() - offY - cardHeight;
+        float baseX = offX;
+        float baseY = offY;
         float step = cardHeight + gap;
         float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
         final float notch = 3.0F;
@@ -388,7 +422,7 @@ public class Notification extends Module {
 
             slide = Math.round(slide);
             float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY - idx * step) * invScale;
+            float targetY = (baseY + idx * step) * invScale;
             if (Float.isNaN(entry.animY)) entry.animY = targetY;
             entry.animY += (targetY - entry.animY) * reflow;
             float y = entry.animY;
@@ -419,7 +453,7 @@ public class Notification extends Module {
             int shadowColor = new Color(0, 0, 0, (int) (110.0F * alpha)).getRGB();
             RenderUtil.drawRect(x + 3.0F, y + 3.0F, x + cardWidth + 3.0F, y + cardHeight + 3.0F, shadowColor);
 
-            int bodyColor = new Color(12, 12, 18, (int) (235.0F * alpha)).getRGB();
+            int bodyColor = Leader.hudElementManager.background("Notification", 2.0F, 20.0F, 235.0F * alpha / 255.0F);
             RenderUtil.drawRect(x + notch, y, x + cardWidth - notch, y + cardHeight, bodyColor);
             RenderUtil.drawRect(x, y + notch, x + notch, y + cardHeight - notch, bodyColor);
             RenderUtil.drawRect(x + cardWidth - notch, y + notch, x + cardWidth, y + cardHeight - notch, bodyColor);
@@ -550,13 +584,13 @@ public class Notification extends Module {
         float cardHeight = 30.0F;
         float gap = 4.0F;
         float radius = 8.0F;
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 8.0F;
+        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
         boolean isRight = this.mode.getValue() == 0;
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
-        float baseX = isRight ? sr.getScaledWidth() - cardWidth - offX : offX;
-        float baseY = sr.getScaledHeight() - offY - cardHeight;
+        float baseX = offX;
+        float baseY = offY;
         float step = cardHeight + gap;
         float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
 
@@ -570,7 +604,7 @@ public class Notification extends Module {
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
             float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY - idx * step) * invScale;
+            float targetY = (baseY + idx * step) * invScale;
             if (Float.isNaN(entry.animY)) entry.animY = targetY;
             entry.animY += (targetY - entry.animY) * reflow;
             float y = entry.animY;
@@ -592,7 +626,7 @@ public class Notification extends Module {
             RenderUtil.drawRoundedRectWithGl(x, y + 2.0F, x + cardWidth, y + cardHeight + 2.0F, radius,
                     new Color(0, 0, 0, (int) (55.0F * alpha)).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
-                    new Color(20, 22, 27, (int) (225.0F * alpha)).getRGB());
+                    Leader.hudElementManager.background("Notification", 2.0F, 20.0F, 225.0F * alpha / 255.0F));
 
             float ringCX = x + 17.0F;
             float ringCY = y + cardHeight / 2.0F;
@@ -644,8 +678,8 @@ public class Notification extends Module {
 
     private void renderFrost(ScaledResolution sr, long now, long dur) {
         float textScale = this.fontScale.getValue();
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 8.0F;
+        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
@@ -660,7 +694,7 @@ public class Notification extends Module {
         float textHeight = FontManager.getFontHeight() * textScale;
         float step = cardHeight + 4.0F;
         float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
-        float baseY = sr.getScaledHeight() - offY - cardHeight;
+        float baseY = offY;
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(localScale, localScale, 1.0F);
@@ -688,8 +722,8 @@ public class Notification extends Module {
 
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
-            float targetX = (isRight ? sr.getScaledWidth() - offX - cardWidth + slide : offX - slide) * invScale;
-            float targetY = (baseY - idx * step) * invScale;
+            float targetX = (offX + (isRight ? slide : -slide)) * invScale;
+            float targetY = (baseY + idx * step) * invScale;
             if (Float.isNaN(entry.animX)) {
                 entry.animX = targetX;
                 entry.animY = targetY;
@@ -716,6 +750,10 @@ public class Notification extends Module {
                     radius, new Color(16, 20, 30, (int) (24.0F * alpha)).getRGB());
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
                     new Color(255, 255, 255, (int) (140.0F * alpha)).getRGB());
+            Color frostBg = Leader.hudElementManager.backgroundColor("Notification", 2.0F, 20.0F);
+            RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
+                    new Color(frostBg.getRed(), frostBg.getGreen(), frostBg.getBlue(),
+                            (int) (frostBg.getAlpha() * alpha * 0.5F)).getRGB());
 
             RenderUtil.drawRoundedRectWithGl(x + 4.0F, y + 5.0F, x + 7.0F, y + cardHeight - 5.0F, 1.5F,
                     new Color(ar, ag, ab, (int) (250.0F * alpha)).getRGB());
@@ -762,8 +800,8 @@ public class Notification extends Module {
 
     private void renderLucid(ScaledResolution sr, long now, long dur) {
         float textScale = this.fontScale.getValue();
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 8.0F;
+        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
@@ -810,12 +848,12 @@ public class Notification extends Module {
             float cardHeight = twoLines ? 4.5F + textHeight + 2.0F + textHeight + 5.0F : textHeight + 10.0F;
             float cardWidth = Math.max(minWidth, Math.min(maxWidth, padLeft + contentWidth + padRight));
             float step = cardHeight + 4.0F;
-            float baseY = sr.getScaledHeight() - offY - cardHeight;
+            float baseY = offY;
 
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
-            float targetX = (isRight ? sr.getScaledWidth() - offX - cardWidth + slide : offX - slide) * invScale;
-            float targetY = (baseY - idx * step) * invScale;
+            float targetX = (offX + (isRight ? slide : -slide)) * invScale;
+            float targetY = (baseY + idx * step) * invScale;
             if (Float.isNaN(entry.animX)) {
                 entry.animX = targetX;
                 entry.animY = targetY;
@@ -839,7 +877,7 @@ public class Notification extends Module {
             });
 
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
-                    new Color(48, 57, 103, (int) (51.0F * alpha)).getRGB());
+                    Leader.hudElementManager.background("Notification", 2.0F, 20.0F, 51.0F * alpha / 255.0F));
 
             float iconY = y + (cardHeight - iconSize) / 2.0F;
             lucidIcon(entry.noticeMode).draw(x + iconX, iconY, iconSize, 0xFFFFFF, alpha);
@@ -902,14 +940,14 @@ public class Notification extends Module {
         float padRight = 9.0F;
         float minWidth = 116.0F;
         float maxWidth = 220.0F;
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 8.0F;
+        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
         float step = cardHeight + 4.0F;
-        float baseY = sr.getScaledHeight() - offY - cardHeight;
+        float baseY = offY;
         float reflow = 1.0F - (float) Math.exp(-0.0165F * 16.0F);
 
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
@@ -948,8 +986,8 @@ public class Notification extends Module {
 
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
-            float targetX = (isRight ? sr.getScaledWidth() - offX - cardWidth + slide : offX - slide) * invScale;
-            float targetY = (baseY - idx * step) * invScale;
+            float targetX = (offX + (isRight ? slide : -slide)) * invScale;
+            float targetY = (baseY + idx * step) * invScale;
             if (Float.isNaN(entry.animX)) {
                 entry.animX = targetX;
                 entry.animY = targetY;
@@ -971,7 +1009,7 @@ public class Notification extends Module {
             });
 
             RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight,
-                    radius, new Color(105, 106, 112, (int) (51.0F * alpha)).getRGB());
+                    radius, Leader.hudElementManager.background("Notification", 2.0F, 20.0F, 51.0F * alpha / 255.0F));
 
             float barWidth = Math.max(1.5F, (cardWidth - 4.0F) * remain);
             RenderUtil.drawRect(x + 2.0F, y + cardHeight - 1.0F,

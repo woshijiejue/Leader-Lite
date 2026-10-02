@@ -5,7 +5,6 @@ import leader.events.AttackEvent;
 import leader.events.HitSlowDownEvent;
 import leader.events.LivingUpdateEvent;
 import leader.module.Module;
-import leader.module.modules.combat.Velocity;
 import leader.property.properties.BooleanProperty;
 import leader.property.properties.ModeProperty;
 import leader.property.properties.PercentProperty;
@@ -59,7 +58,6 @@ public class KeepSprint extends Module {
     }
 
     public double getSlowFactor() {
-        if (Velocity.blinkActive) return 1.0;
         switch (mode.getValue()) {
             case 1:
                 return 0.6;

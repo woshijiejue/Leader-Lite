@@ -28,12 +28,11 @@ public class Watermark extends Module {
     private long lastFrameTime = System.currentTimeMillis();
     private int displayFps = 0;
     private int frameCount = 0;
+    private int lastPing = 0;
 
     public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN", "LUCID"});
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
-    public final IntProperty offX = new IntProperty("offset-x", 4, 0, 500);
-    public final IntProperty offY = new IntProperty("offset-y", 4, 0, 500);
 
     public Watermark() {
         super("Watermark", false);
@@ -65,7 +64,7 @@ public class Watermark extends Module {
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!this.isEnabled()) return;
+        if (!this.isEnabled() || Leader.hudElementManager.isSuppressed("Watermark")) return;
 
         long now = System.currentTimeMillis();
         frameCount++;
@@ -138,8 +137,8 @@ public class Watermark extends Module {
         ScaledResolution sr = new ScaledResolution(mc);
         float maxW = sr.getScaledWidth() / uiScale;
         float maxH = sr.getScaledHeight() / uiScale;
-        float x = this.offX.getValue();
-        float y = this.offY.getValue();
+        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F);
+        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F);
         if (x + cardW > maxW) x = maxW - cardW - 4.0F;
         if (y + cardH > maxH) y = maxH - cardH - 4.0F;
         if (x < 4.0F) x = 4.0F;
@@ -234,8 +233,8 @@ public class Watermark extends Module {
         ScaledResolution sr = new ScaledResolution(mc);
         float maxW = sr.getScaledWidth() / uiScale;
         float maxH = sr.getScaledHeight() / uiScale;
-        float x = this.offX.getValue();
-        float y = this.offY.getValue();
+        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F);
+        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F);
         if (x + cardW > maxW) x = maxW - cardW - 4.0F;
         if (y + cardH > maxH) y = maxH - cardH - 4.0F;
         if (x < 4.0F) x = 4.0F;
@@ -324,9 +323,13 @@ public class Watermark extends Module {
     }
 
     private int getPing() {
-        if (mc.thePlayer == null || mc.getNetHandler() == null) return 0;
+        if (mc.thePlayer == null || mc.getNetHandler() == null) return lastPing;
         NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
-        return info != null ? info.getResponseTime() : 0;
+        if (info != null) {
+            int ping = info.getResponseTime();
+            if (ping > 0) lastPing = ping;
+        }
+        return lastPing;
     }
 
     private void renderClassic(String curText, String nextText, float anim, Color themeColor) {
@@ -334,8 +337,8 @@ public class Watermark extends Module {
         float textScale = this.fontScale.getValue();
         float curW = FontManager.getStringWidth(curText) * textScale;
         float nextW = FontManager.getStringWidth(nextText) * textScale;
-        float x = this.offX.getValue();
-        float y = this.offY.getValue();
+        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F);
+        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F);
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(uiScale, uiScale, 1.0F);

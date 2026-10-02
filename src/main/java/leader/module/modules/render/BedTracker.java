@@ -64,10 +64,6 @@ public class BedTracker extends Module {
     public final TextProperty marcoText;
     public final IntProperty marcoDelay;
     public final BooleanProperty hud;
-    public final ModeProperty hudPosX;
-    public final ModeProperty hudPosY;
-    public final IntProperty hudOffX;
-    public final IntProperty hudOffY;
     public final FloatProperty hudScale;
     public final BooleanProperty hudShadow;
 
@@ -121,10 +117,6 @@ public class BedTracker extends Module {
         this.marcoText = new TextProperty("macro-text", "/lobby", () -> this.marco.getValue() || this.marcoOnPreal.getValue());
         this.marcoDelay = new IntProperty("macro-delay", 1, 1, 10, () -> this.marco.getValue() || this.marcoOnPreal.getValue());
         this.hud = new BooleanProperty("hud", true);
-        this.hudPosX = new ModeProperty("hud-position-x", 0, new String[]{"LEFT", "MIDDLE", "RIGHT"}, this.hud::getValue);
-        this.hudPosY = new ModeProperty("hud-position-y", 0, new String[]{"TOP", "MIDDLE", "BOTTOM"}, this.hud::getValue);
-        this.hudOffX = new IntProperty("hud-offset-x", 2, 0, 255, this.hud::getValue);
-        this.hudOffY = new IntProperty("hud-offset-y", 2, 0, 255, this.hud::getValue);
         this.hudScale = new FloatProperty("hud-scale", 1.0F, 0.5F, 1.5F, this.hud::getValue);
         this.hudShadow = new BooleanProperty("hud-shadow", true, this.hud::getValue);
     }
@@ -215,7 +207,7 @@ public class BedTracker extends Module {
 
     @EventTarget(Priority.LOW)
     public void onRender(Render2DEvent event) {
-        if (this.isEnabled() && this.hud.getValue()) {
+        if (this.isEnabled() && this.hud.getValue() && !Leader.hudElementManager.isSuppressed("BedTracker")) {
             if (mc.theWorld != null && mc.thePlayer != null && !mc.gameSettings.showDebugInfo) {
                 GuiScreen currentScreen = mc.currentScreen;
                 if (currentScreen == null || currentScreen instanceof GuiChat) {
@@ -236,30 +228,8 @@ public class BedTracker extends Module {
                     ScaledResolution scaledResolution = new ScaledResolution(mc);
                     float width = (float) FontManager.getStringWidth(text);
                     float height = (float) FontManager.getFontHeight() - 1.0F;
-                    float scale = (float) this.hudOffX.getValue() / this.hudScale.getValue();
-                    switch (this.hudPosX.getValue()) {
-                        case 0:
-                            scale++;
-                            break;
-                        case 1:
-                            scale += (float) scaledResolution.getScaledWidth() / this.hudScale.getValue() / 2.0F - width / 2.0F;
-                            break;
-                        case 2:
-                            scale = (scale + 1.0F) * -1.0F;
-                            scale += (float) scaledResolution.getScaledWidth() / this.hudScale.getValue() - width;
-                    }
-                    float offset = (float) this.hudOffY.getValue() / this.hudScale.getValue();
-                    switch (this.hudPosY.getValue()) {
-                        case 0:
-                            offset++;
-                            break;
-                        case 1:
-                            offset += (float) scaledResolution.getScaledHeight() / this.hudScale.getValue() / 2.0F - height / 2.0F;
-                            break;
-                        case 2:
-                            offset = (offset + 1.0F) * -1.0F;
-                            offset += (float) scaledResolution.getScaledHeight() / this.hudScale.getValue() - height;
-                    }
+                    float scale = Leader.hudElementManager.x("BedTracker", 2.0F, 2.0F) / this.hudScale.getValue();
+                    float offset = Leader.hudElementManager.y("BedTracker", 2.0F, 2.0F) / this.hudScale.getValue();
                     GlStateManager.pushMatrix();
                     GlStateManager.scale(this.hudScale.getValue(), this.hudScale.getValue(), 1.0F);
                     GlStateManager.translate(scale, offset, 0.0F);

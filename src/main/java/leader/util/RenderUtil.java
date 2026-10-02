@@ -280,6 +280,21 @@ public class RenderUtil {
                 new Color(255, 255, 255, (int) (120.0F * alpha)).getRGB());
     }
 
+    public static void drawGrayGlass(float x1, float y1, float x2, float y2, float radius, float alpha) {
+        drawGrayGlass(x1, y1, x2, y2, radius, alpha, new Color(46, 48, 54, 150));
+    }
+
+    public static void drawGrayGlass(float x1, float y1, float x2, float y2, float radius, float alpha, Color base) {
+        int r = base.getRed(), g = base.getGreen(), b = base.getBlue(), a = base.getAlpha();
+        drawRoundedRectWithGl(x1 + 0.5F, y1 + 1.6F, x2 + 0.5F, y2 + 1.6F, radius,
+                new Color(0, 0, 0, (int) (30.0F * alpha)).getRGB());
+        drawRoundedRectGradient(x1, y1, x2, y2, radius,
+                new Color(Math.min(255, r + 12), Math.min(255, g + 12), Math.min(255, b + 12), (int) (a * alpha)).getRGB(),
+                new Color(Math.max(0, r - 8), Math.max(0, g - 8), Math.max(0, b - 8), (int) (a * alpha)).getRGB());
+        drawRoundedRectWithGl(x1 + radius * 0.7F, y1 + 0.6F, x2 - radius * 0.7F, y1 + 1.2F, 0.3F,
+                new Color(255, 255, 255, (int) (28.0F * alpha)).getRGB());
+    }
+
     public static int interpolateColor(int c1, int c2, float fraction) {
         int a1 = (c1 >> 24 & 255), a2 = (c2 >> 24 & 255);
         int r1 = (c1 >> 16 & 255), r2 = (c2 >> 16 & 255);

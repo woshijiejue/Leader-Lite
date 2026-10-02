@@ -1,6 +1,7 @@
 package leader.module.modules.render;
 
 import leader.enums.ChatColors;
+import leader.Leader;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
 import leader.module.Module;
@@ -23,6 +24,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 
 import java.awt.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class Indicators extends Module {
@@ -35,6 +37,8 @@ public class Indicators extends Module {
     public final BooleanProperty arrows = new BooleanProperty("arrows", true);
     public final BooleanProperty egg = new BooleanProperty("egg", true);
     public final BooleanProperty snowball = new BooleanProperty("snowball", true);
+
+    private static int trackedCount = 0;
 
     private boolean shouldRender(Entity entity) {
         double d = (entity.posX - entity.lastTickPosX) * (Indicators.mc.thePlayer.posX - entity.posX) + (entity.posY - entity.lastTickPosY) * (Indicators.mc.thePlayer.posY + (double) Indicators.mc.thePlayer.getEyeHeight() - entity.posY - (double) entity.height / 2.0) + (entity.posZ - entity.lastTickPosZ) * (Indicators.mc.thePlayer.posZ - entity.posZ);
@@ -86,16 +90,22 @@ public class Indicators extends Module {
         return new Color(-1);
     }
 
+    public static int tracked() {
+        return trackedCount;
+    }
+
     public Indicators() {
         super("Indicators", false, true);
     }
 
     @EventTarget
     public void onRender(Render2DEvent render2DEvent) {
-        if (!this.isEnabled()) {
+        if (!this.isEnabled() || Leader.hudElementManager.isSuppressed("Indicators")) {
             return;
         }
-        for (Entity entity : TeamUtil.getLoadedEntitiesSorted().stream().filter(this::shouldRender).collect(Collectors.toList())) {
+        List<Entity> targets = TeamUtil.getLoadedEntitiesSorted().stream().filter(this::shouldRender).collect(Collectors.toList());
+        trackedCount = targets.size();
+        for (Entity entity : targets) {
             float offset = 10.0f + this.offset.getValue();
             float yawBetween = RotationUtil.getYawBetween(RenderUtil.lerpDouble(Indicators.mc.thePlayer.posX, Indicators.mc.thePlayer.prevPosX, render2DEvent.getPartialTicks()), RenderUtil.lerpDouble(Indicators.mc.thePlayer.posZ, Indicators.mc.thePlayer.prevPosZ, render2DEvent.getPartialTicks()), RenderUtil.lerpDouble(entity.posX, entity.prevPosX, render2DEvent.getPartialTicks()), RenderUtil.lerpDouble(entity.posZ, entity.prevPosZ, render2DEvent.getPartialTicks()));
             if (Indicators.mc.gameSettings.thirdPersonView == 2) {

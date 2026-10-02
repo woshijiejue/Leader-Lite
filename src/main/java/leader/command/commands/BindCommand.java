@@ -5,7 +5,6 @@ import leader.command.Command;
 import leader.module.Module;
 import leader.util.ChatUtil;
 import leader.util.KeyBindUtil;
-import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
 import java.util.ArrayList;
@@ -44,19 +43,24 @@ public class BindCommand extends Command {
                 );
             }
         } else {
-            String keyInput = args.get(2).toUpperCase();
+            String keyInput = args.get(2).toUpperCase(Locale.ROOT);
             int keyIndex = 0;
 
-            if (keyInput.equalsIgnoreCase("NONE") || keyInput.equalsIgnoreCase("NULL") || keyInput.equalsIgnoreCase("0")) {
+            if (keyInput.equalsIgnoreCase("NONE") || keyInput.equalsIgnoreCase("NULL")) {
                 keyIndex = 0;
             } else {
-                keyIndex = Keyboard.getKeyIndex(keyInput);
+                keyIndex = KeyBindUtil.getKeyIndex(keyInput);
 
                 if (keyIndex == 0) {
                     int buttonIndex = getMouseButtonIndex(keyInput);
                     if (buttonIndex != -1) {
                         keyIndex = buttonIndex - 100;
                     }
+                }
+
+                if (keyIndex == 0) {
+                    ChatUtil.sendFormatted(String.format("%sUnknown key (&o%s&r)&r", Leader.clientName, args.get(2)));
+                    return;
                 }
             }
 

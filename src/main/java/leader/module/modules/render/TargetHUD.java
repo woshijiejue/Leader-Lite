@@ -59,12 +59,8 @@ public class TargetHUD extends Module {
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"DEFAULT", "TRIANGLE", "BACKGROUND", "MODERN", "INK", "AURA", "FROST", "SLATE"});
     public final ModeProperty color = new ModeProperty("color", 0, new String[]{"DEFAULT", "HUD"});
     public final ModeProperty position = new ModeProperty("position", 0, new String[]{"SCREEN", "FOLLOW"});
-    public final ModeProperty posX = new ModeProperty("position-x", 1, new String[]{"LEFT", "MIDDLE", "RIGHT"}, () -> this.position.getValue() == 0);
-    public final ModeProperty posY = new ModeProperty("position-y", 1, new String[]{"TOP", "MIDDLE", "BOTTOM"}, () -> this.position.getValue() == 0);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.15F, 0.85F, 1.5F);
-    public final IntProperty offX = new IntProperty("offset-x", 0, -255, 255);
-    public final IntProperty offY = new IntProperty("offset-y", 40, -255, 255);
     public final PercentProperty background = new PercentProperty("background", 25);
     public final BooleanProperty backgroundHUDColor = new BooleanProperty("BackgroundHUDColor",true);
     public final ColorProperty backgroundColor = new ColorProperty("background-color", Color.BLACK.getRGB(),() -> !backgroundHUDColor.getValue());
@@ -216,7 +212,7 @@ public class TargetHUD extends Module {
 
     @EventTarget
     public void onRender3D(Render3DEvent event) {
-        if (!this.isEnabled() || mc.thePlayer == null || this.position.getValue() != 1) {
+        if (!this.isEnabled() || mc.thePlayer == null || this.position.getValue() != 1 || Leader.hudElementManager.isSuppressed("TargetHUD")) {
             return;
         }
 
@@ -400,7 +396,7 @@ public class TargetHUD extends Module {
 
     @EventTarget
     public void onRender(Render2DEvent event) {
-        if (this.isEnabled() && mc.thePlayer != null && this.position.getValue() == 0) {
+        if (this.isEnabled() && mc.thePlayer != null && this.position.getValue() == 0 && !Leader.hudElementManager.isSuppressed("TargetHUD")) {
             EntityLivingBase entityLivingBase = this.target;
             this.target = this.resolveTarget();
             if (this.target != null) {
@@ -497,24 +493,8 @@ public class TargetHUD extends Module {
                 float headSize = Math.min(23.0F, cardHeight - 4.0F);
                 float headIconOffset = this.head.getValue() && this.headTexture != null ? headSize + 2.0F : 0.0F;
                 float barTotalWidth = Math.max(headIconOffset + 70.0F, headIconOffset + 2.0F + barContentWidth + 2.0F);
-                float posX = this.offX.getValue().floatValue() / this.scale.getValue();
-                switch (this.posX.getValue()) {
-                    case 1:
-                        posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - barTotalWidth / 2.0F;
-                        break;
-                    case 2:
-                        posX *= -1.0F;
-                        posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - barTotalWidth;
-                }
-                float posY = this.offY.getValue().floatValue() / this.scale.getValue();
-                switch (this.posY.getValue()) {
-                    case 1:
-                        posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - cardHeight / 2.0F;
-                        break;
-                    case 2:
-                        posY *= -1.0F;
-                        posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - cardHeight;
-                }
+                float posX = Leader.hudElementManager.x("TargetHUD", (float) scaledResolution.getScaledWidth() / 2.0F - barTotalWidth / 2.0F, 20.0F);
+                float posY = Leader.hudElementManager.y("TargetHUD", 40.0F, 40.0F);
                 GlStateManager.pushMatrix();
                 GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
                 GlStateManager.translate(posX, posY, -450.0F);
@@ -563,28 +543,8 @@ public class TargetHUD extends Module {
         boolean hasHead = this.head.getValue() && this.headTexture != null;
         float headIconOffset = hasHead ? headSize + 2.0F : 0.0F;
 
-        float posX = this.renderingFollow ? -barWidth / 2.0F : this.offX.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posX.getValue()) {
-                case 1:
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - barWidth / 2.0F;
-                    break;
-                case 2:
-                    posX *= -1.0F;
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - barWidth;
-            }
-        }
-        float posY = this.renderingFollow ? -barHeight / 2.0F : this.offY.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posY.getValue()) {
-                case 1:
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - barHeight / 2.0F;
-                    break;
-                case 2:
-                    posY *= -1.0F;
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - barHeight;
-            }
-        }
+        float posX = this.renderingFollow ? -barWidth / 2.0F : Leader.hudElementManager.x("TargetHUD", (float) scaledResolution.getScaledWidth() / 2.0F - 75.0F, 40.0F);
+        float posY = this.renderingFollow ? -barHeight / 2.0F : Leader.hudElementManager.y("TargetHUD", 40.0F, 40.0F);
 
         if (!this.renderingFollow) {
             final float bx = posX;
@@ -685,30 +645,8 @@ public class TargetHUD extends Module {
         String modernHealthText = ChatColors.formatColor(String.format("&r&f%s&r", healthStr));
         float modernHealthWidth = this.getTextWidth(modernHealthText);
 
-        float posX = this.renderingFollow ? -cardWidth / 2.0F : this.offX.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posX.getValue()) {
-                case 1:
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - cardWidth / 2.0F;
-                    break;
-                case 2:
-                    posX *= -1.0F;
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - cardWidth;
-                    break;
-            }
-        }
-        float posY = this.renderingFollow ? -cardHeight / 2.0F : this.offY.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posY.getValue()) {
-                case 1:
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - cardHeight / 2.0F;
-                    break;
-                case 2:
-                    posY *= -1.0F;
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - cardHeight;
-                    break;
-            }
-        }
+        float posX = this.renderingFollow ? -cardWidth / 2.0F : Leader.hudElementManager.x("TargetHUD", (float) scaledResolution.getScaledWidth() / 2.0F - 75.0F, 40.0F);
+        float posY = this.renderingFollow ? -cardHeight / 2.0F : Leader.hudElementManager.y("TargetHUD", 40.0F, 40.0F);
 
         if (!this.renderingFollow) {
             final float bx = posX;
@@ -741,7 +679,7 @@ public class TargetHUD extends Module {
         int rimColor = this.outline.getValue()
                 ? new Color(targetColor.getRed(), targetColor.getGreen(), targetColor.getBlue(), 90).getRGB()
                 : new Color(255, 255, 255, 30).getRGB();
-        int glassColor = new Color(14, 16, 22, glassAlpha).getRGB();
+        int glassColor = Leader.hudElementManager.background("TargetHUD", 40.0F, 40.0F, glassAlpha / 255.0F);
 
         RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, radius, rimColor);
         RenderUtil.drawRoundedRectWithGl(1.0F, 1.0F, cardWidth - 1.0F, cardHeight - 1.0F, radius - 1.0F, glassColor);
@@ -899,30 +837,8 @@ public class TargetHUD extends Module {
         final float radius = 8.0F;
         final float textX = hasHead ? 44.0F : 12.0F;
 
-        float posX = this.renderingFollow ? -cardWidth / 2.0F : this.offX.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posX.getValue()) {
-                case 1:
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - cardWidth / 2.0F;
-                    break;
-                case 2:
-                    posX *= -1.0F;
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - cardWidth;
-                    break;
-            }
-        }
-        float posY = this.renderingFollow ? -cardHeight / 2.0F : this.offY.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posY.getValue()) {
-                case 1:
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - cardHeight / 2.0F;
-                    break;
-                case 2:
-                    posY *= -1.0F;
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - cardHeight;
-                    break;
-            }
-        }
+        float posX = this.renderingFollow ? -cardWidth / 2.0F : Leader.hudElementManager.x("TargetHUD", (float) scaledResolution.getScaledWidth() / 2.0F - 75.0F, 40.0F);
+        float posY = this.renderingFollow ? -cardHeight / 2.0F : Leader.hudElementManager.y("TargetHUD", 40.0F, 40.0F);
 
         if (!this.renderingFollow) {
             final float bx = posX;
@@ -946,7 +862,7 @@ public class TargetHUD extends Module {
         GlStateManager.translate(posX, posY, this.renderingFollow ? 0.0F : -450.0F);
 
         int cardAlpha = 51;
-        int cardColor = new Color(20, 22, 27, cardAlpha).getRGB();
+        int cardColor = Leader.hudElementManager.background("TargetHUD", 40.0F, 40.0F, cardAlpha / 255.0F);
         RenderUtil.drawRoundedRectWithGl(0.0F, 0.0F, cardWidth, cardHeight, radius, cardColor);
 
         float ringCX = 24.0F;
@@ -1055,30 +971,8 @@ public class TargetHUD extends Module {
         final float brushY = cardHeight - 6.5F;
         final float barX2 = cardWidth - 12.0F;
 
-        float posX = this.renderingFollow ? -cardWidth / 2.0F : this.offX.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posX.getValue()) {
-                case 1:
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - cardWidth / 2.0F;
-                    break;
-                case 2:
-                    posX *= -1.0F;
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - cardWidth;
-                    break;
-            }
-        }
-        float posY = this.renderingFollow ? -cardHeight / 2.0F : this.offY.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posY.getValue()) {
-                case 1:
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - cardHeight / 2.0F;
-                    break;
-                case 2:
-                    posY *= -1.0F;
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - cardHeight;
-                    break;
-            }
-        }
+        float posX = this.renderingFollow ? -cardWidth / 2.0F : Leader.hudElementManager.x("TargetHUD", (float) scaledResolution.getScaledWidth() / 2.0F - 75.0F, 40.0F);
+        float posY = this.renderingFollow ? -cardHeight / 2.0F : Leader.hudElementManager.y("TargetHUD", 40.0F, 40.0F);
 
         if (!this.renderingFollow) {
             final float bx = posX;
@@ -1253,30 +1147,8 @@ public class TargetHUD extends Module {
         final float contentX = hasHead ? pad + headSize + 8.0F : pad + 3.0F;
         final float contentRight = cardWidth - pad - 3.0F;
 
-        float posX = this.renderingFollow ? 0.0F : this.offX.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posX.getValue()) {
-                case 1:
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - cardWidth / 2.0F;
-                    break;
-                case 2:
-                    posX *= -1.0F;
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - cardWidth;
-                    break;
-            }
-        }
-        float posY = this.renderingFollow ? 0.0F : this.offY.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posY.getValue()) {
-                case 1:
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - cardHeight / 2.0F;
-                    break;
-                case 2:
-                    posY *= -1.0F;
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - cardHeight;
-                    break;
-            }
-        }
+        float posX = this.renderingFollow ? 0.0F : Leader.hudElementManager.x("TargetHUD", (float) scaledResolution.getScaledWidth() / 2.0F - 75.0F, 40.0F);
+        float posY = this.renderingFollow ? 0.0F : Leader.hudElementManager.y("TargetHUD", 40.0F, 40.0F);
 
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
         long now = System.currentTimeMillis();
@@ -1520,30 +1392,8 @@ public class TargetHUD extends Module {
             this.frostLagRatio = lagTarget;
         }
 
-        float posX = this.renderingFollow ? 0.0F : this.offX.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posX.getValue()) {
-                case 1:
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - cardWidth / 2.0F;
-                    break;
-                case 2:
-                    posX *= -1.0F;
-                    posX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - cardWidth;
-                    break;
-            }
-        }
-        float posY = this.renderingFollow ? 0.0F : this.offY.getValue().floatValue() / this.scale.getValue();
-        if (!this.renderingFollow) {
-            switch (this.posY.getValue()) {
-                case 1:
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - cardHeight / 2.0F;
-                    break;
-                case 2:
-                    posY *= -1.0F;
-                    posY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - cardHeight;
-                    break;
-            }
-        }
+        float posX = this.renderingFollow ? 0.0F : Leader.hudElementManager.x("TargetHUD", (float) scaledResolution.getScaledWidth() / 2.0F - 75.0F, 40.0F);
+        float posY = this.renderingFollow ? 0.0F : Leader.hudElementManager.y("TargetHUD", 40.0F, 40.0F);
 
         if (!this.renderingFollow) {
             final float bx = posX;
@@ -1650,26 +1500,8 @@ public class TargetHUD extends Module {
         final float headSize = 20.0F;
         final float barLineWidth = 3.5F;
 
-        float triPosX = this.offX.getValue().floatValue() / this.scale.getValue();
-        switch (this.posX.getValue()) {
-            case 1:
-                triPosX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() / 2.0F - halfBase;
-                break;
-            case 2:
-                triPosX *= -1.0F;
-                triPosX += (float) scaledResolution.getScaledWidth() / this.scale.getValue() - baseWidth;
-                break;
-        }
-        float triPosY = this.offY.getValue().floatValue() / this.scale.getValue();
-        switch (this.posY.getValue()) {
-            case 1:
-                triPosY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() / 2.0F - height / 2.0F;
-                break;
-            case 2:
-                triPosY *= -1.0F;
-                triPosY += (float) scaledResolution.getScaledHeight() / this.scale.getValue() - height;
-                break;
-        }
+        float triPosX = Leader.hudElementManager.x("TargetHUD", (float) scaledResolution.getScaledWidth() / 2.0F - halfBase, 40.0F);
+        float triPosY = Leader.hudElementManager.y("TargetHUD", 40.0F, 40.0F);
         final float tipX  = triPosX + halfBase;
         final float tipY  = triPosY;
         final float leftX = triPosX;

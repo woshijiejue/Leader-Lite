@@ -38,10 +38,6 @@ public class HUD extends Module {
     public final ColorProperty custom1 = new ColorProperty("custom-color-1", Color.WHITE.getRGB(), () -> this.colorMode.getValue() == 3 || this.colorMode.getValue() == 4 || this.colorMode.getValue() == 5);
     public final ColorProperty custom2 = new ColorProperty("custom-color-2", Color.WHITE.getRGB(), () -> this.colorMode.getValue() == 4 || this.colorMode.getValue() == 5);
     public final ColorProperty custom3 = new ColorProperty("custom-color-3", Color.WHITE.getRGB(), () -> this.colorMode.getValue() == 5);
-    public final ModeProperty posX = new ModeProperty("position-x", 0, new String[]{"LEFT", "RIGHT"});
-    public final ModeProperty posY = new ModeProperty("position-y", 0, new String[]{"TOP", "BOTTOM"});
-    public final IntProperty offsetX = new IntProperty("offset-x", 2, 0, 255);
-    public final IntProperty offsetY = new IntProperty("offset-y", 2, 0, 255);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
     public final PercentProperty background = new PercentProperty("background", 25);
     public final IntProperty rowSpacing = new IntProperty("row-spacing", 0, 0, 10);
@@ -57,6 +53,7 @@ public class HUD extends Module {
     public final BooleanProperty glow = new BooleanProperty("glow", false);
     public final IntProperty barless = new IntProperty("barless", 0, 0, 8, () -> this.showBar.getValue());
     public final ModeProperty barMode = new ModeProperty("bar-mode", 0, new String[]{"RIGHT", "LEFT", "TOP", "BOTTOM"}, () -> this.showBar.getValue());
+    public final ModeProperty align = new ModeProperty("align", 0, new String[]{"LEFT", "RIGHT"});
 
     private String getModuleName(Module module) {
         String moduleName = module.getName();
@@ -223,17 +220,12 @@ public class HUD extends Module {
                 RenderUtil.disableRenderState();
             }
         }
-        if (this.isEnabled() && !mc.gameSettings.showDebugInfo) {
+        if (this.isEnabled() && !mc.gameSettings.showDebugInfo && !Leader.hudElementManager.isSuppressed("HUD")) {
             float height = (float) FontManager.getFontHeight() - 1.0F;
-            float x = (float) this.offsetX.getValue()
-                    + (1.0F + (this.showBar.getValue() ? (this.shadow.getValue() ? 2.0F : 1.0F) : 0.0F)) * this.scale.getValue();
-            float y = (float) this.offsetY.getValue() + 1.0F * this.scale.getValue();
-            if (this.posX.getValue() == 1) {
-                x = (float) new ScaledResolution(mc).getScaledWidth() - x;
-            }
-            if (this.posY.getValue() == 1) {
-                y = (float) new ScaledResolution(mc).getScaledHeight() - y - height * this.scale.getValue();
-            }
+            ScaledResolution sr = new ScaledResolution(mc);
+            boolean rightAlign = this.align.getValue() == 1;
+            float x = rightAlign ? sr.getScaledWidth() - 2.0F : Leader.hudElementManager.x("HUD", 2.0F, 2.0F);
+            float y = Leader.hudElementManager.y("HUD", 2.0F, 2.0F);
             GlStateManager.pushMatrix();
             GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
             long l = System.currentTimeMillis();
@@ -253,11 +245,18 @@ public class HUD extends Module {
                 int color = themeColor.getRGB();
                 float sx = x / this.scale.getValue();
                 float sy = y / this.scale.getValue();
-                float bgX1 = sx - 1.0F - (this.posX.getValue() == 0 ? 0.0F : totalWidth);
-                float bgY1 = sy - this.rowSpacing.getValue() - (this.posY.getValue() == 0 ? (offset == 0L ? 1.0F : 0.0F) : (this.shadow.getValue() ? 1.0F : 0.0F));
-                float bgX2 = sx + 1.0F + (this.posX.getValue() == 0 ? totalWidth : 0.0F);
-                float bgY2 = sy + height + this.rowSpacing.getValue() + (this.posY.getValue() == 0 ? (this.shadow.getValue() ? 1.0F : 0.0F) : (offset == 0L ? 1.0F : 0.0F));
-                float textX = sx - (this.posX.getValue() == 1 ? totalWidth : 0.0F);
+                float bgX1, bgX2, textX;
+                if (rightAlign) {
+                    bgX2 = sx + 1.0F;
+                    bgX1 = sx - totalWidth - 1.0F;
+                    textX = sx - totalWidth;
+                } else {
+                    bgX1 = sx - 1.0F;
+                    bgX2 = sx + 1.0F + totalWidth;
+                    textX = sx;
+                }
+                float bgY1 = sy - this.rowSpacing.getValue() - (offset == 0L ? 1.0F : 0.0F);
+                float bgY2 = sy + height + this.rowSpacing.getValue() + (this.shadow.getValue() ? 1.0F : 0.0F);
                 float textY = sy;
                 listMinX = Math.min(listMinX, bgX1);
                 listMinY = Math.min(listMinY, bgY1);
@@ -273,7 +272,7 @@ public class HUD extends Module {
                 if (useThemeBg) {
                     bgAlphaColor = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), (int) (this.background.getValue().floatValue() / 100.0F * 255.0F)).getRGB();
                 } else {
-                    bgAlphaColor = new Color(0.0F, 0.0F, 0.0F, this.background.getValue().floatValue() / 100.0F).getRGB();
+                    bgAlphaColor = Leader.hudElementManager.background("HUD", 2.0F, 2.0F, this.background.getValue().floatValue() / 100.0F);
                 }
                 int glowColor = useThemeBg ? color : themeColor.getRGB();
 
@@ -296,7 +295,7 @@ public class HUD extends Module {
                 if (hasBg && this.glow.getValue()) {
                     boolean firstRow = offset == 0L;
                     boolean lastRow = offset == this.activeModules.size() - 1;
-                    boolean outerLeft = this.posX.getValue() == 1;
+                    boolean outerLeft = false;
                     RenderUtil.enableRenderState();
                     drawGlowOutline(
                             bgX1, bgY1, bgX2, bgY2, glowColor, 6, 0.5F,
@@ -315,18 +314,16 @@ public class HUD extends Module {
                     float barY1 = bgY1 + barlessVal;
                     float barY2 = bgY2 - barlessVal;
                     if (barModeVal == 0) {
-                        boolean alignLeft = this.posX.getValue() == 0;
-                        if (alignLeft) {
-                            RenderUtil.drawRect(sx - 2.0F, barY1, sx - 1.0F, barY2, color);
-                        } else {
-                            RenderUtil.drawRect(sx + 1.0F, barY1, sx + 2.0F, barY2, color);
-                        }
-                    } else if (barModeVal == 1) {
-                        boolean alignLeft = this.posX.getValue() == 0;
-                        if (alignLeft) {
+                        if (rightAlign) {
                             RenderUtil.drawRect(bgX2, barY1, bgX2 + 1.0F, barY2, color);
                         } else {
+                            RenderUtil.drawRect(sx - 2.0F, barY1, sx - 1.0F, barY2, color);
+                        }
+                    } else if (barModeVal == 1) {
+                        if (rightAlign) {
                             RenderUtil.drawRect(bgX1 - 1.0F, barY1, bgX1, barY2, color);
+                        } else {
+                            RenderUtil.drawRect(bgX2, barY1, bgX2 + 1.0F, barY2, color);
                         }
                     } else if (barModeVal == 2) {
                         float bw = 1.0F;
@@ -353,7 +350,7 @@ public class HUD extends Module {
                     FontManager.drawString(
                                     moduleName,
                                     textX,
-                                    textY + (this.posY.getValue() == 1 ? 1.0F : 0.0F),
+                                    textY,
                                     color,
                                     false
                             );
@@ -375,7 +372,7 @@ public class HUD extends Module {
                             FontManager.drawString(
                                             string,
                                             textX + suffixX,
-                                            textY + (this.posY.getValue() == 1 ? 1.0F : 0.0F),
+                                            textY,
                                             ChatColors.GRAY.toAwtColor(),
                                             false
                                     );
@@ -383,7 +380,7 @@ public class HUD extends Module {
                         suffixX += (float) FontManager.getStringWidth(string) + (this.shadow.getValue() ? 3.0F : 2.0F);
                     }
                 }
-                y += (height + 2 * this.rowSpacing.getValue() + (this.shadow.getValue() ? 1.0F : 0.0F)) * this.scale.getValue() * (this.posY.getValue() == 0 ? 1.0F : -1.0F);
+                y += (height + 2 * this.rowSpacing.getValue() + (this.shadow.getValue() ? 1.0F : 0.0F)) * this.scale.getValue();
                 offset++;
             }
 

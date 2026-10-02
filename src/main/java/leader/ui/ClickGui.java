@@ -35,6 +35,8 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
+import static leader.ui.GuiProperties.*;
+
 import java.awt.Color;
 import java.io.File;
 import java.io.FileReader;
@@ -226,7 +228,7 @@ public class ClickGui extends GuiScreen {
         });
 
         drawSidebar(x, y, mouseX, mouseY);
-        drawHeader(x, y);
+        drawHeader(x, y, mouseX, mouseY);
         drawModuleList(x, y, mouseX, mouseY);
         drawSettings(x, y, mouseX, mouseY);
 
@@ -234,45 +236,43 @@ public class ClickGui extends GuiScreen {
     }
 
     private void drawSidebar(float x, float y, int mouseX, int mouseY) {
-        float chipX = x + 14.0F;
-        float chipY = y + 12.0F;
-        float centerY = chipY + 11.0F;
-        RenderUtil.drawRoundedRectWithGl(chipX, chipY, chipX + 22.0F, chipY + 22.0F, 7.0F, col(accent, 48));
-        Icon.CROWN.drawCentered(chipX + 11.0F, centerY, 13.0F, accent.getRGB(), alpha);
-        text("Leader", chipX + 30.0F, centerY, col(245, 247, 252, 255), 18.0F);
-        text("Lite", chipX + 30.0F + width("Leader", 18.0F) + 3.0F, centerY, col(accent, 255), 18.0F);
+        float centerY = y + 23.0F;
+        Icon.CROWN.drawCentered(x + 24.0F, centerY, 14.0F, accent.getRGB(), alpha);
+        text("Leader", x + 36.0F, centerY, col(245, 247, 252, 255), 18.0F);
+        text("Lite", x + 36.0F + width("Leader", 18.0F) + 3.0F, centerY, col(accent, 255), 18.0F);
 
-        text("CATEGORIES", x + 16.0F, y + 62.0F, col(120, 128, 145, 255), 11.0F);
+        text("CATEGORIES", x + 16.0F, y + 60.0F, col(98, 106, 122, 255), 10.0F);
 
-        float rowH = 26.0F;
-        float gap = 3.0F;
-        float top = y + 72.0F;
-        float target = top + selectedCategory * (rowH + gap);
+        float rowH = 28.0F;
+        float top = y + 70.0F;
+        float target = top + selectedCategory * rowH;
         if (!search.isEmpty()) target = -1000.0F;
         if (categoryIndicator < 0.0F || target < 0.0F) categoryIndicator = target;
         categoryIndicator += (target - categoryIndicator) * (1.0F - (float) Math.exp(-dt * 16.0F));
         if (search.isEmpty()) {
-            RenderUtil.drawRoundedRectWithGl(x + 10.0F, categoryIndicator, x + SIDEBAR - 10.0F, categoryIndicator + rowH, 8.0F, col(accent, 40));
-            RenderUtil.drawRoundedRectWithGl(x + 10.0F, categoryIndicator + 7.0F, x + 12.5F, categoryIndicator + rowH - 7.0F, 1.25F, col(accent, 255));
+            drawPill(x + 8.0F, categoryIndicator + 3.0F, x + SIDEBAR - 8.0F, categoryIndicator + rowH - 3.0F, 1.0F);
         }
 
         for (int i = 0; i < CATEGORY_NAMES.length; i++) {
             final int index = i;
             String name = CATEGORY_NAMES[i];
-            float ry = top + i * (rowH + gap);
-            boolean hovered = inside(mouseX, mouseY, x + 10.0F, ry, x + SIDEBAR - 10.0F, ry + rowH);
+            float ry = top + i * rowH;
+            boolean hovered = inside(mouseX, mouseY, x, ry, x + SIDEBAR, ry + rowH);
             float hover = anim("ch" + i, hovered ? 1.0F : 0.0F, 14.0F);
             float sel = anim("cs" + i, search.isEmpty() && selectedCategory == i ? 1.0F : 0.0F, 14.0F);
-            if (hover > 0.01F) {
-                RenderUtil.drawRoundedRectWithGl(x + 10.0F, ry, x + SIDEBAR - 10.0F, ry + rowH, 8.0F, col(255, 255, 255, (int) (8 * hover * (1.0F - sel))));
+            float hoverOnly = hover * (1.0F - sel);
+            if (hoverOnly > 0.01F) {
+                RenderUtil.drawRoundedRectWithGl(x + 8.0F, ry + 3.0F, x + SIDEBAR - 8.0F, ry + rowH - 3.0F, 7.0F,
+                        col(255, 255, 255, (int) (8 * hoverOnly)));
             }
             float cy = ry + rowH / 2.0F;
-            int iconColor = mix(new Color(125, 133, 150), accent, sel).getRGB();
-            categoryIcon(name).drawCentered(x + 26.0F, cy, 12.0F, iconColor, alpha);
-            text(name, x + 40.0F, cy, mixCol(new Color(165, 172, 188), new Color(246, 248, 252), Math.max(sel, hover * 0.6F), 255), 15.0F);
+            float shift = 1.0F * Math.max(sel, hoverOnly);
+            int iconColor = mix(new Color(112, 120, 137), accent, sel).getRGB();
+            categoryIcon(name).drawCentered(x + 22.0F + shift, cy, 12.0F, iconColor, alpha);
+            text(name, x + 35.0F + shift, cy, mixCol(new Color(150, 157, 173), new Color(246, 248, 252), Math.max(sel, hover * 0.6F), 255), 15.0F);
             String count = String.valueOf(categories.get(name).size());
-            text(count, x + SIDEBAR - 18.0F - width(count, 12.0F), cy, col(110, 118, 135, 255), 12.0F);
-            addHit(x + 10.0F, ry, x + SIDEBAR - 10.0F, ry + rowH, (button, mX, mY) -> {
+            text(count, x + SIDEBAR - 14.0F - width(count, 11.0F), cy, mixCol(new Color(92, 100, 116), accent, sel, 255), 11.0F);
+            addHit(x, ry, x + SIDEBAR, ry + rowH, (button, mX, mY) -> {
                 search = "";
                 if (selectedCategory != index) {
                     selectedCategory = index;
@@ -284,12 +284,16 @@ public class ClickGui extends GuiScreen {
             });
         }
 
-        float cardY1 = y + H - 46.0F;
-        float cardY2 = y + H - 12.0F;
-        RenderUtil.drawRoundedRectWithGl(x + 10.0F, cardY1, x + SIDEBAR - 10.0F, cardY2, 8.0F, col(255, 255, 255, 7));
+        float cardY1 = y + H - 44.0F;
+        float cardY2 = y + H;
+        RenderUtil.drawRoundedRectGradientH(x + 14.0F, cardY1, x + SIDEBAR / 2.0F, cardY1 + 0.5F, 0.0F, col(255, 255, 255, 0), col(255, 255, 255, 18));
+        RenderUtil.drawRoundedRectGradientH(x + SIDEBAR / 2.0F, cardY1, x + SIDEBAR - 14.0F, cardY1 + 0.5F, 0.0F, col(255, 255, 255, 18), col(255, 255, 255, 0));
         float headSize = 20.0F;
-        float headX = x + 17.0F;
+        float headX = x + 16.0F;
         float cy = (cardY1 + cardY2) / 2.0F;
+        RenderUtil.enableRenderState();
+        RenderUtil.drawRect(headX - 1.0F, cy - headSize / 2.0F - 1.0F, headX + headSize + 1.0F, cy + headSize / 2.0F + 1.0F, col(accent, 120));
+        RenderUtil.disableRenderState();
         ResourceLocation skin = null;
         if (mc.thePlayer != null && mc.getNetHandler() != null) {
             NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
@@ -303,7 +307,9 @@ public class ClickGui extends GuiScreen {
             Gui.drawScaledCustomSizeModalRect((int) headX, (int) (cy - headSize / 2.0F), 40.0F, 8.0F, 8, 8, (int) headSize, (int) headSize, 64.0F, 64.0F);
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         } else {
-            RenderUtil.drawRoundedRectWithGl(headX, cy - headSize / 2.0F, headX + headSize, cy + headSize / 2.0F, 5.0F, col(accent, 60));
+            RenderUtil.enableRenderState();
+            RenderUtil.drawRect(headX, cy - headSize / 2.0F, headX + headSize, cy + headSize / 2.0F, col(24, 26, 34, 255));
+            RenderUtil.disableRenderState();
         }
         String user = mc.getSession() != null ? mc.getSession().getUsername() : "Player";
         String server = mc.getCurrentServerData() != null ? mc.getCurrentServerData().serverIP : "Singleplayer";
@@ -313,13 +319,33 @@ public class ClickGui extends GuiScreen {
         text(GuiText.trim(server, (int) maxW, 11.0F), tx, cy + 6.0F, col(120, 128, 145, 255), 11.0F);
     }
 
-    private void drawHeader(float x, float y) {
+    private void drawHeader(float x, float y, int mouseX, int mouseY) {
         float hx = x + SIDEBAR + 16.0F;
         float cy = y + HEADER / 2.0F;
         String title = search.isEmpty() ? CATEGORY_NAMES[selectedCategory] : "Search";
         text(title, hx, cy, col(246, 248, 252, 255), 20.0F);
         int count = visibleModules().size();
         text(count + (count == 1 ? " module" : " modules"), hx + width(title, 20.0F) + 8.0F, cy, col(120, 128, 145, 255), 12.0F);
+
+        float btnW = 110.0F;
+        float btnH = 24.0F;
+        float btnX = x + W - 178.0F - btnW;
+        float btnY = cy - btnH / 2.0F;
+        boolean btnHovered = inside(mouseX, mouseY, btnX, btnY, btnX + btnW, btnY + btnH);
+        float btnHover = anim("hudDesignerBtn", btnHovered ? 1.0F : 0.0F, 14.0F);
+
+        addHit(btnX, btnY, btnX + btnW, btnY + btnH, (button, mX, mY) -> {
+            if (button == 0) {
+                mc.displayGuiScreen(new GuiHUDDesigner());
+            }
+        });
+
+        if (btnHover > 0.01F) {
+            RenderUtil.drawRoundedRectWithGl(btnX - 2.5F, btnY - 2.5F, btnX + btnW + 2.5F, btnY + btnH + 2.5F, 9.5F, col(accent, (int) (26 * btnHover)));
+            RenderUtil.drawRoundedRectWithGl(btnX - 0.75F, btnY - 0.75F, btnX + btnW + 0.75F, btnY + btnH + 0.75F, 7.5F, col(accent, (int) (140 * btnHover)));
+        }
+        RenderUtil.drawRoundedRectWithGl(btnX, btnY, btnX + btnW, btnY + btnH, 7.0F, col(22, 24, 32, 255));
+        text("HUD Designer", btnX + (btnW - width("HUD Designer", 13.0F)) / 2.0F, cy, mixCol(new Color(180, 185, 200), accent, btnHover, 255), 13.0F);
 
         float sw = 150.0F;
         float sh = 22.0F;
@@ -404,17 +430,30 @@ public class ClickGui extends GuiScreen {
             float on = anim("me" + key, module.isEnabled() ? 1.0F : 0.0F, 14.0F);
 
             float rowX2 = lx + lw - 6.0F;
-            RenderUtil.drawRoundedRectWithGl(lx, ry, rowX2, ry + ROW, 7.0F, col(255, 255, 255, (int) (4 + 7 * hover)));
+            float hoverOnly = hover * (1.0F - sel);
+            if (hoverOnly > 0.01F) {
+                RenderUtil.drawRoundedRectWithGl(lx + 2.0F, ry + 1.0F, rowX2, ry + ROW - 1.0F, 7.0F,
+                        col(255, 255, 255, (int) (8 * hoverOnly)));
+            }
             if (sel > 0.01F) {
-                RenderUtil.drawRoundedRectGradientH(lx, ry, rowX2, ry + ROW, 7.0F, col(accent, (int) (52 * sel)), col(accent, (int) (12 * sel)));
-                float barH = (ROW - 12.0F) * sel;
-                float cyBar = ry + ROW / 2.0F;
-                RenderUtil.drawRoundedRectWithGl(lx + 1.5F, cyBar - barH / 2.0F, lx + 3.5F, cyBar + barH / 2.0F, 1.0F, col(accent, 255));
+                drawPill(lx + 2.0F, ry + 1.0F, rowX2, ry + ROW - 1.0F, sel);
+            }
+            if (i < modules.size() - 1) {
+                float sepY = ry + ROW + ROW_GAP / 2.0F - 0.25F;
+                RenderUtil.enableRenderState();
+                RenderUtil.drawRect(lx + 10.0F, sepY, rowX2, sepY + 0.5F, col(255, 255, 255, 8));
+                RenderUtil.disableRenderState();
             }
             float cy = ry + ROW / 2.0F;
             float swW = 20.0F;
             float swX = rowX2 - 8.0F - swW;
-            float nameX = lx + 10.0F + 2.0F * sel;
+            if (sel > 0.01F) {
+                RenderUtil.enableRenderState();
+                RenderUtil.fillCircle(lx + 11.0F, cy, 3.6F * sel, 20, col(accent, (int) (50 * sel)));
+                RenderUtil.fillCircle(lx + 11.0F, cy, 1.9F * sel, 20, col(accent, (int) (255 * sel)));
+                RenderUtil.disableRenderState();
+            }
+            float nameX = lx + 11.0F + 7.0F * sel;
             text(GuiText.trim(module.getName(), (int) (swX - nameX - 8.0F), 15.0F), nameX, cy,
                     mixCol(new Color(150, 157, 173), new Color(246, 248, 252), Math.max(on, sel), 255), 15.0F);
             drawSwitch(swX, cy, swW, 11.0F, on);
@@ -538,13 +577,9 @@ public class ClickGui extends GuiScreen {
         boolean hovered = inside(mouseX, mouseY, rx - 4.0F, Math.max(ry, clipTop), rx + rw + 4.0F, Math.min(ry + h, clipBottom));
         float hover = anim(key, hovered ? 1.0F : 0.0F, 14.0F);
         if (hover > 0.01F) {
-            RenderUtil.drawRoundedRectWithGl(rx - 4.0F, ry, rx + rw + 4.0F, ry + h, 6.0F, col(255, 255, 255, (int) (7 * hover)));
+            RenderUtil.drawRoundedRectGradientH(rx - 4.0F, ry, rx + rw + 4.0F, ry + h, 0.0F,
+                    col(255, 255, 255, (int) (9 * hover)), col(255, 255, 255, (int) (2 * hover)));
         }
-    }
-
-    private String label(Property<?> property) {
-        String name = property.getName().replace("-", " ").replace("_", " ");
-        return name.isEmpty() ? name : Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
     private float drawBoolean(final BooleanProperty property, float rx, float ry, float rw, int mouseX, int mouseY) {
@@ -718,17 +753,29 @@ public class ClickGui extends GuiScreen {
         rowBackground("bindh", rx, ry, rw, h, mouseX, mouseY);
         float cy = ry + h / 2.0F;
         boolean binding = bindingModule == module;
-        String value = binding ? "Press a key..." : KeyBindUtil.getKeyName(module.getKey());
+        String value = binding ? "Press any key..." : KeyBindUtil.getKeyName(module.getKey());
         if (value == null || value.isEmpty()) value = "NONE";
         float pillW = width(value, 13.0F) + 16.0F;
         text("Keybind", rx, cy, col(205, 210, 222, 255), 14.0F);
+        String hint = binding ? "Esc cancel" : "RMB clear";
+        text(hint, rx + width("Keybind", 14.0F) + 8.0F, cy, col(100, 108, 124, 255), 10.0F);
         RenderUtil.drawRoundedRectWithGl(rx + rw - pillW, cy - 8.0F, rx + rw, cy + 8.0F, 5.0F,
                 binding ? col(accent, 70) : col(22, 24, 31, 255));
         text(value, rx + rw - pillW + 8.0F, cy, binding ? col(250, 250, 252, 255) : col(200, 205, 216, 255), 13.0F);
         addHit(rx - 4.0F, ry, rx + rw + 4.0F, ry + h, (button, mX, mY) -> {
             if (button == 0) bindingModule = module;
+            else if (button == 1) module.setKey(module instanceof GuiModule ? Keyboard.KEY_RSHIFT : KeyBindUtil.NONE);
         });
         return h;
+    }
+
+    private void drawPill(float x1, float y1, float x2, float y2, float amount) {
+        float r = Math.min(7.0F, (y2 - y1) / 2.0F);
+        RenderUtil.drawRoundedRectWithGl(x1 - 0.5F, y1 - 0.5F, x2 + 0.5F, y2 + 0.5F, r + 0.5F, col(accent, (int) (70 * amount)));
+        RenderUtil.drawRoundedRectWithGl(x1, y1, x2, y2, r, col(26, 28, 36, (int) (235 * amount)));
+        RenderUtil.drawRoundedRectWithGl(x1, y1, x2, y2, r, col(accent, (int) (22 * amount)));
+        RenderUtil.drawRoundedRectGradient(x1 + 0.5F, y1 + 0.5F, x2 - 0.5F, (y1 + y2) / 2.0F, r - 0.5F,
+                col(255, 255, 255, (int) (12 * amount)), col(255, 255, 255, 0));
     }
 
     private void drawSwitch(float x, float centerY, float w, float h, float progress) {
@@ -758,81 +805,6 @@ public class ClickGui extends GuiScreen {
         float[] hsb = colorStates.computeIfAbsent(draggingColor, p -> new float[3]);
         hsb[draggingColorBar] = clamp01((mouseX - colorTrackX) / colorTrackW);
         draggingColor.setValue(new Color(Color.HSBtoRGB(hsb[0], hsb[1], hsb[2])).getRGB());
-    }
-
-    private float sliderRatio(Property<?> property) {
-        double min;
-        double max;
-        double value;
-        if (property instanceof FloatProperty) {
-            FloatProperty p = (FloatProperty) property;
-            min = p.getMinimum();
-            max = p.getMaximum();
-            value = p.getValue();
-        } else if (property instanceof IntProperty) {
-            IntProperty p = (IntProperty) property;
-            min = p.getMinimum();
-            max = p.getMaximum();
-            value = p.getValue();
-        } else {
-            PercentProperty p = (PercentProperty) property;
-            min = p.getMinimum();
-            max = p.getMaximum();
-            value = p.getValue();
-        }
-        return max - min <= 0.0D ? 0.0F : clamp01((float) ((value - min) / (max - min)));
-    }
-
-    private void setSliderRatio(Property<?> property, float ratio) {
-        if (property instanceof FloatProperty) {
-            FloatProperty p = (FloatProperty) property;
-            float min = p.getMinimum();
-            float max = p.getMaximum();
-            float step = max - min <= 2.0F ? 0.01F : 0.1F;
-            float v = min + (max - min) * ratio;
-            v = Math.round(v / step) * step;
-            v = Math.round(v * 100.0F) / 100.0F;
-            p.setValue(Math.max(min, Math.min(max, v)));
-        } else if (property instanceof IntProperty) {
-            IntProperty p = (IntProperty) property;
-            p.setValue((int) Math.round(p.getMinimum() + (p.getMaximum() - p.getMinimum()) * (double) ratio));
-        } else if (property instanceof PercentProperty) {
-            PercentProperty p = (PercentProperty) property;
-            p.setValue((int) Math.round(p.getMinimum() + (p.getMaximum() - p.getMinimum()) * (double) ratio));
-        }
-    }
-
-    private void setSliderText(Property<?> property, String text) {
-        try {
-            if (property instanceof FloatProperty) {
-                FloatProperty p = (FloatProperty) property;
-                p.setValue(Math.max(p.getMinimum(), Math.min(p.getMaximum(), Float.parseFloat(text.trim()))));
-            } else if (property instanceof IntProperty) {
-                IntProperty p = (IntProperty) property;
-                p.setValue(Math.max(p.getMinimum(), Math.min(p.getMaximum(), Integer.parseInt(text.trim()))));
-            } else if (property instanceof PercentProperty) {
-                PercentProperty p = (PercentProperty) property;
-                p.setValue(Math.max(p.getMinimum(), Math.min(p.getMaximum(), Integer.parseInt(text.trim().replace("%", "")))));
-            }
-        } catch (NumberFormatException ignored) {
-        }
-    }
-
-    private String rawValue(Property<?> property) {
-        return String.valueOf(property.getValue());
-    }
-
-    private String sliderText(Property<?> property) {
-        if (property instanceof FloatProperty) {
-            String s = String.format(Locale.US, "%.2f", ((FloatProperty) property).getValue());
-            if (s.contains(".")) {
-                s = s.replaceAll("0+$", "");
-                if (s.endsWith(".")) s = s.substring(0, s.length() - 1);
-            }
-            return s;
-        }
-        if (property instanceof PercentProperty) return property.getValue() + "%";
-        return String.valueOf(property.getValue());
     }
 
     private List<Module> visibleModules() {
@@ -999,11 +971,9 @@ public class ClickGui extends GuiScreen {
                 bindingModule = null;
                 return;
             }
-            if (keyCode == Keyboard.KEY_BACK || keyCode == Keyboard.KEY_DELETE) {
-                bindingModule.setKey(bindingModule instanceof GuiModule ? Keyboard.KEY_RSHIFT : 0);
-            } else {
-                bindingModule.setKey(keyCode);
-            }
+            int key = KeyBindUtil.fromTyped(typedChar, keyCode);
+            if (key == KeyBindUtil.NONE) return;
+            bindingModule.setKey(key);
             bindingModule = null;
             return;
         }

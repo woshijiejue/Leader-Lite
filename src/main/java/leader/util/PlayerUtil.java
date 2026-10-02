@@ -2,7 +2,6 @@ package leader.util;
 
 import leader.event.EventManager;
 import leader.events.HitSlowDownEvent;
-import leader.module.modules.combat.Velocity;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockAir;
 import net.minecraft.client.Minecraft;
@@ -182,13 +181,11 @@ public class PlayerUtil {
                                     0.1,
                                     MathHelper.cos(mc.thePlayer.rotationYaw * (float) Math.PI / 180.0F) * (float) knockbackLevel * 0.5F
                             );
-                            if (!Velocity.blinkActive) {
-                                HitSlowDownEvent event = (HitSlowDownEvent) EventManager.call(new HitSlowDownEvent());
-                                mc.thePlayer.motionX *= event.getSlowDown();
-                                mc.thePlayer.motionZ *= event.getSlowDown();
-                                if (!event.getSprint()) {
-                                    mc.thePlayer.setSprinting(false);
-                                }
+                            HitSlowDownEvent event = (HitSlowDownEvent) EventManager.call(new HitSlowDownEvent());
+                            mc.thePlayer.motionX *= event.getSlowDown();
+                            mc.thePlayer.motionZ *= event.getSlowDown();
+                            if (!event.getSprint()) {
+                                mc.thePlayer.setSprinting(false);
                             }
                         }
                         if (target instanceof EntityPlayerMP && target.velocityChanged) {

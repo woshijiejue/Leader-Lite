@@ -7,6 +7,7 @@ import leader.event.types.EventType;
 import leader.events.*;
 import leader.module.modules.player.NoHitDelay;
 import leader.module.modules.render.BetterFPS;
+import leader.util.KeyBindUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiScreen;
@@ -156,6 +157,7 @@ public abstract class MixinMinecraft {
     )
     private void setKeyBindState(int integer, boolean boolean2) {
         KeyBinding.setKeyBindState(integer, boolean2);
+        KeyBindUtil.onKeyState(integer, boolean2);
         if (boolean2 && this.currentScreen == null) {
             EventManager.call(new KeyEvent(integer));
         }

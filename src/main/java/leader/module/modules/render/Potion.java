@@ -1,5 +1,6 @@
 package leader.module.modules.render;
 
+import leader.Leader;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
 import leader.module.Module;
@@ -32,11 +33,12 @@ public class Potion extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final Map<Integer, Integer> potionMaxDurations = new HashMap<>();
     private List<PotionEffect> currentEffects = new ArrayList<>();
+    private final Map<Integer, Float> auraY = new HashMap<>();
+    private final Map<Integer, Float> auraFade = new HashMap<>();
+    private long auraLastFrame;
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"RIGHT", "LEFT"});
-    public final ModeProperty displayMode = new ModeProperty("display-mode", 0, new String[]{"Bar", "Circle", "Modern", "Frost", "Lucid", "Slate"});
-    public final IntProperty offsetX = new IntProperty("offset-x", 2, 0, 255);
-    public final IntProperty offsetY = new IntProperty("offset-y", 2, 0, 255);
+    public final ModeProperty displayMode = new ModeProperty("display-mode", 0, new String[]{"Bar", "Circle", "Modern", "Frost", "Lucid", "Slate", "Aura"});
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
 
@@ -99,7 +101,7 @@ public class Potion extends Module {
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!this.isEnabled() || mc.thePlayer.getActivePotionEffects().isEmpty()) return;
+        if (!this.isEnabled() || mc.thePlayer.getActivePotionEffects().isEmpty() || Leader.hudElementManager.isSuppressed("Potion")) return;
 
         currentEffects = mc.thePlayer.getActivePotionEffects().stream()
                 .sorted(Comparator.comparingInt(e -> -(
@@ -114,7 +116,9 @@ public class Potion extends Module {
         float invScale = 1.0F / this.scale.getValue();
         boolean isRight = this.mode.getValue() == 0;
 
-        if (this.displayMode.getValue() == 5) {
+        if (this.displayMode.getValue() == 6) {
+            renderAura(invScale, isRight);
+        } else if (this.displayMode.getValue() == 5) {
             renderSlate(index, invScale, isRight);
         } else if (this.displayMode.getValue() == 4) {
             renderLucid(index, invScale, isRight);
@@ -142,8 +146,8 @@ public class Potion extends Module {
         float textY2 = textY1 + textHeight + 1.0F;
         float iconSize = cardHeight - 4.0F;
         float iconOffset = iconSize + 4.0F;
-        float offX = this.offsetX.getValue() + 4.0F;
-        float offY = this.offsetY.getValue() + 4.0F;
+        float offX = Leader.hudElementManager.x("Potion", 2.0F, 2.0F) + 4.0F;
+        float offY = Leader.hudElementManager.y("Potion", 2.0F, 2.0F) + 4.0F;
         float baseX = isRight ? (screenWidth - cardWidth - offX) * invScale : offX * invScale;
         float baseY = offY * invScale;
         float step = (cardHeight + gap) * invScale;
@@ -173,7 +177,8 @@ public class Potion extends Module {
             });
 
             RenderUtil.enableRenderState();
-            RenderUtil.drawRect(x, y, x + cardWidth, y + cardHeight, new Color(0, 0, 0, 0.45F).getRGB());
+            RenderUtil.drawRect(x, y, x + cardWidth, y + cardHeight,
+                    Leader.hudElementManager.background("Potion", 2.0F, 2.0F, 224.0F / 255.0F));
 
             float fillWidth = cardWidth * ratio;
             int fillColor = new Color(themeColor.getRed(), themeColor.getGreen(), themeColor.getBlue(), 60).getRGB();
@@ -233,8 +238,8 @@ public class Potion extends Module {
         float textY2 = textY1 + textHeight + 1.0F;
         float iconSize = 18.0F;
         float iconOffset = iconSize + 4.0F;
-        float offX = this.offsetX.getValue() + 4.0F;
-        float offY = this.offsetY.getValue() + 4.0F;
+        float offX = Leader.hudElementManager.x("Potion", 2.0F, 2.0F) + 4.0F;
+        float offY = Leader.hudElementManager.y("Potion", 2.0F, 2.0F) + 4.0F;
         float baseX = isRight ? (new ScaledResolution(mc).getScaledWidth() - cardWidth - offX) * invScale : offX * invScale;
         float baseY = offY * invScale;
         float step = (cardHeight + gap) * invScale;
@@ -265,7 +270,8 @@ public class Potion extends Module {
             });
 
             RenderUtil.enableRenderState();
-            RenderUtil.drawRoundedRect(x, y, x + cardWidth, y + cardHeight, radius, new Color(0, 0, 0, 0.45F).getRGB());
+            RenderUtil.drawRoundedRect(x, y, x + cardWidth, y + cardHeight, radius,
+                    Leader.hudElementManager.background("Potion", 2.0F, 2.0F, 224.0F / 255.0F));
             RenderUtil.disableRenderState();
 
             float cx = x + iconSize / 2.0F + 2.0F;
@@ -322,8 +328,8 @@ public class Potion extends Module {
         float subScale = Math.max(0.72F, textScale * 0.76F);
         float iconBox = 25.0F;
         float iconSize = 17.0F;
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 6.0F;
+        float offX = Leader.hudElementManager.x("Potion", 2.0F, 2.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Potion", 2.0F, 2.0F) + 6.0F;
         float baseX = isRight ? (screenWidth - cardWidth - offX) * invScale : offX * invScale;
         float baseY = offY * invScale;
         float step = (cardHeight + gap) * invScale;
@@ -423,8 +429,8 @@ public class Potion extends Module {
         float textHeight = FontManager.getFontHeight() * textScale;
         float iconSize = 18.0F;
         float textX = 30.0F;
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 6.0F;
+        float offX = Leader.hudElementManager.x("Potion", 2.0F, 2.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Potion", 2.0F, 2.0F) + 6.0F;
         float baseX = isRight ? (screenWidth - cardWidth - offX) * invScale : offX * invScale;
         float baseY = offY * invScale;
         float step = (cardHeight + gap) * invScale;
@@ -459,6 +465,10 @@ public class Potion extends Module {
             });
 
             RenderUtil.drawGlass(x, y, x + cardWidth, y + cardHeight, radius, 1.0F);
+            Color frostBg = Leader.hudElementManager.backgroundColor("Potion", 2.0F, 2.0F);
+            RenderUtil.drawRoundedRectWithGl(x, y, x + cardWidth, y + cardHeight, radius,
+                    new Color(frostBg.getRed(), frostBg.getGreen(), frostBg.getBlue(),
+                            (int) (frostBg.getAlpha() * 0.5F)).getRGB());
 
             float lineY = y + cardHeight - 3.6F;
             float lineLeft = x + textX;
@@ -518,8 +528,8 @@ public class Potion extends Module {
         float textScale = this.fontScale.getValue();
         float textHeight = FontManager.getFontHeight() * textScale;
         float textX = chipX + chipSize + 7.0F;
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 6.0F;
+        float offX = Leader.hudElementManager.x("Potion", 2.0F, 2.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Potion", 2.0F, 2.0F) + 6.0F;
         float baseX = isRight ? (screenWidth - cardWidth - offX) * invScale : offX * invScale;
         float baseY = offY * invScale;
         float step = (cardHeight + gap) * invScale;
@@ -604,8 +614,8 @@ public class Potion extends Module {
         float gap = 3.0F;
         float capH = FontManager.getCapHeight(nameSize);
         float cardHeight = pad * 2.0F + Math.max(well, capH + 8.0F);
-        float offX = this.offsetX.getValue() + 6.0F;
-        float offY = this.offsetY.getValue() + 6.0F;
+        float offX = Leader.hudElementManager.x("Potion", 2.0F, 2.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Potion", 2.0F, 2.0F) + 6.0F;
         float step = (cardHeight + gap) * invScale;
 
         float cardWidth = 110.0F;
@@ -676,6 +686,143 @@ public class Potion extends Module {
             GlStateManager.disableBlend();
             index++;
         }
+    }
+
+    private void renderAura(float invScale, boolean isRight) {
+        float screenWidth = new ScaledResolution(mc).getScaledWidth();
+        float nameSize = 15.0F * this.fontScale.getValue();
+        float metaSize = 11.5F * this.fontScale.getValue();
+        float nameCap = FontManager.getCapHeight(nameSize);
+        float metaCap = FontManager.getCapHeight(metaSize);
+        float cardH = nameCap + metaCap + 17.0F;
+        float radius = 7.0F;
+        float gap = 4.0F;
+        float padL = 13.0F;
+        float padR = 12.0F;
+        float ringR = Math.min(10.5F, cardH / 2.0F - 5.0F);
+        float textX = padL + ringR * 2.0F + 10.0F;
+        float offX = Leader.hudElementManager.x("Potion", 2.0F, 2.0F) + 6.0F;
+        float offY = Leader.hudElementManager.y("Potion", 2.0F, 2.0F) + 6.0F;
+
+        long now = System.currentTimeMillis();
+        float dt = auraLastFrame == 0L ? 0.016F : Math.min(0.1F, (now - auraLastFrame) / 1000.0F);
+        auraLastFrame = now;
+        float k = 1.0F - (float) Math.exp(-14.0F * dt);
+
+        List<Integer> ids = new ArrayList<>();
+        for (PotionEffect effect : currentEffects) ids.add(effect.getPotionID());
+        auraY.keySet().retainAll(ids);
+        auraFade.keySet().retainAll(ids);
+
+        float cardW = 126.0F;
+        for (PotionEffect effect : currentEffects) {
+            net.minecraft.potion.Potion type = net.minecraft.potion.Potion.potionTypes[effect.getPotionID()];
+            float nameW = FontManager.getStringWidth(I18n.format(type.getName()), nameSize);
+            float metaW = FontManager.getStringWidth(effect.getIsPotionDurationMax() ? "Permanent" : net.minecraft.potion.Potion.getDurationString(effect), metaSize);
+            float pillW = FontManager.getStringWidth(intToRoman(effect.getAmplifier() + 1), metaSize) + 10.0F;
+            cardW = Math.max(cardW, Math.min(210.0F, textX + Math.max(nameW, metaW) + 10.0F + pillW + padR));
+        }
+
+        float baseX = isRight ? (screenWidth - cardW - offX) * invScale : offX * invScale;
+        float baseY = offY * invScale;
+        float step = (cardH + gap) * invScale;
+
+        for (int index = 0; index < currentEffects.size(); index++) {
+            PotionEffect effect = currentEffects.get(index);
+            int id = effect.getPotionID();
+            net.minecraft.potion.Potion potion = net.minecraft.potion.Potion.potionTypes[id];
+            int maxDur = potionMaxDurations.getOrDefault(id, Math.max(effect.getDuration(), 1));
+            boolean infinite = effect.getIsPotionDurationMax();
+            float ratio = infinite ? 1.0F : Math.min((float) effect.getDuration() / (float) maxDur, 1.0F);
+
+            float slot = auraY.getOrDefault(id, (float) index);
+            slot += (index - slot) * k;
+            auraY.put(id, slot);
+            float fade = auraFade.getOrDefault(id, 0.0F);
+            fade = Math.min(1.0F, fade + (1.0F - fade) * k + 0.003F);
+            auraFade.put(id, fade);
+            float ease = 1.0F - (float) Math.pow(1.0F - fade, 3.0D);
+
+            Color liquid = new Color((potion.getLiquidColor() & 0x00FFFFFF) | 0xFF000000, true);
+            Color tint = ColorUtil.interpolate(0.22F, liquid, Color.WHITE);
+            boolean low = !infinite && effect.getDuration() < 200;
+            float pulse = low ? 0.5F + 0.5F * (float) Math.sin(now / 210.0D) : 0.0F;
+            Color accent = low ? ColorUtil.interpolate(pulse * 0.6F, new Color(255, 118, 110), new Color(255, 214, 210)) : tint;
+
+            String title = I18n.format(potion.getName());
+            String level = intToRoman(effect.getAmplifier() + 1);
+            String duration = infinite ? "Permanent" : net.minecraft.potion.Potion.getDurationString(effect);
+
+            float x = baseX + (1.0F - ease) * 22.0F * (isRight ? 1.0F : -1.0F);
+            float y = baseY + slot * step;
+
+            final float sc = this.scale.getValue();
+            final float bx = x;
+            final float by = y;
+            final float bw = cardW;
+            final float bh = cardH;
+            final float br = radius;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1);
+                GlStateManager.popMatrix();
+            });
+
+            RenderUtil.drawGrayGlass(x, y, x + cardW, y + cardH, radius, ease,
+                    Leader.hudElementManager.backgroundColor("Potion", 2.0F, 2.0F));
+
+            float ringCx = x + padL + ringR;
+            float ringCy = y + cardH / 2.0F;
+            float thick = 1.8F;
+            float sweep = Math.max(4.0F, 360.0F * ratio);
+            RenderUtil.enableRenderState();
+            RenderUtil.fillCircle(ringCx, ringCy, ringR - thick / 2.0F - 0.6F, 32, alpha(liquid, 34 * ease));
+            RenderUtil.disableRenderState();
+            if (low) {
+                RenderUtil.drawArcRing(ringCx, ringCy, ringR + 1.6F, 2.4F, 0.0F, 360.0F, alpha(accent, 40 * pulse * ease));
+            }
+            RenderUtil.drawArcRing(ringCx, ringCy, ringR, thick, 0.0F, 360.0F, alpha(Color.WHITE, 26 * ease));
+            RenderUtil.drawArcRing(ringCx, ringCy, ringR, thick, -90.0F, sweep, alpha(accent, 240 * ease));
+            double endRad = Math.toRadians(-90.0F + sweep);
+            RenderUtil.enableRenderState();
+            RenderUtil.fillCircle(ringCx, ringCy - ringR, thick / 2.0F + 0.15F, 16, alpha(accent, 240 * ease));
+            RenderUtil.fillCircle(ringCx + Math.cos(endRad) * ringR, ringCy + Math.sin(endRad) * ringR,
+                    thick / 2.0F + 0.15F, 16, alpha(accent, 240 * ease));
+            RenderUtil.disableRenderState();
+            Icon.potion(id).drawCentered(ringCx, ringCy, ringR * 1.08F, tint.getRGB(), ease);
+
+            float levelW = FontManager.getStringWidth(level, metaSize);
+            float pillW = levelW + 10.0F;
+            float pillH = metaCap + 6.0F;
+            float row1Top = y + (cardH - nameCap - 4.0F - metaCap) / 2.0F;
+            float row1Mid = row1Top + nameCap / 2.0F;
+            float pillX = x + cardW - padR - pillW;
+            float pillY = row1Mid - pillH / 2.0F;
+            RenderUtil.drawRoundedRectWithGl(pillX, pillY, pillX + pillW, pillY + pillH, pillH / 2.0F,
+                    alpha(Color.WHITE, 22 * ease));
+
+            float baseline1 = row1Top + nameCap;
+            float baseline2 = baseline1 + 4.0F + metaCap;
+            String name = fitSized(title, pillX - (x + textX) - 6.0F, nameSize);
+
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            FontManager.drawString(name, x + textX, baseline1 - FontManager.getBaseline(nameSize),
+                    alpha(new Color(240, 242, 246), 250 * ease), false, nameSize);
+            FontManager.drawString(level, pillX + (pillW - levelW) / 2.0F, pillY + pillH / 2.0F + metaCap / 2.0F - FontManager.getBaseline(metaSize),
+                    alpha(new Color(220, 224, 232), 235 * ease), false, metaSize);
+            FontManager.drawString(duration, x + textX, baseline2 - FontManager.getBaseline(metaSize),
+                    low ? alpha(accent, 240 * ease) : alpha(new Color(176, 180, 190), 225 * ease), false, metaSize);
+            GlStateManager.enableDepth();
+            GlStateManager.disableBlend();
+        }
+    }
+
+    private static int alpha(Color c, float a) {
+        int v = Math.max(0, Math.min(255, (int) a));
+        return (v << 24) | (c.getRGB() & 0x00FFFFFF);
     }
 
     private String fitSized(String text, float maxWidth, float size) {

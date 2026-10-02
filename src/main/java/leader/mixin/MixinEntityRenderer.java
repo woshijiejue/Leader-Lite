@@ -13,6 +13,7 @@ import leader.module.modules.player.AutoBlockIn;
 import leader.module.modules.player.GhostHand;
 import leader.module.modules.player.Scaffold;
 import leader.module.modules.render.EnvModifier;
+import leader.module.modules.render.FreeLook;
 import leader.module.modules.render.NoHurtCam;
 import leader.module.modules.render.ViewClip;
 import net.minecraft.block.Block;
@@ -64,6 +65,14 @@ public abstract class MixinEntityRenderer {
             method = {"updateCameraAndRender"},
             at = {@At("HEAD")}
     )
+    private void freelookMouse(float float1, long long2, CallbackInfo callbackInfo) {
+        FreeLook.applyMouse();
+    }
+
+    @Inject(
+            method = {"updateCameraAndRender"},
+            at = {@At("HEAD")}
+    )
     private void updateCameraAndRender(float float1, long long2, CallbackInfo callbackInfo) {
         if (this.mc.thePlayer != null) {
             Scaffold scaffold = (Scaffold) Leader.moduleManager.modules.get(Scaffold.class);
@@ -82,6 +91,14 @@ public abstract class MixinEntityRenderer {
                 ((IAccessorEntityPlayer) this.mc.thePlayer).setItemInUseCount(69000);
             }
         }
+    }
+
+    @Inject(
+            method = {"updateCameraAndRender"},
+            at = {@At("RETURN")}
+    )
+    private void freelookCapture(float float1, long long2, CallbackInfo callbackInfo) {
+        FreeLook.captureMouse();
     }
 
     @Inject(

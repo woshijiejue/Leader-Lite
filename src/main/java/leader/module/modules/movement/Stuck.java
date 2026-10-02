@@ -8,6 +8,7 @@ import leader.event.types.EventType;
 import leader.events.*;
 import leader.mixin.IAccessorMinecraft;
 import leader.module.Module;
+import leader.property.properties.IntProperty;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.network.Packet;
@@ -18,6 +19,7 @@ import net.minecraft.network.play.server.S27PacketExplosion;
 
 public class Stuck extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
+    public final IntProperty stuckTicks = new IntProperty("Stuck Ticks", 10, 10, 20);
     private double savedMotionX;
     private double savedMotionY;
     private double savedMotionZ;
@@ -76,18 +78,19 @@ public class Stuck extends Module {
                 Leader.delayManager.delayedPacket.offer((Packet<INetHandlerPlayClient>) event.getPacket());
                 event.setCancelled(true);
                 this.knockbackRelease = true;
-                tick = 10;
+                tick = this.stuckTicks.getValue();
             }
         }
     }
     @EventTarget
     public void onTick(TickEvent event){
         if (using && event.getType() == EventType.PRE) {
-            if (tick == 10){
+            int releaseTick = this.stuckTicks.getValue();
+            if (tick == releaseTick){
                 this.setEnabledInternal(false);
                 using = true;
             }
-            if (tick == 11){
+            if (tick == releaseTick + 1){
                 this.knockbackRelease = false;
                 this.setEnabledInternal(true);
                 tick = 0;

@@ -6,6 +6,7 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.resources.IResource;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
+import leader.Leader;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
 import leader.module.Module;
@@ -29,8 +30,6 @@ public class GifDisplay extends Module {
 
     public final ModeProperty gifMode = new ModeProperty("GIF", 0, new String[]{"AngryPig", "Best", "CryCat", "Dancer", "DieCat", "DiePig", "Kabo", "NoneBig", "PigFucker", "YaoMao"});
     public final BooleanProperty lockRatio = new BooleanProperty("Lock Ratio", true);
-    public final FloatProperty posX = new FloatProperty("X", 200.0F, 0.0F, 3000.0F);
-    public final FloatProperty posY = new FloatProperty("Y", 100.0F, 0.0F, 3000.0F);
     public final FloatProperty imgWidth = new FloatProperty("Width", 128.0F, 1.0F, 2000.0F);
     public final FloatProperty imgHeight = new FloatProperty("Height", 128.0F, 1.0F, 2000.0F, () -> !this.lockRatio.getValue());
 
@@ -48,7 +47,7 @@ public class GifDisplay extends Module {
 
     @EventTarget
     public void onRender(Render2DEvent event) {
-        if (!this.isEnabled()) return;
+        if (!this.isEnabled() || Leader.hudElementManager.isSuppressed("GifDisplay")) return;
 
         String currentGif = this.gifMode.getModeString();
         if (!currentGif.equals(this.loadedGif)) {
@@ -73,8 +72,8 @@ public class GifDisplay extends Module {
         } else {
             drawHeight = (int) (float) this.imgHeight.getValue();
         }
-        int x = (int) (float) this.posX.getValue();
-        int y = (int) (float) this.posY.getValue();
+        int x = (int) Leader.hudElementManager.x("GifDisplay", 200.0F, 100.0F);
+        int y = (int) Leader.hudElementManager.y("GifDisplay", 200.0F, 100.0F);
 
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GlStateManager.bindTexture(texId);
