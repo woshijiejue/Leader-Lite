@@ -327,7 +327,7 @@ public class Watermark extends Module {
         NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
         if (info != null) {
             int ping = info.getResponseTime();
-            if (ping > 0) lastPing = ping;
+            if (ping > 1) lastPing = ping;
         }
         return lastPing;
     }

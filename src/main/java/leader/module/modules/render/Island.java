@@ -143,7 +143,7 @@ public class Island extends Module {
         NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
         if (info != null) {
             int ping = info.getResponseTime();
-            if (ping >= 0) lastPing = ping;
+            if (ping >= 2) lastPing = ping;
         }
         return lastPing;
     }
@@ -604,7 +604,7 @@ public class Island extends Module {
 
     private float idleWidth(float nameSize, float metaSize, boolean preview) {
         return 39 + FontManager.getStringWidth("Leader", nameSize) + 12
-                + (showMetrics.getValue() ? 22 + FontManager.getStringWidth(idleMetrics(preview), metaSize) : 0);
+                + (showMetrics.getValue() ? 24 + FontManager.getStringWidth(idleMetrics(preview), metaSize) : 0);
     }
 
     public NoticeMode getPreviewNoticeMode() { return previewNoticeMode; }
@@ -644,10 +644,15 @@ public class Island extends Module {
         String right = idleMetrics(preview);
         float brandW = FontManager.getStringWidth("Leader", nameSize);
         float sep = brandX + brandW + 10;
-        RenderUtil.drawRect(sep, y + 9, sep + 0.6F, y + h - 9, fade(SECONDARY, 45, ease));
         float infoX = sep + 12;
-        text(fit(right, w - (infoX - x) - 12, metaSize), infoX,
-                y + (h + FontManager.getCapHeight(metaSize)) / 2, metaSize, fade(SECONDARY, 255, ease));
+        // Width is animated and may temporarily lag behind a longer FPS/ping value.
+        // Fade the complete metrics in as space becomes available, never truncate its units.
+        float available = w - (39 + brandW + 22) - 12;
+        float metricsEase = ease * Math.max(0, Math.min(1,
+                (available - FontManager.getStringWidth(right, metaSize) + 2) / 2));
+        RenderUtil.drawRect(sep, y + 9, sep + 0.6F, y + h - 9, fade(SECONDARY, 45, metricsEase));
+        text(right, infoX, y + (h + FontManager.getCapHeight(metaSize)) / 2,
+                metaSize, fade(SECONDARY, 255, metricsEase));
     }
 
     public void renderPreview(float x, float y, float alpha) {

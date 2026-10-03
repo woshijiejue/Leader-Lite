@@ -1416,26 +1416,6 @@ public class Scaffold extends Module {
     }
 
     @EventTarget
-    public void onEarlyPlace(EarlyPlaceEvent event) {
-        if (!this.isEnabled() || this.mode.getValue() != 2) return;
-        if (this.placeDelayCounter > 0) return;
-        if (!this.canPlace() || !ItemUtil.isHoldingBlock()) return;
-
-        MovingObjectPosition mop = RotationUtil.rayTrace(event.getYaw(), event.getPitch(), mc.playerController.getBlockReachDistance(), 1.0F);
-        if (mop == null || mop.typeOfHit != MovingObjectType.BLOCK || mop.sideHit == null) return;
-        BlockPos support = mop.getBlockPos();
-        if (BlockUtil.isReplaceable(support) || BlockUtil.isInteractable(support)) return;
-
-        BlockPos cell = support.offset(mop.sideHit);
-
-        if (this.place(support, mop.sideHit, mop.hitVec)) {
-            event.markPlaced();
-            this.placeDelayCounter = this.placeDelay.getValue();
-            this.recordPlacement(cell);
-        }
-    }
-
-    @EventTarget
     public void onRightClick(RightClickMouseEvent event) {
         if (this.isEnabled()) event.setCancelled(true);
     }

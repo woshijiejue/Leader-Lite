@@ -3,7 +3,6 @@ package leader.mixin;
 import leader.Leader;
 import leader.event.EventManager;
 import leader.event.types.EventType;
-import leader.events.EarlyPlaceEvent;
 import leader.events.LivingUpdateEvent;
 import leader.events.MoveInputEvent;
 import leader.events.PlayerUpdateEvent;
@@ -111,7 +110,6 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
             )}
     )
     private void onMotionUpdate(CallbackInfo callbackInfo) {
-        EventManager.call(new EarlyPlaceEvent(this.rotationYaw, this.rotationPitch));
         EventManager.call(new PlayerUpdateEvent());
     }
 
