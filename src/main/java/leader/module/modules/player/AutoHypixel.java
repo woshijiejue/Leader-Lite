@@ -31,7 +31,8 @@ public class AutoHypixel extends Module {
     public AutoHypixel() {
         super("AutoHypixel", false);
     }
-
+    public String knownMode, knownType;
+    public TimerUtil delay = new TimerUtil();
     @EventTarget(Priority.LOWEST)
     public void onPacket(PacketEvent event) {
         if (!isEnabled() || event.getType() == EventType.SEND) {
@@ -72,7 +73,7 @@ public class AutoHypixel extends Module {
                 }
             }
         }
-
+        S02PacketChat packet = (S02PacketChat) event.getPacket();
         if (packet.getChatComponent().getFormattedText().contains("play again?")) {
             Iterator<IChatComponent> iterator = packet.getChatComponent().getSiblings().iterator();
             while (iterator.hasNext()) {

@@ -308,4 +308,33 @@ public class BedTracker extends Module {
         this.whitelistedPlayers.clear();
         this.bedPos = null;
     }
+
+    public float[] previewSize() {
+        return new float[]{FontManager.getStringWidth(ChatColors.formatColor("&fBed: &atrue&r &7| &fDistance: &r42")) * hudScale.getValue(),
+                (FontManager.getFontHeight() + 1) * hudScale.getValue()};
+    }
+
+    public void renderPreview(float x, float y, float alpha) {
+        float scale = this.hudScale.getValue();
+        String text = ChatColors.formatColor("&fBed: &atrue&r &7| &fDistance: &r42");
+        float width = FontManager.getStringWidth(text);
+        float height = FontManager.getFontHeight();
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(scale, scale, 1.0F);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+        Color hudColor = this.getHudColor(42);
+        int textColor = new Color(hudColor.getRed(), hudColor.getGreen(), hudColor.getBlue(), (int)(alpha * 255)).getRGB();
+
+        if (this.hudShadow.getValue()) {
+            FontManager.drawStringWithShadow(text, x / scale, y / scale, textColor);
+        } else {
+            FontManager.drawString(text, x / scale, y / scale, textColor, false);
+        }
+
+        GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
+    }
 }

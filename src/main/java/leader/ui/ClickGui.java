@@ -336,7 +336,7 @@ public class ClickGui extends GuiScreen {
 
         addHit(btnX, btnY, btnX + btnW, btnY + btnH, (button, mX, mY) -> {
             if (button == 0) {
-                mc.displayGuiScreen(new GuiHUDDesigner());
+                mc.displayGuiScreen(new GuiHUDDesigner(this));
             }
         });
 

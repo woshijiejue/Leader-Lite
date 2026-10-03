@@ -3,24 +3,27 @@ package leader.module.modules.render;
 import leader.Leader;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
+import leader.events.LoadWorldEvent;
 import leader.module.Module;
 import leader.module.modules.combat.KillAura;
 import leader.module.modules.player.Scaffold;
 import leader.module.modules.render.notification.Notification;
+import leader.module.modules.render.notification.NoticeMode;
 import leader.property.properties.BooleanProperty;
 import leader.property.properties.FloatProperty;
 import leader.property.properties.IntProperty;
 import leader.util.BlockUtil;
-import leader.util.ItemUtil;
 import leader.util.Icon;
 import leader.util.RenderUtil;
 import leader.util.shader.ShaderElement;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.network.NetworkPlayerInfo;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.WorldRenderer;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemBlock;
@@ -29,6 +32,7 @@ import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 
 import java.awt.Color;
+import java.util.Locale;
 
 public class Island extends Module {
 
@@ -37,6 +41,11 @@ public class Island extends Module {
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
     public final IntProperty holdTime = new IntProperty("hold-time", 1100, 0, 5000);
+    public final BooleanProperty blur = new BooleanProperty("blur", true);
+    public final FloatProperty cornerRadius = new FloatProperty("corner-radius", 12.0F, 4.0F, 18.0F);
+    public final FloatProperty animationSpeed = new FloatProperty("animation-speed", 1.0F, 0.5F, 2.0F);
+    public final BooleanProperty showMetrics = new BooleanProperty("show-metrics", true);
+    public final BooleanProperty healthWarning = new BooleanProperty("health-warning", true);
 
     private static final int IDLE = 0;
     private static final int BLOCKS = 1;
@@ -58,13 +67,44 @@ public class Island extends Module {
     private float hpGhost;
     private float blocksAnim;
     private int lastPing = 0;
+    private long alertStart;
+    private String alertTitle = "";
+    private String alertDescription = "";
+    private NoticeMode alertMode = NoticeMode.Info;
+    private float alertDuration = 1500;
+    private NoticeMode previewNoticeMode = NoticeMode.Enable;
+    private static final Color SECONDARY = new Color(149, 158, 177);
+    private static final Color FOREGROUND = new Color(238, 242, 250);
 
     public Island() {
         super("Island", false);
     }
 
+    @Override
+    public void onEnabled() {
+        resetAnimation();
+    }
+
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) {
+        resetAnimation();
+        lastPing = 0;
+    }
+
+    private void resetAnimation() {
+        shown = pending = IDLE;
+        lastActive = lastFrame = 0L;
+        animW = animH = velW = velH = hpAnim = hpGhost = blocksAnim = 0.0F;
+        contentFade = 1.0F;
+        lastTarget = null;
+        alertStart = 0;
+        alertTitle = alertDescription = "";
+    }
+
     private EntityLivingBase getTarget() {
         if (!Leader.hudElementManager.isSuppressed("TargetHUD")) return null;
+        TargetHUD hud = (TargetHUD) Leader.moduleManager.modules.get(TargetHUD.class);
+        if (hud == null || !hud.isEnabled()) return null;
         KillAura killAura = (KillAura) Leader.moduleManager.modules.get(KillAura.class);
         if (killAura == null || !killAura.isEnabled()) return null;
         EntityLivingBase target = killAura.getTarget();
@@ -72,7 +112,8 @@ public class Island extends Module {
     }
 
     private boolean isLowHealth() {
-        return mc.thePlayer.getHealth() > 0.0F && mc.thePlayer.getHealth() <= 6.0F;
+        return this.healthWarning.getValue() && mc.thePlayer != null
+                && mc.thePlayer.getHealth() > 0.0F && mc.thePlayer.getHealth() <= 6.0F;
     }
 
     private boolean isScaffolding() {
@@ -84,7 +125,9 @@ public class Island extends Module {
 
     private boolean hasAlert() {
         if (!Leader.hudElementManager.isSuppressed("Notification")) return false;
-        return Notification.hasLatest() && Notification.latestProgress() > 0.0F;
+        Notification notification = (Notification) Leader.moduleManager.modules.get(Notification.class);
+        return notification != null && notification.isEnabled()
+                && Notification.hasLatest() && Notification.latestProgress() > 0.0F;
     }
 
     private int resolveState(EntityLivingBase target) {
@@ -96,11 +139,11 @@ public class Island extends Module {
     }
 
     private int getPing() {
-        if (mc.getNetHandler() == null) return lastPing;
+        if (mc.thePlayer == null || mc.getNetHandler() == null) return lastPing;
         NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
         if (info != null) {
             int ping = info.getResponseTime();
-            if (ping > 0) lastPing = ping;
+            if (ping >= 0) lastPing = ping;
         }
         return lastPing;
     }
@@ -115,12 +158,13 @@ public class Island extends Module {
     }
 
     private static String fit(String text, float maxW, float size) {
+        if (maxW <= 0.0F) return "";
         if (FontManager.getStringWidth(text, size) <= maxW) return text;
         String out = text;
-        while (out.length() > 2 && FontManager.getStringWidth(out, size) > maxW) {
-            out = out.substring(0, out.length() - 1);
+        while (!out.isEmpty() && FontManager.getStringWidth(out + "..", size) > maxW) {
+            out = out.substring(0, out.offsetByCodePoints(out.length(), -1));
         }
-        return out;
+        return out.isEmpty() ? "" : out + "..";
     }
 
     private static ResourceLocation getSkin(EntityLivingBase entity) {
@@ -137,69 +181,78 @@ public class Island extends Module {
     }
 
     private void text(String s, float x, float baseline, float size, int color) {
+        if ((color >>> 24) < 4) return;
         FontManager.drawString(s, x, baseline - FontManager.getBaseline(size), color, false, size);
     }
 
-    private float contentWidth(int state, float nameSize, float metaSize, EntityLivingBase target) {
+    public float contentWidth(int state, float nameSize, float metaSize, EntityLivingBase target) {
         switch (state) {
             case TARGET: {
                 float nameW = Math.min(110.0F, FontManager.getStringWidth(target != null ? target.getName() : "", nameSize));
                 return Math.max(168.0F, 12.0F + 26.0F + 9.0F + nameW + 46.0F + 12.0F);
             }
             case BLOCKS:
-                return 14.0F + 18.0F + 8.0F + FontManager.getStringWidth("Scaffold", nameSize)
-                        + 14.0F + FontManager.getStringWidth("999", nameSize + 2.0F) + 14.0F;
+                return Math.max(210, 70 + FontManager.getStringWidth("999", nameSize + 4)
+                        + FontManager.getStringWidth("blocks", metaSize) + FontManager.getStringWidth("9.99 b/s", metaSize));
             case DANGER:
-                return 14.0F + 14.0F + 8.0F + FontManager.getStringWidth("Low Health", nameSize)
-                        + 16.0F + FontManager.getStringWidth("20.0", nameSize) + 14.0F;
+                return Math.max(192, 80 + FontManager.getStringWidth("Low health", nameSize)
+                        + FontManager.getStringWidth("6.0", nameSize + 2));
             case ALERT:
-                return Math.max(124.0F, FontManager.getStringWidth(Notification.latestText(), nameSize) + 40.0F);
+                return alertWidth(Notification.latestText(), Notification.latestDescription(),
+                        Notification.latestMode(), nameSize, metaSize);
             default: {
-                String right = Minecraft.getDebugFPS() + " fps   " + this.getPing() + " ms";
-                return 14.0F + FontManager.getStringWidth("Leader", nameSize)
-                        + 14.0F + FontManager.getStringWidth(right, metaSize) + 14.0F;
+                return idleWidth(nameSize, metaSize, false);
             }
         }
     }
 
-    private float contentHeight(int state, float nameSize) {
+    public float contentHeight(int state, float nameSize) {
         float cap = FontManager.getCapHeight(nameSize);
         switch (state) {
             case TARGET:
-                return Math.max(38.0F, cap + 26.0F);
+                return Math.max(34.0F, cap + 22.0F);
             case BLOCKS:
+                return Math.max(30, cap + 20);
             case DANGER:
-                return Math.max(28.0F, cap + 17.0F);
+                return Math.max(30, cap + 20);
             case ALERT:
-                return Math.max(26.0F, cap + 13.0F);
+                return Math.max(30, cap + 20);
             default:
-                return Math.max(22.0F, cap + 13.0F);
+                return Math.max(24, cap + 16);
         }
     }
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!this.isEnabled() || mc.thePlayer == null) return;
+        if (!this.isEnabled() || mc.thePlayer == null || mc.currentScreen instanceof leader.ui.GuiHUDDesigner) return;
 
         long now = System.currentTimeMillis();
-        float dt = this.lastFrame == 0L ? 0.016F : Math.min(0.05F, (now - this.lastFrame) / 1000.0F);
+        float dt = this.lastFrame == 0L ? 0.016F : Math.max(0.0F, Math.min(0.05F, (now - this.lastFrame) / 1000.0F));
         this.lastFrame = now;
 
         EntityLivingBase liveTarget = this.getTarget();
-        if (liveTarget != null) this.lastTarget = liveTarget;
+        if (liveTarget != null && liveTarget != this.lastTarget) {
+            this.lastTarget = liveTarget;
+            this.hpAnim = this.hpGhost = Math.max(0.0F, Math.min(1.0F,
+                    liveTarget.getHealth() / Math.max(1.0F, liveTarget.getMaxHealth())));
+        }
         int resolved = this.resolveState(liveTarget);
         if (resolved != IDLE) {
             this.lastActive = now;
             this.pending = resolved;
-        } else if (now - this.lastActive > this.holdTime.getValue()) {
+        } else if (this.pending == ALERT || now - this.lastActive > this.holdTime.getValue()) {
             this.pending = IDLE;
         }
 
-        if (this.pending != this.shown) {
-            this.contentFade = Math.max(0.0F, this.contentFade - dt * 9.0F);
-            if (this.contentFade <= 0.0F) this.shown = this.pending;
+        boolean newAlert = pending == ALERT && shown == ALERT && Notification.latestStartTime() != alertStart;
+        if (this.pending != this.shown || newAlert) {
+            this.contentFade = Math.max(0.0F, this.contentFade - dt * 9.0F * animationSpeed.getValue());
+            if (this.contentFade <= 0.0F) {
+                this.shown = this.pending;
+                if (shown == ALERT) captureAlert();
+            }
         } else {
-            this.contentFade = Math.min(1.0F, this.contentFade + dt * 6.0F);
+            this.contentFade = Math.min(1.0F, this.contentFade + dt * 6.0F * animationSpeed.getValue());
         }
 
         float nameSize = 14.0F * this.fontScale.getValue();
@@ -211,42 +264,46 @@ public class Island extends Module {
             this.animW = targetW;
             this.animH = targetH;
         }
-        float stiffness = 260.0F;
-        float damping = 24.0F;
-        this.velW += ((targetW - this.animW) * stiffness - this.velW * damping) * dt;
-        this.velH += ((targetH - this.animH) * stiffness - this.velH * damping) * dt;
-        this.animW += this.velW * dt;
-        this.animH += this.velH * dt;
+        // Substeps keep the spring stable even at low FPS or high animation speed.
+        float remaining = dt * animationSpeed.getValue();
+        while (remaining > 0.0F) {
+            float step = Math.min(remaining, 1.0F / 120.0F);
+            this.velW += ((targetW - this.animW) * 260.0F - this.velW * 24.0F) * step;
+            this.velH += ((targetH - this.animH) * 260.0F - this.velH * 24.0F) * step;
+            this.animW += this.velW * step;
+            this.animH += this.velH * step;
+            remaining -= step;
+        }
 
         float sc = this.scale.getValue();
         ScaledResolution sr = new ScaledResolution(mc);
         float w = this.animW;
         float h = this.animH;
-        float r = Math.min(h / 2.0F, 8.0F);
-        float x = Leader.hudElementManager.x("Island", sr.getScaledWidth() / sc / 2.0F - w / 2.0F, 6.0F / sc);
-        float y = Leader.hudElementManager.y("Island", sr.getScaledWidth() / sc / 2.0F - w / 2.0F, 6.0F / sc);
+        float r = Math.min(h / 2.0F, cornerRadius.getValue());
+        float defaultX = sr.getScaledWidth() / 2.0F - w * sc / 2.0F;
+        float x = Leader.hudElementManager.x("Island", defaultX, 8.0F) / sc;
+        float y = Leader.hudElementManager.y("Island", defaultX, 8.0F) / sc;
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(sc, sc, 1.0F);
 
-        final float bx = x;
-        final float by = y;
-        final float bw = w;
-        final float bh = h;
-        final float br = r;
-        ShaderElement.addBlurTask(() -> {
-            GlStateManager.pushMatrix();
-            GlStateManager.scale(sc, sc, 1.0F);
-            RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1);
-            GlStateManager.popMatrix();
-        });
+        if (this.blur.getValue()) {
+            final float bx = x;
+            final float by = y;
+            final float bw = w;
+            final float bh = h;
+            final float br = r;
+            ShaderElement.addBlurTask(() -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.scale(sc, sc, 1.0F);
+                RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, br, -1);
+                GlStateManager.popMatrix();
+            });
+        }
 
         Color accent = this.accent(now);
         Color edge = this.shown == DANGER ? new Color(255, 96, 92) : accent;
-
-        RenderUtil.drawGrayGlass(x, y, x + w, y + h, r, 1.0F,
-                Leader.hudElementManager.backgroundColor("Island", 40.0F, 40.0F));
-        RenderUtil.drawRoundedRectGradientH(x, y, x + w, y + h, r, alpha(edge, 14 * this.contentFade), alpha(edge, 0));
+        drawSurface(x, y, w, h, r, edge, 1.0F, shown == TARGET);
 
         float ease = this.contentFade * this.contentFade * (3.0F - 2.0F * this.contentFade);
         if (ease > 0.01F) {
@@ -256,19 +313,19 @@ public class Island extends Module {
             float slide = (1.0F - ease) * 3.0F;
             switch (this.shown) {
                 case TARGET:
-                    this.drawTarget(x, y + slide, w, baseH, ease, dt, nameSize, metaSize, accent);
+                    this.drawTarget(x, y + slide, w, h, ease, dt, nameSize, metaSize, accent);
                     break;
                 case BLOCKS:
-                    this.drawBlocks(x, y + slide, w, baseH, ease, dt, nameSize, metaSize, accent);
+                    this.drawBlocks(x, y + slide, w, h, ease, dt, nameSize, metaSize, accent, false);
                     break;
                 case DANGER:
-                    this.drawDanger(x, y + slide, w, baseH, ease, now, nameSize, metaSize);
+                    this.drawDanger(x, y + slide, w, h, ease, now, nameSize, metaSize, false);
                     break;
                 case ALERT:
-                    this.drawAlert(x, y + slide, w, baseH, ease, nameSize);
+                    this.drawAlert(x, y + slide, w, h, ease, nameSize, metaSize, false);
                     break;
                 default:
-                    this.drawIdle(x, y + slide, w, baseH, ease, nameSize, metaSize);
+                    this.drawIdle(x, y + slide, w, h, ease, nameSize, metaSize, false);
                     break;
             }
             GlStateManager.disableBlend();
@@ -279,7 +336,102 @@ public class Island extends Module {
     }
 
     private static int fade(Color c, float a, float ease) {
-        return alpha(c, Math.max(5.0F, a * ease));
+        return alpha(c, a * ease);
+    }
+
+    private void captureAlert() {
+        alertStart = Notification.latestStartTime();
+        alertTitle = Notification.latestText();
+        alertDescription = Notification.latestDescription();
+        alertMode = Notification.latestMode();
+        Notification notification = (Notification) Leader.moduleManager.modules.get(Notification.class);
+        alertDuration = notification != null ? notification.duration.getValue() : 1500;
+    }
+
+    private Color noticeTint(NoticeMode mode) {
+        switch (mode) {
+            case Enable: return new Color(137, 213, 175);
+            case Disable: return new Color(225, 144, 156);
+            default: return new Color(222, 192, 139);
+        }
+    }
+
+    private String noticeDetail(String description, NoticeMode mode) {
+        if (!description.isEmpty()) return description;
+        return mode == NoticeMode.Enable ? "Enabled" : mode == NoticeMode.Disable ? "Disabled" : "Client notice";
+    }
+
+    private float alertWidth(String title, String description, NoticeMode mode, float nameSize, float metaSize) {
+        float textWidth = Math.max(FontManager.getStringWidth(title, nameSize),
+                FontManager.getStringWidth(noticeDetail(description, mode), metaSize));
+        return Math.max(172, Math.min(286, 76 + textWidth));
+    }
+
+    private float titleBaseline(float y, float h, float nameSize, float metaSize) {
+        float titleCap = FontManager.getCapHeight(nameSize), metaCap = FontManager.getCapHeight(metaSize);
+        return y + (h - titleCap - metaCap - 5) / 2 + titleCap;
+    }
+
+    private void iconTile(float x, float y, Icon icon, Color tint, float opacity) {
+        RenderUtil.drawRoundedRectWithGl(x, y, x + 24, y + 24, 6, fade(tint, 15, opacity));
+        icon.drawCentered(x + 12, y + 12, 13, tint.getRGB(), opacity);
+    }
+
+    private void noticeGlyph(float x, float y, NoticeMode mode, Color tint, float opacity) {
+        RenderUtil.drawRoundedRectWithGl(x, y, x + 24, y + 24, 6, fade(tint, 18, opacity));
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableDepth();
+        int ink = fade(tint, 255, opacity);
+        if (mode == NoticeMode.Enable) {
+            RenderUtil.drawLine(x + 7, y + 12, x + 10.5F, y + 15.5F, 1.6F, ink);
+            RenderUtil.drawLine(x + 10.5F, y + 15.5F, x + 17, y + 8.5F, 1.6F, ink);
+        } else if (mode == NoticeMode.Disable) {
+            RenderUtil.drawLine(x + 8, y + 8, x + 16, y + 16, 1.6F, ink);
+            RenderUtil.drawLine(x + 16, y + 8, x + 8, y + 16, 1.6F, ink);
+        } else {
+            RenderUtil.drawRoundedRectWithGl(x + 11.2F, y + 7, x + 12.8F, y + 13, 0.8F, ink);
+            RenderUtil.fillCircle(x + 12, y + 16, 0.9F, 12, ink);
+        }
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(1, 1, 1, 1);
+    }
+
+    private void lifetimeRing(float cx, float cy, float progress, Color tint, float opacity) {
+        progress = Math.max(0, Math.min(1, progress));
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableDepth();
+        for (int i = 0; i < 32; i++) {
+            double a = Math.PI * 2 * i / 32 - Math.PI / 2;
+            double b = Math.PI * 2 * (i + 1) / 32 - Math.PI / 2;
+            RenderUtil.drawLine(cx + (float) Math.cos(a) * 4.5F, cy + (float) Math.sin(a) * 4.5F,
+                    cx + (float) Math.cos(b) * 4.5F, cy + (float) Math.sin(b) * 4.5F, 1,
+                    fade(tint, i / 32.0F < progress ? 145 : 24, opacity));
+        }
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(1, 1, 1, 1);
+    }
+
+    private void drawSurface(float x, float y, float w, float h, float radius, Color accent, float opacity, boolean target) {
+        Color bg = Leader.hudElementManager.backgroundColor("Island", 40.0F, 40.0F);
+        if (!target) {
+            // One restrained graphite surface: readable over the world without a stacked card effect.
+            RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, radius,
+                    alpha(new Color(bg.getRed() / 2, bg.getGreen() / 2, bg.getBlue() / 2), bg.getAlpha() * opacity * 0.5F));
+            return;
+        }
+        RenderUtil.drawRoundedRectWithGl(x, y + 2.0F, x + w, y + h + 2.0F, radius, alpha(Color.BLACK, 38 * opacity));
+        RenderUtil.drawRoundedRectWithGl(x - 0.6F, y - 0.6F, x + w + 0.6F, y + h + 0.6F,
+                radius + 0.6F, alpha(new Color(170, 182, 208), 35 * opacity));
+        RenderUtil.drawRoundedRectGradient(x, y, x + w, y + h, radius,
+                alpha(bg, bg.getAlpha() * opacity),
+                alpha(new Color(Math.max(0, bg.getRed() - 10), Math.max(0, bg.getGreen() - 10),
+                        Math.max(0, bg.getBlue() - 10)), bg.getAlpha() * opacity));
+        RenderUtil.drawRoundedRectGradientH(x, y, x + w, y + h, radius,
+                alpha(accent, 10 * opacity), alpha(accent, 0));
+        RenderUtil.drawRoundedRectWithGl(x + radius, y + 0.5F, x + w - radius, y + 1.0F,
+                0.25F, alpha(Color.WHITE, 24 * opacity));
     }
 
     private void drawTarget(float x, float y, float w, float h, float ease, float dt, float nameSize, float metaSize, Color accent) {
@@ -294,61 +446,62 @@ public class Island extends Module {
         if (this.hpGhost < this.hpAnim) this.hpGhost = this.hpAnim;
         else this.hpGhost = approach(this.hpGhost, this.hpAnim, 1.0F - (float) Math.exp(-dt * 3.0F));
 
-        float head = 26.0F;
-        float hx = x + 12.0F;
+        float head = 28.0F;
+        float hx = x + 10.0F;
         float hy = y + (h - head) / 2.0F;
-        RenderUtil.drawRoundedRectWithGl(hx - 1.0F, hy - 1.0F, hx + head + 1.0F, hy + head + 1.0F, 5.0F, fade(accent, 90, ease));
+
+        RenderUtil.drawRoundedRectWithGl(hx, hy, hx + head, hy + head, 5, fade(new Color(22, 24, 30), 255, ease));
+        RenderUtil.drawRoundedRectWithGl(hx, hy, hx + head, hy + head, 5, fade(accent, 25, ease));
+
         ResourceLocation skin = getSkin(target);
         if (skin != null) {
             float hurt = target.hurtTime > 0 ? target.hurtTime / 10.0F : 0.0F;
             GlStateManager.enableBlend();
             GlStateManager.enableTexture2D();
-            GlStateManager.color(1.0F, 1.0F - hurt * 0.55F, 1.0F - hurt * 0.55F, ease);
+            GlStateManager.color(1.0F, 1.0F - hurt * 0.5F, 1.0F - hurt * 0.5F, ease);
             mc.getTextureManager().bindTexture(skin);
-            GlStateManager.pushMatrix();
-            GlStateManager.translate(hx, hy, 0.0F);
-            Gui.drawScaledCustomSizeModalRect(0, 0, 8.0F, 8.0F, 8, 8, (int) head, (int) head, 64.0F, 64.0F);
-            Gui.drawScaledCustomSizeModalRect(0, 0, 40.0F, 8.0F, 8, 8, (int) head, (int) head, 64.0F, 64.0F);
-            GlStateManager.popMatrix();
+            drawRoundedSkin(hx, hy, head, 5, 8, 8);
+            drawRoundedSkin(hx, hy, head, 5, 40, 8);
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         } else {
-            RenderUtil.drawRoundedRectWithGl(hx, hy, hx + head, hy + head, 4.0F, fade(new Color(40, 42, 50), 255, ease));
             String initial = target.getName().isEmpty() ? "?" : target.getName().substring(0, 1).toUpperCase();
             float iw = FontManager.getStringWidth(initial, nameSize);
-            this.text(initial, hx + (head - iw) / 2.0F, hy + (head + FontManager.getCapHeight(nameSize)) / 2.0F, nameSize, fade(Color.WHITE, 255, ease));
+            this.text(initial, hx + (head - iw) / 2.0F, hy + (head + FontManager.getCapHeight(nameSize)) / 2.0F, nameSize, fade(accent, 255, ease));
         }
 
         float left = hx + head + 9.0F;
         float right = x + w - 12.0F;
         float cap = FontManager.getCapHeight(nameSize);
-        float nameBase = y + 7.0F + cap;
-        Color hpColor = new Color(Color.HSBtoRGB(0.33F * this.hpAnim, 0.62F, 1.0F));
-        String hpText = String.format("%.1f", hp);
+        float nameBase = y + (h - cap) / 2.0F + cap - 1.0F;
+
+        Color hpColor = new Color(Color.HSBtoRGB(0.33F * this.hpAnim, 0.7F, 0.95F));
+        String hpText = String.format(Locale.ROOT, "%.1f", hp);
         float hpW = FontManager.getStringWidth(hpText, nameSize);
         String name = fit(target.getName(), Math.max(10.0F, right - hpW - 8.0F - left), nameSize);
         this.text(name, left, nameBase, nameSize, fade(Color.WHITE, 255, ease));
         this.text(hpText, right - hpW, nameBase, nameSize, fade(hpColor, 255, ease));
 
-        float barY = y + h - 11.0F;
+        float barY = y + h - 7.0F;
+        float barH = 3.5F;
         float barW = right - left;
-        RenderUtil.drawRoundedRectWithGl(left, barY, right, barY + 3.0F, 1.5F, fade(Color.WHITE, 22, ease));
+        RenderUtil.drawRoundedRectWithGl(left, barY, right, barY + barH, barH / 2.0F, fade(Color.WHITE, 16, ease));
         if (this.hpGhost > this.hpAnim + 0.002F) {
-            RenderUtil.drawRoundedRectWithGl(left, barY, left + barW * this.hpGhost, barY + 3.0F, 1.5F, fade(new Color(255, 236, 200), 120, ease));
+            RenderUtil.drawRoundedRectWithGl(left, barY, left + barW * this.hpGhost, barY + barH, barH / 2.0F, fade(new Color(255, 200, 140), 90, ease));
         }
         if (this.hpAnim > 0.01F) {
-            RenderUtil.drawRoundedRectGradientH(left, barY, left + Math.max(3.0F, barW * this.hpAnim), barY + 3.0F, 1.5F,
+            RenderUtil.drawRoundedRectGradientH(left, barY, left + Math.max(barH, barW * this.hpAnim), barY + barH, barH / 2.0F,
                     fade(accent, 255, ease), fade(hpColor, 255, ease));
         }
     }
 
-    private void drawBlocks(float x, float y, float w, float h, float ease, float dt, float nameSize, float metaSize, Color accent) {
-        int count = Math.max(0, Scaffold.count);
+    private void drawBlocks(float x, float y, float w, float h, float ease, float dt, float nameSize, float metaSize, Color accent, boolean preview) {
+        int count = preview ? 128 : Math.max(0, Scaffold.count);
         float k = 1.0F - (float) Math.exp(-dt * 12.0F);
         this.blocksAnim = approach(this.blocksAnim, Math.min(1.0F, count / 64.0F), k);
 
         Scaffold scaffold = (Scaffold) Leader.moduleManager.modules.get(Scaffold.class);
         ItemStack iconStack = null;
-        if (scaffold != null && mc.thePlayer != null) {
+        if (!preview && scaffold != null && mc.thePlayer != null) {
             for (int i = 0; i < 9; i++) {
                 ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
                 if (stack != null && stack.stackSize > 0 && stack.getItem() instanceof ItemBlock) {
@@ -362,15 +515,19 @@ public class Island extends Module {
             }
         }
 
-        float iconSize = 16.0F;
-        float ix = x + 12.0F;
+        float iconSize = 18.0F;
+        float ix = x + 10.0F;
         float iy = y + (h - iconSize) / 2.0F;
-        float iconWellSize = iconSize + 6.0F;
-        RenderUtil.drawRoundedRectWithGl(ix, iy, ix + iconWellSize, iy + iconWellSize, 5.0F, fade(accent, 32, ease));
+
+        if (iconStack == null) {
+            RenderUtil.drawRoundedRectGradient(ix + 2, iy + 2, ix + 16, iy + 16, 2,
+                    fade(new Color(191, 191, 200), 230, ease), fade(new Color(112, 112, 126), 230, ease));
+            RenderUtil.drawRect(ix + 3, iy + 3, ix + 15, iy + 5, fade(Color.WHITE, 65, ease));
+        }
 
         if (iconStack != null && ease > 0.6F) {
             GlStateManager.pushMatrix();
-            GlStateManager.translate(ix + 3.0F, iy + 3.0F, 0.0F);
+            GlStateManager.translate(ix + 1.0F, iy + 1.0F, 0.0F);
             RenderUtil.renderItemInGUI(iconStack, 0, 0, false);
             GlStateManager.popMatrix();
             GlStateManager.disableDepth();
@@ -378,85 +535,168 @@ public class Island extends Module {
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         }
 
-        float cap = FontManager.getCapHeight(nameSize);
-        float left = ix + iconWellSize + 8.0F;
-        float base = y + (h + cap) / 2.0F - 1.0F;
-        this.text("Scaffold", left, base, nameSize, fade(Color.WHITE, 255, ease));
-
-        float countSize = nameSize + 1.0F;
-        String countText = String.valueOf(count);
-        float cw = FontManager.getStringWidth(countText, countSize);
-        float countBase = y + (h + FontManager.getCapHeight(countSize)) / 2.0F;
-        this.text(countText, x + w - 12.0F - cw, countBase, countSize, fade(Color.WHITE, 255, ease));
-
-        float barLeft = x + 12.0F;
-        float barRight = x + w - 12.0F;
-        float barY = y + h - 4.0F;
-        float barWidth = Math.min(barRight - barLeft, 70.0F);
-        float barActualRight = barLeft + barWidth;
-        RenderUtil.drawRoundedRectWithGl(barLeft, barY, barActualRight, barY + 2.0F, 1.0F, fade(Color.WHITE, 18, ease));
-        if (this.blocksAnim > 0.01F) {
-            RenderUtil.drawRoundedRectWithGl(barLeft, barY, barLeft + Math.max(2.0F, barWidth * this.blocksAnim), barY + 2.0F, 1.0F, fade(accent, 255, ease));
+        String countText = Integer.toString(count);
+        double bps = preview || mc.thePlayer == null ? 4.32 : Math.hypot(mc.thePlayer.posX - mc.thePlayer.prevPosX,
+                mc.thePlayer.posZ - mc.thePlayer.prevPosZ) * 20;
+        String speedText = String.format(Locale.ROOT, "%.2f b/s", bps);
+        float numberSize = nameSize + 4;
+        float textX = x + 37;
+        float numberW = FontManager.getStringWidth(countText, numberSize);
+        float valueBase = y + (h + FontManager.getCapHeight(numberSize)) / 2 - 1;
+        Color countColor = count <= 16 ? new Color(225, 144, 156) : count <= 48 ? new Color(222, 192, 139) : new Color(174, 181, 230);
+        text(countText, textX, valueBase, numberSize, fade(FOREGROUND, 255, ease));
+        text("blocks", textX + numberW + 5, valueBase, metaSize, fade(SECONDARY, 255, ease));
+        float barLeft = textX + numberW + 5 + FontManager.getStringWidth("blocks", metaSize) + 16;
+        float barRight = x + w - 12;
+        float barY = y + h / 2 + 5;
+        float barH = 2;
+        text(speedText, barLeft, barY - 5, metaSize, fade(SECONDARY, 255, ease));
+        RenderUtil.drawRoundedRectWithGl(barLeft, barY, barRight, barY + barH, 1,
+                fade(Color.WHITE, 22, ease));
+        float ratio = preview ? 0.75F : this.blocksAnim;
+        if (ratio > 0.01F) {
+            float fill = Math.max(barH, (barRight - barLeft) * ratio);
+            RenderUtil.drawRoundedRectWithGl(barLeft, barY, barLeft + fill, barY + barH, 1, fade(countColor, 220, ease));
         }
     }
 
-    private void drawDanger(float x, float y, float w, float h, float ease, long now, float nameSize, float metaSize) {
-        Color red = new Color(255, 96, 92);
-        float pulse = 0.5F + 0.5F * (float) Math.sin(now / 160.0);
-        float icon = 14.0F;
-        float ix = x + 14.0F;
-        float iy = y + (h - icon) / 2.0F;
-        RenderUtil.fillCircle(ix + icon / 2.0F, iy + icon / 2.0F, icon / 2.0F + 2.0F + pulse * 2.0F, 32, fade(red, 50 * (1.0F - pulse) + 20, ease));
-        Icon.HEAL.draw(ix, iy, icon, red.getRGB(), ease * (0.75F + 0.25F * pulse));
+    private void drawDanger(float x, float y, float w, float h, float ease, long now, float nameSize, float metaSize, boolean preview) {
+        Color red = new Color(225, 144, 156);
+        float pulse = 0.5F + 0.5F * (float) Math.sin(now / 360.0);
+        iconTile(x + 10, y + (h - 24) / 2, Icon.HEAL, red, ease * (0.8F + pulse * 0.2F));
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
-        float cap = FontManager.getCapHeight(nameSize);
-        float base = y + (h + cap) / 2.0F;
-        this.text("Low Health", ix + icon + 8.0F, base, nameSize, fade(Color.WHITE, 255, ease));
-        String hp = String.format("%.1f", mc.thePlayer.getHealth());
-        float hw = FontManager.getStringWidth(hp, nameSize);
-        this.text(hp, x + w - 14.0F - hw, base, nameSize, fade(red, 255, ease));
+        float base = titleBaseline(y, h, nameSize, metaSize);
+        float health = preview || mc.thePlayer == null ? 4.0F : mc.thePlayer.getHealth();
+        String hp = String.format(Locale.ROOT, "%.1f", health);
+        float valueSize = nameSize + 2;
+        float pillW = FontManager.getStringWidth(hp, valueSize) + 16;
+        float pillX = x + w - 10 - pillW;
+        text(fit("Low health", pillX - x - 51, nameSize), x + 43, base, nameSize, fade(FOREGROUND, 255, ease));
+        text("Take cover", x + 43, base + FontManager.getCapHeight(metaSize) + 5,
+                metaSize, fade(SECONDARY, 255, ease));
+        RenderUtil.drawRoundedRectWithGl(pillX, y + h / 2 - 10, pillX + pillW, y + h / 2 + 10,
+                5, fade(red, 14, ease));
+        text(hp, pillX + 8, y + (h + FontManager.getCapHeight(valueSize)) / 2,
+                valueSize, fade(red, 255, ease));
     }
 
-    private void drawAlert(float x, float y, float w, float h, float ease, float nameSize) {
-        String label = fit(Notification.latestText(), w - 64.0F, nameSize);
-        Color tintColor = new Color(Notification.latestColor());
-        float cap = FontManager.getCapHeight(nameSize);
-        float base = y + (h - cap) / 2.0F + cap - 1.5F;
+    private void drawAlert(float x, float y, float w, float h, float ease, float nameSize, float metaSize, boolean preview) {
+        NoticeMode mode = preview ? previewNoticeMode : alertMode;
+        Color tint = noticeTint(mode);
+        String title = preview ? "Scaffold" : alertTitle;
+        String description = preview ? "" : alertDescription;
+        noticeGlyph(x + 10, y + (h - 24) / 2, mode, tint, ease);
+        float left = x + 43, available = Math.max(0, w - 76);
+        float base = titleBaseline(y, h, nameSize, metaSize);
+        text(fit(title, available, nameSize), left, base, nameSize, fade(FOREGROUND, 255, ease));
+        text(fit(noticeDetail(description, mode), available, metaSize), left,
+                base + 5 + FontManager.getCapHeight(metaSize), metaSize, fade(tint, 205, ease));
+        float progress = preview ? 0.65F : 1 - (System.currentTimeMillis() - alertStart) / Math.max(1, alertDuration);
+        lifetimeRing(x + w - 16, y + h / 2, progress, tint, ease);
+    }
 
-        int iconColor = tintColor.getRGB();
-        float iconWellX = x + 11.0F;
-        float iconWellY = y + h / 2.0F;
-        float iconWellSize = 27.0F;
-        float iconSize = 12.0F;
+    private String idleMetrics(boolean preview) {
+        return (preview ? 60 : Minecraft.getDebugFPS()) + " fps / " + (preview ? 20 : getPing()) + " ms";
+    }
 
-        RenderUtil.fillCircle(iconWellX, iconWellY, iconWellSize / 2.0F, 32, fade(tintColor, 32, ease));
-        Icon.INFO.drawCentered(iconWellX, iconWellY, iconSize, iconColor, ease);
+    private float idleWidth(float nameSize, float metaSize, boolean preview) {
+        return 39 + FontManager.getStringWidth("Leader", nameSize) + 12
+                + (showMetrics.getValue() ? 22 + FontManager.getStringWidth(idleMetrics(preview), metaSize) : 0);
+    }
 
-        this.text(label, iconWellX + iconWellSize / 2.0F + 8.0F, base, nameSize, fade(Color.WHITE, 245, ease));
+    public NoticeMode getPreviewNoticeMode() { return previewNoticeMode; }
 
-        float progress = Notification.latestProgress();
-        float barLeft = x + 8.0F;
-        float barRight = x + w - 8.0F;
-        float barY = y + h - 3.5F;
-        RenderUtil.drawRoundedRectWithGl(barLeft, barY, barRight, barY + 1.6F, 0.8F, fade(Color.WHITE, 20, ease));
-        if (progress > 0.01F) {
-            RenderUtil.drawRoundedRectWithGl(barLeft, barY, barLeft + Math.max(1.6F, (barRight - barLeft) * progress), barY + 1.6F, 0.8F,
-                    fade(tintColor, 240, ease));
+    public void setPreviewNoticeMode(NoticeMode mode) { previewNoticeMode = mode; }
+
+    private void drawRoundedSkin(float x, float y, float size, float radius, float skinU, float skinV) {
+        // Textured rounded mesh clips both skin layers without modifying the global stencil buffer.
+        boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+        GlStateManager.disableCull();
+        Tessellator tessellator = Tessellator.getInstance();
+        WorldRenderer wr = tessellator.getWorldRenderer();
+        wr.begin(GL11.GL_TRIANGLE_FAN, DefaultVertexFormats.POSITION_TEX);
+        wr.pos(x + size / 2, y + size / 2, 0).tex((skinU + 4) / 64, (skinV + 4) / 64).endVertex();
+        for (int corner = 0; corner <= 4; corner++) {
+            int c = corner % 4;
+            float cx = x + (c == 0 || c == 3 ? radius : size - radius);
+            float cy = y + (c < 2 ? radius : size - radius);
+            for (int step = 0; step <= (corner == 4 ? 0 : 10); step++) {
+                double angle = Math.toRadians(180 + c * 90 + step * 9);
+                float px = cx + (float) Math.cos(angle) * radius;
+                float py = cy + (float) Math.sin(angle) * radius;
+                wr.pos(px, py, 0).tex((skinU + (px - x) / size * 8) / 64,
+                        (skinV + (py - y) / size * 8) / 64).endVertex();
+            }
         }
+        tessellator.draw();
+        if (cull) GlStateManager.enableCull();
     }
 
-    private void drawIdle(float x, float y, float w, float h, float ease, float nameSize, float metaSize) {
-        float cap = FontManager.getCapHeight(nameSize);
-        float nameBase = y + (h + cap) / 2.0F;
-        this.text("Leader", x + 14.0F, nameBase, nameSize, fade(Color.WHITE, 240, ease));
+    private void drawIdle(float x, float y, float w, float h, float ease, float nameSize, float metaSize, boolean preview) {
+        iconTile(x + 8, y + (h - 24) / 2, Icon.CROWN, new Color(174, 181, 230), ease);
+        float brandX = x + 39;
+        text("Leader", brandX, y + (h + FontManager.getCapHeight(nameSize)) / 2,
+                nameSize, fade(FOREGROUND, 255, ease));
+        if (!showMetrics.getValue()) return;
+        String right = idleMetrics(preview);
+        float brandW = FontManager.getStringWidth("Leader", nameSize);
+        float sep = brandX + brandW + 10;
+        RenderUtil.drawRect(sep, y + 9, sep + 0.6F, y + h - 9, fade(SECONDARY, 45, ease));
+        float infoX = sep + 12;
+        text(fit(right, w - (infoX - x) - 12, metaSize), infoX,
+                y + (h + FontManager.getCapHeight(metaSize)) / 2, metaSize, fade(SECONDARY, 255, ease));
+    }
 
-        String right = Minecraft.getDebugFPS() + " fps   " + this.getPing() + " ms";
-        float rw = FontManager.getStringWidth(right, metaSize);
-        float metaBase = y + (h + FontManager.getCapHeight(metaSize)) / 2.0F;
-        this.text(right, x + w - 14.0F - rw, metaBase, metaSize, fade(new Color(158, 163, 178), 230, ease));
+    public void renderPreview(float x, float y, float alpha) {
+        renderPreview(x, y, alpha, IDLE);
+    }
+
+    public float[] previewSize(int state) {
+        float nameSize = 14 * fontScale.getValue();
+        float w = contentWidth(state, nameSize, 11 * fontScale.getValue(), null);
+        if (state == IDLE && showMetrics.getValue()) {
+            w = idleWidth(nameSize, 11 * fontScale.getValue(), true);
+        } else if (state == ALERT) {
+            w = alertWidth("Scaffold", "", previewNoticeMode, nameSize, 11 * fontScale.getValue());
+        }
+        return new float[]{w * scale.getValue(), contentHeight(state, nameSize) * scale.getValue()};
+    }
+
+    public void renderPreview(float x, float y, float opacity, int state) {
+        float sc = scale.getValue();
+        float[] size = previewSize(state);
+        float w = size[0] / sc, h = size[1] / sc;
+        float nameSize = 14 * fontScale.getValue(), metaSize = 11 * fontScale.getValue();
+        Color accent = accent(System.currentTimeMillis());
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(sc, sc, 1);
+        x /= sc;
+        y /= sc;
+        drawSurface(x, y, w, h, Math.min(h / 2, cornerRadius.getValue()),
+                state == DANGER ? new Color(255, 125, 145) : accent, opacity, state == TARGET);
+        if (state == BLOCKS) drawBlocks(x, y, w, h, opacity, 0, nameSize, metaSize, accent, true);
+        else if (state == DANGER) drawDanger(x, y, w, h, opacity, System.currentTimeMillis(), nameSize, metaSize, true);
+        else if (state == ALERT) drawAlert(x, y, w, h, opacity, nameSize, metaSize, true);
+        else if (state == TARGET) {
+            // Keep the accepted target layout without mutating live combat animation state.
+            RenderUtil.drawRoundedRectWithGl(x + 10, y + (h - 28) / 2, x + 38, y + (h + 28) / 2,
+                    5, fade(accent, 28, opacity));
+            text("T", x + 19, y + (h + FontManager.getCapHeight(nameSize)) / 2, nameSize, fade(accent, 255, opacity));
+            text("Target", x + 47, y + (h + FontManager.getCapHeight(nameSize)) / 2 - 1,
+                    nameSize, fade(Color.WHITE, 255, opacity));
+            String hp = "15.0";
+            text(hp, x + w - 12 - FontManager.getStringWidth(hp, nameSize),
+                    y + (h + FontManager.getCapHeight(nameSize)) / 2 - 1, nameSize, fade(accent, 255, opacity));
+            RenderUtil.drawRoundedRectWithGl(x + 47, y + h - 7, x + w - 12, y + h - 3.5F, 1.75F,
+                    fade(Color.WHITE, 16, opacity));
+            RenderUtil.drawRoundedRectWithGl(x + 47, y + h - 7, x + 47 + (w - 59) * 0.75F, y + h - 3.5F,
+                    1.75F, fade(accent, 255, opacity));
+        } else drawIdle(x, y, w, h, opacity, nameSize, metaSize, true);
+        GlStateManager.color(1, 1, 1, 1);
+        GlStateManager.popMatrix();
     }
 
 }

@@ -1,6 +1,8 @@
 package leader.management;
 
 import com.google.gson.*;
+import leader.Leader;
+import leader.module.modules.render.Island;
 import leader.mixin.IAccessorMinecraft;
 import net.minecraft.client.Minecraft;
 
@@ -42,7 +44,8 @@ public class HUDElementManager {
     public HUDElement getOrCreate(String name, float defaultX, float defaultY) {
         HUDElement element = elements.get(name);
         if (element == null) {
-            element = new HUDElement(defaultX, defaultY, DEFAULT_BACKGROUND);
+            int background = name.equals("Island") ? new Color(20, 24, 34, 220).getRGB() : DEFAULT_BACKGROUND;
+            element = new HUDElement(defaultX, defaultY, background);
             elements.put(name, element);
         }
         return element;
@@ -98,7 +101,13 @@ public class HUDElementManager {
 
     public boolean isSuppressed(String name) {
         String target = mergedInto(name);
-        return target != null && !target.equals(name);
+        return "Island".equals(target) && !target.equals(name) && isIslandActive();
+    }
+
+    public boolean isIslandActive() {
+        if (Leader.moduleManager == null) return false;
+        Island island = (Island) Leader.moduleManager.modules.get(Island.class);
+        return island != null && island.isEnabled();
     }
 
     public List<String> mergedModules(String target) {

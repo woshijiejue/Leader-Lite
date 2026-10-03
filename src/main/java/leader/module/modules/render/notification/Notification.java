@@ -29,6 +29,17 @@ public class Notification extends Module {
 
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final List<NotificationEntry> entries = new ArrayList<>();
+    private float lastLayoutX = Float.NaN;
+    private float lastLayoutY = Float.NaN;
+    private float lastLayoutScale = Float.NaN;
+    private float lastLayoutFontScale = Float.NaN;
+    private int lastLayoutStyle = -1;
+    private int lastLayoutMode = -1;
+    private int lastLayoutWidth = -1;
+    private int lastLayoutHeight = -1;
+    private boolean previewing;
+    private float previewX, previewY, previewAlpha;
+    private NoticeMode previewMode = NoticeMode.Enable;
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"RIGHT", "LEFT"});
     public final ModeProperty style = new ModeProperty("style", 1, new String[]{"CLASSIC", "MODERN", "8BIT", "AURA", "FROST", "LUCID", "SLATE"});
@@ -54,6 +65,18 @@ public class Notification extends Module {
 
     public static String latestText() {
         return entries.isEmpty() ? "" : entries.get(entries.size() - 1).text;
+    }
+
+    public static String latestDescription() {
+        return entries.isEmpty() ? "" : entries.get(entries.size() - 1).description;
+    }
+
+    public static NoticeMode latestMode() {
+        return entries.isEmpty() ? NoticeMode.Info : entries.get(entries.size() - 1).noticeMode;
+    }
+
+    public static long latestStartTime() {
+        return entries.isEmpty() ? 0L : entries.get(entries.size() - 1).startTime;
     }
 
     public static int latestColor() {
@@ -95,6 +118,7 @@ public class Notification extends Module {
     }
 
     private float getAlpha(long now, long start, long dur) {
+        if (previewing) return previewAlpha;
         float elapsed = now - start;
         float fadeIn = Math.min(dur * 0.15F, 200.0F);
         float fadeOut = Math.min(dur * 0.20F, 300.0F);
@@ -110,37 +134,43 @@ public class Notification extends Module {
     @EventTarget
     public void onRender2D(Render2DEvent event) {
         if (!this.isEnabled()) return;
-        if (Leader.hudElementManager.isSuppressed("Notification")) return;
-        ScaledResolution sr = new ScaledResolution(mc);
-        float screenWidth = sr.getScaledWidth();
-        float screenHeight = sr.getScaledHeight();
         long now = System.currentTimeMillis();
         long dur = this.duration.getValue();
         entries.removeIf(entry -> now - entry.startTime > dur);
+        if (Leader.hudElementManager.isSuppressed("Notification")) return;
+        if (mc.currentScreen instanceof leader.ui.GuiHUDDesigner) return;
+        ScaledResolution sr = new ScaledResolution(mc);
+        resetLayoutIfChanged(sr);
+        float screenWidth = sr.getScaledWidth();
+        float screenHeight = sr.getScaledHeight();
         if (entries.isEmpty()) return;
 
+        renderEntries(sr, now, dur, entries);
+    }
+
+    private void renderEntries(ScaledResolution sr, long now, long dur, List<NotificationEntry> entries) {
         if (this.style.getValue() == 1) {
-            renderModern(sr, now, dur);
+            renderModern(sr, now, dur, entries);
             return;
         }
         if (this.style.getValue() == 2) {
-            renderEightBit(sr, now, dur);
+            renderEightBit(sr, now, dur, entries);
             return;
         }
         if (this.style.getValue() == 3) {
-            renderAura(sr, now, dur);
+            renderAura(sr, now, dur, entries);
             return;
         }
         if (this.style.getValue() == 4) {
-            renderFrost(sr, now, dur);
+            renderFrost(sr, now, dur, entries);
             return;
         }
         if (this.style.getValue() == 5) {
-            renderLucid(sr, now, dur);
+            renderLucid(sr, now, dur, entries);
             return;
         }
         if (this.style.getValue() == 6) {
-            renderSlate(sr, now, dur);
+            renderSlate(sr, now, dur, entries);
             return;
         }
 
@@ -151,8 +181,8 @@ public class Notification extends Module {
         float textHeight = FontManager.getFontHeight() * textScale;
         float textY = (cardHeight - textHeight) / 2.0F;
 
-        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 4.0F;
-        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 4.0F;
+        float offX = renderOriginX(4);
+        float offY = renderOriginY(4);
         boolean isRight = this.mode.getValue() == 0;
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
@@ -169,12 +199,12 @@ public class Notification extends Module {
             NotificationEntry entry = entries.get(i);
             float progress = Math.min((float) (now - entry.startTime) / (float) dur, 1.0F);
             float alpha = getAlpha(now, entry.startTime, dur);
-            int idx = i;
-            float targetY = (baseY + idx * step) * invScale;
+            int idx = max - 1 - i;
+            float targetY = cardY(sr, baseY, cardHeight, idx * step);
             if (Float.isNaN(entry.animY)) entry.animY = targetY;
             entry.animY += (targetY - entry.animY) * reflow;
             float y = entry.animY;
-            float x = baseX * invScale;
+            float x = cardX(sr, baseX, cardWidth, 0);
             Color themeColor = switch (entry.noticeMode) {
                 case Enable ->  new Color(0x00FF00);
                 case Disable -> new Color(0xFF4444);
@@ -272,14 +302,14 @@ public class Notification extends Module {
         GlStateManager.popMatrix();
     }
 
-    private void renderModern(ScaledResolution sr, long now, long dur) {
+    private void renderModern(ScaledResolution sr, long now, long dur, List<NotificationEntry> entries) {
         float cardWidth = 136.0F;
         float cardHeight = 34.0F;
         float gap = 5.0F;
         float radius = 6.0F;
         float textScale = this.fontScale.getValue();
-        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
-        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
+        float offX = renderOriginX(6);
+        float offY = renderOriginY(8);
         boolean isRight = this.mode.getValue() == 0;
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
@@ -297,8 +327,8 @@ public class Notification extends Module {
             float alpha = Math.max(0.0F, Math.min(1.0F, getAlpha(now, entry.startTime, dur)));
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 18.0F;
-            float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY + idx * step) * invScale;
+            float x = cardX(sr, baseX, cardWidth, isRight ? slide : -slide);
+            float targetY = cardY(sr, baseY, cardHeight, idx * step);
             if (Float.isNaN(entry.animY)) entry.animY = targetY;
             entry.animY += (targetY - entry.animY) * reflow;
             float y = entry.animY;
@@ -390,7 +420,7 @@ public class Notification extends Module {
             "..XXX.."
     };
 
-    private void renderEightBit(ScaledResolution sr, long now, long dur) {
+    private void renderEightBit(ScaledResolution sr, long now, long dur, List<NotificationEntry> entries) {
         float textScale = this.fontScale.getValue();
         float textHeight = FontManager.getFontHeight() * textScale;
         float cardWidth = 140.0F;
@@ -399,8 +429,8 @@ public class Notification extends Module {
         boolean showScanlines = this.scanlines.getValue();
         float cardHeight = Math.max(26.0F, textHeight + 14.0F);
         float gap = 4.0F;
-        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
-        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
+        float offX = renderOriginX(6);
+        float offY = renderOriginY(8);
         boolean isRight = this.mode.getValue() == 0;
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
@@ -421,8 +451,8 @@ public class Notification extends Module {
             float slide = (1.0F - alpha) * 16.0F;
 
             slide = Math.round(slide);
-            float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY + idx * step) * invScale;
+            float x = cardX(sr, baseX, cardWidth, isRight ? slide : -slide);
+            float targetY = cardY(sr, baseY, cardHeight, idx * step);
             if (Float.isNaN(entry.animY)) entry.animY = targetY;
             entry.animY += (targetY - entry.animY) * reflow;
             float y = entry.animY;
@@ -577,15 +607,15 @@ public class Notification extends Module {
         GlStateManager.disableBlend();
     }
 
-    private void renderAura(ScaledResolution sr, long now, long dur) {
+    private void renderAura(ScaledResolution sr, long now, long dur, List<NotificationEntry> entries) {
         float textScale = this.fontScale.getValue();
         float textHeight = FontManager.getFontHeight() * textScale;
         float cardWidth = 120.0F;
         float cardHeight = 30.0F;
         float gap = 4.0F;
         float radius = 8.0F;
-        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
-        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
+        float offX = renderOriginX(6);
+        float offY = renderOriginY(8);
         boolean isRight = this.mode.getValue() == 0;
         float invScale = 1.0F / this.scale.getValue();
         int max = Math.min(entries.size(), this.maxAlerts.getValue());
@@ -603,8 +633,8 @@ public class Notification extends Module {
             float alpha = Math.max(0.0F, Math.min(1.0F, getAlpha(now, entry.startTime, dur)));
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
-            float x = (baseX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY + idx * step) * invScale;
+            float x = cardX(sr, baseX, cardWidth, isRight ? slide : -slide);
+            float targetY = cardY(sr, baseY, cardHeight, idx * step);
             if (Float.isNaN(entry.animY)) entry.animY = targetY;
             entry.animY += (targetY - entry.animY) * reflow;
             float y = entry.animY;
@@ -676,10 +706,10 @@ public class Notification extends Module {
         }
     }
 
-    private void renderFrost(ScaledResolution sr, long now, long dur) {
+    private void renderFrost(ScaledResolution sr, long now, long dur, List<NotificationEntry> entries) {
         float textScale = this.fontScale.getValue();
-        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
-        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
+        float offX = renderOriginX(6);
+        float offY = renderOriginY(8);
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
@@ -722,8 +752,8 @@ public class Notification extends Module {
 
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
-            float targetX = (offX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY + idx * step) * invScale;
+            float targetX = cardX(sr, offX, cardWidth, isRight ? slide : -slide);
+            float targetY = cardY(sr, baseY, cardHeight, idx * step);
             if (Float.isNaN(entry.animX)) {
                 entry.animX = targetX;
                 entry.animY = targetY;
@@ -798,10 +828,10 @@ public class Notification extends Module {
         }
     }
 
-    private void renderLucid(ScaledResolution sr, long now, long dur) {
+    private void renderLucid(ScaledResolution sr, long now, long dur, List<NotificationEntry> entries) {
         float textScale = this.fontScale.getValue();
-        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
-        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
+        float offX = renderOriginX(6);
+        float offY = renderOriginY(8);
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
@@ -852,8 +882,13 @@ public class Notification extends Module {
 
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
-            float targetX = (offX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY + idx * step) * invScale;
+            float targetX = cardX(sr, offX, cardWidth, isRight ? slide : -slide);
+            float stackOffset = 0;
+            for (int j = i + 1; j < max; j++) {
+                boolean lines = !entries.get(j).description.isEmpty();
+                stackOffset += (lines ? 4.5F + textHeight + 2 + textHeight + 5 : textHeight + 10) + 4;
+            }
+            float targetY = cardY(sr, baseY, cardHeight, stackOffset);
             if (Float.isNaN(entry.animX)) {
                 entry.animX = targetX;
                 entry.animY = targetY;
@@ -928,7 +963,7 @@ public class Notification extends Module {
         GlStateManager.popMatrix();
     }
 
-    private void renderSlate(ScaledResolution sr, long now, long dur) {
+    private void renderSlate(ScaledResolution sr, long now, long dur, List<NotificationEntry> entries) {
         float textScale = this.fontScale.getValue();
         float subScale = Math.max(0.74F, textScale * 0.82F);
         float textHeight = FontManager.getFontHeight() * textScale;
@@ -940,8 +975,8 @@ public class Notification extends Module {
         float padRight = 9.0F;
         float minWidth = 116.0F;
         float maxWidth = 220.0F;
-        float offX = Leader.hudElementManager.x("Notification", 2.0F, 20.0F) + 6.0F;
-        float offY = Leader.hudElementManager.y("Notification", 2.0F, 20.0F) + 8.0F;
+        float offX = renderOriginX(6);
+        float offY = renderOriginY(8);
         float localScale = this.scale.getValue();
         float invScale = 1.0F / localScale;
         boolean isRight = this.mode.getValue() == 0;
@@ -986,8 +1021,8 @@ public class Notification extends Module {
 
             int idx = max - 1 - i;
             float slide = (1.0F - alpha) * 14.0F;
-            float targetX = (offX + (isRight ? slide : -slide)) * invScale;
-            float targetY = (baseY + idx * step) * invScale;
+            float targetX = cardX(sr, offX, cardWidth, isRight ? slide : -slide);
+            float targetY = cardY(sr, baseY, cardHeight, idx * step);
             if (Float.isNaN(entry.animX)) {
                 entry.animX = targetX;
                 entry.animY = targetY;
@@ -1119,5 +1154,88 @@ public class Notification extends Module {
             this.startTime = startTime;
         }
     }
+
+    public float[] previewSize() {
+        float textHeight = FontManager.getFontHeight() * fontScale.getValue();
+        float width, height;
+        switch (style.getValue()) {
+            case 0: width = 100; height = 20; break;
+            case 1: width = 136; height = 34; break;
+            case 2: width = 140; height = Math.max(26, textHeight + 14); break;
+            case 3: width = 120; height = 30; break;
+            case 4:
+                width = Math.max(96, Math.min(200, 20 + FontManager.getStringWidth("Notification") * fontScale.getValue()));
+                height = 26;
+                break;
+            case 5:
+                width = Math.max(90, Math.min(220, 36 + Math.max(FontManager.getStringWidth("\u00a7lNotification"),
+                        FontManager.getStringWidth("Enabled")) * fontScale.getValue()));
+                height = 11.5F + textHeight * 2;
+                break;
+            default:
+                float subScale = Math.max(0.74F, fontScale.getValue() * 0.82F);
+                width = Math.max(116, Math.min(220, 43 + Math.max(FontManager.getStringWidth("Notification") * fontScale.getValue(),
+                        FontManager.getStringWidth("Enabled") * subScale)));
+                height = Math.max(30, textHeight + FontManager.getFontHeight() * subScale + 9);
+        }
+        return new float[]{width * scale.getValue(), height * scale.getValue()};
+    }
+
+    private float cardX(ScaledResolution sr, float originX, float width, float slide) {
+        if (previewing) return originX / scale.getValue();
+        // RIGHT uses the preview's right edge as the anchor, including variable-width styles.
+        return NotificationLayout.x(sr.getScaledWidth(), originX, previewSize()[0], width,
+                scale.getValue(), mode.getValue() == 0, slide);
+    }
+
+    private float cardY(ScaledResolution sr, float originY, float height, float stackOffset) {
+        if (previewing) return (originY - stackOffset * scale.getValue()) / scale.getValue();
+        // The newest card's bottom edge stays fixed; older cards stack upwards in scaled units.
+        return NotificationLayout.y(sr.getScaledHeight(), originY, previewSize()[1], height,
+                scale.getValue(), stackOffset);
+    }
+
+    private float renderOriginX(float padding) {
+        return previewing ? previewX : Leader.hudElementManager.x("Notification", 2, 20) + padding;
+    }
+
+    private float renderOriginY(float padding) {
+        return previewing ? previewY : Leader.hudElementManager.y("Notification", 2, 20) + padding;
+    }
+
+    private void resetLayoutIfChanged(ScaledResolution sr) {
+        float x = Leader.hudElementManager.x("Notification", 2, 20);
+        float y = Leader.hudElementManager.y("Notification", 2, 20);
+        float sc = scale.getValue(), fs = fontScale.getValue();
+        int st = style.getValue(), md = mode.getValue();
+        if (x != lastLayoutX || y != lastLayoutY || sc != lastLayoutScale
+                || fs != lastLayoutFontScale || st != lastLayoutStyle || md != lastLayoutMode
+                || sr.getScaledWidth() != lastLayoutWidth || sr.getScaledHeight() != lastLayoutHeight) {
+            for (NotificationEntry entry : entries) entry.animX = entry.animY = Float.NaN;
+            lastLayoutX = x; lastLayoutY = y; lastLayoutScale = sc;
+            lastLayoutFontScale = fs; lastLayoutStyle = st; lastLayoutMode = md;
+            lastLayoutWidth = sr.getScaledWidth(); lastLayoutHeight = sr.getScaledHeight();
+        }
+    }
+
+    public void renderPreview(float x, float y, float alpha) {
+        long now = System.currentTimeMillis(), dur = duration.getValue();
+        List<NotificationEntry> sample = new ArrayList<>();
+        String description = previewMode == NoticeMode.Enable ? "Enabled" : previewMode == NoticeMode.Disable ? "Disabled" : "Warning";
+        sample.add(new NotificationEntry("Notification", description, previewMode, now - Math.round(dur * 0.35F)));
+        previewing = true;
+        previewX = x; previewY = y; previewAlpha = alpha;
+        try {
+            // The same style renderer as the live HUD, but with an isolated sample queue.
+            renderEntries(new ScaledResolution(mc), now, dur, sample);
+        } finally {
+            previewing = false;
+            GlStateManager.color(1, 1, 1, 1);
+        }
+    }
+
+    public NoticeMode getPreviewMode() { return previewMode; }
+
+    public void setPreviewMode(NoticeMode mode) { previewMode = mode; }
 
 }

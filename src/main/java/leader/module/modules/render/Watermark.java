@@ -137,8 +137,8 @@ public class Watermark extends Module {
         ScaledResolution sr = new ScaledResolution(mc);
         float maxW = sr.getScaledWidth() / uiScale;
         float maxH = sr.getScaledHeight() / uiScale;
-        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F);
-        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F);
+        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F) / uiScale;
+        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F) / uiScale;
         if (x + cardW > maxW) x = maxW - cardW - 4.0F;
         if (y + cardH > maxH) y = maxH - cardH - 4.0F;
         if (x < 4.0F) x = 4.0F;
@@ -233,8 +233,8 @@ public class Watermark extends Module {
         ScaledResolution sr = new ScaledResolution(mc);
         float maxW = sr.getScaledWidth() / uiScale;
         float maxH = sr.getScaledHeight() / uiScale;
-        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F);
-        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F);
+        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F) / uiScale;
+        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F) / uiScale;
         if (x + cardW > maxW) x = maxW - cardW - 4.0F;
         if (y + cardH > maxH) y = maxH - cardH - 4.0F;
         if (x < 4.0F) x = 4.0F;
@@ -337,8 +337,8 @@ public class Watermark extends Module {
         float textScale = this.fontScale.getValue();
         float curW = FontManager.getStringWidth(curText) * textScale;
         float nextW = FontManager.getStringWidth(nextText) * textScale;
-        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F);
-        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F);
+        float x = Leader.hudElementManager.x("Watermark", 4.0F, 4.0F) / uiScale;
+        float y = Leader.hudElementManager.y("Watermark", 4.0F, 4.0F) / uiScale;
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(uiScale, uiScale, 1.0F);
@@ -365,6 +365,195 @@ public class Watermark extends Module {
         GlStateManager.scale(textScale, textScale, 1.0F);
         FontManager.drawString(text, 0.8F, 0.8F, shadowColor, false);
         FontManager.drawString(text, 0.0F, 0.0F, textColor, false);
+        GlStateManager.popMatrix();
+    }
+
+    public float[] previewSize() {
+        float f = fontScale.getValue(), sc = scale.getValue();
+        if (mode.getValue() == 0) {
+            return new float[]{(FontManager.getStringWidth(CLIENT_NAME) * f + 1) * sc,
+                    (FontManager.getFontHeight() * f + 1) * sc};
+        }
+        if (mode.getValue() == 2) {
+            float w = 16 + 11 + 5 + FontManager.getStringWidth(CLIENT_NAME, 18 * f);
+            for (String item : new String[]{"60 fps", "Player", "20 ms"}) w += 3 + 16 + FontManager.getStringWidth(item, 15 * f);
+            return new float[]{w * sc, (Math.max(FontManager.getCapHeight(18 * f), FontManager.getCapHeight(15 * f)) + 12) * sc};
+        }
+        float w = 10 + 2 + 7 + FontManager.getStringWidth("Leader", 18 * f) + 4
+                + FontManager.getStringWidth("LITE", 14 * f * 0.8F) + 7 + 9 + 1 + 9
+                + FontManager.getStringWidth("60 FPS", 14 * f) + 10;
+        return new float[]{w * sc, (Math.max(FontManager.getCapHeight(18 * f), FontManager.getCapHeight(14 * f)) + 16) * sc};
+    }
+
+    public void renderPreview(float x, float y, float alpha) {
+        int mode = this.mode.getValue();
+        float uiScale = this.scale.getValue();
+        HUD hud = getHud();
+        Color tc = hud != null ? hud.getColor(System.currentTimeMillis()) : new Color(120, 170, 255);
+
+        if (mode == 0) {
+            renderPreviewClassic(x, y, alpha, tc, uiScale);
+        } else if (mode == 2) {
+            renderPreviewLucid(x, y, alpha, tc, uiScale);
+        } else {
+            renderPreviewModern(x, y, alpha, tc, uiScale);
+        }
+    }
+
+    private void renderPreviewClassic(float x, float y, float alpha, Color tc, float uiScale) {
+        float textScale = this.fontScale.getValue();
+        String text = CLIENT_NAME;
+        int textAlpha = (int) (245 * alpha);
+        int shadowAlpha = (int) (Math.min(textAlpha, 80));
+        int textColor = new Color(245, 245, 250, textAlpha).getRGB();
+        int shadowColor = new Color(0, 0, 0, shadowAlpha).getRGB();
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(uiScale, uiScale, 1.0F);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.translate(x / uiScale, y / uiScale, 0.0F);
+        GlStateManager.scale(textScale, textScale, 1.0F);
+        FontManager.drawString(text, 0.8F, 0.8F, shadowColor, false);
+        FontManager.drawString(text, 0.0F, 0.0F, textColor, false);
+        GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
+    }
+
+    private void renderPreviewModern(float x, float y, float alpha, Color tc, float uiScale) {
+        float titleSize = 18.0F * this.fontScale.getValue();
+        float infoSize = 14.0F * this.fontScale.getValue();
+        String brand = "Leader";
+        String tag = "LITE";
+        String info = "60 FPS";
+        float tagSize = infoSize * 0.8F;
+
+        float titleCap = FontManager.getCapHeight(titleSize);
+        float infoCap = FontManager.getCapHeight(infoSize);
+        float brandW = FontManager.getStringWidth(brand, titleSize);
+        float tagW = FontManager.getStringWidth(tag, tagSize);
+        float infoW = FontManager.getStringWidth(info, infoSize);
+
+        float padX = 10.0F;
+        float accentW = 2.0F;
+        float tagPad = 3.5F;
+        float tagBoxW = tagW + tagPad * 2.0F;
+        float sepGap = 9.0F;
+        float cardH = Math.max(titleCap, infoCap) + 16.0F;
+        float cardW = padX + accentW + 7.0F + brandW + 4.0F + tagBoxW + sepGap + 1.0F + sepGap + infoW + padX;
+        final float radius = 5.0F;
+
+        int ar = tc.getRed();
+        int ag = tc.getGreen();
+        int ab = tc.getBlue();
+        Color hi = new Color(Math.min(255, ar + 70), Math.min(255, ag + 70), Math.min(255, ab + 70));
+        float centerY = y + cardH / 2.0F;
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(uiScale, uiScale, 1.0F);
+        float sx = x / uiScale;
+        float sy = y / uiScale;
+
+        RenderUtil.drawRoundedRectWithGl(sx, sy, sx + cardW, sy + cardH, radius,
+                Leader.hudElementManager.background("Watermark", 4, 4, alpha));
+
+        float cursor = sx + padX;
+        RenderUtil.drawRoundedRectGradient(cursor, sy + cardH / 2.0F - titleCap / 2.0F - 2.0F, cursor + accentW,
+                sy + cardH / 2.0F + titleCap / 2.0F + 2.0F, 1.0F,
+                new Color(hi.getRed(), hi.getGreen(), hi.getBlue(), (int)(255 * alpha)).getRGB(),
+                new Color(ar, ag, ab, (int)(255 * alpha)).getRGB());
+        cursor += accentW + 7.0F;
+
+        this.drawLucidText(brand, cursor, sy + cardH / 2.0F + titleCap / 2.0F,
+                new Color(248, 249, 252, (int)(255 * alpha)).getRGB(), titleSize);
+        cursor += brandW + 4.0F;
+
+        float tagCap = FontManager.getCapHeight(tagSize);
+        RenderUtil.drawRoundedRectWithGl(cursor, sy + cardH / 2.0F - tagCap / 2.0F - 3.0F,
+                cursor + tagBoxW, sy + cardH / 2.0F + tagCap / 2.0F + 3.0F, 2.5F,
+                new Color(ar, ag, ab, (int)(230 * alpha)).getRGB());
+        this.drawLucidText(tag, cursor + tagPad, sy + cardH / 2.0F + tagCap / 2.0F,
+                new Color(14, 16, 22, (int)(255 * alpha)).getRGB(), tagSize);
+        cursor += tagBoxW + sepGap;
+
+        RenderUtil.drawRoundedRectWithGl(cursor, sy + cardH / 2.0F - infoCap / 2.0F - 2.0F, cursor + 1.0F,
+                sy + cardH / 2.0F + infoCap / 2.0F + 2.0F, 0.5F,
+                new Color(255, 255, 255, (int)(60 * alpha)).getRGB());
+        cursor += 1.0F + sepGap;
+
+        RenderUtil.drawRoundedRectWithGl(cursor, sy + cardH - 3.0F, cursor + infoW, sy + cardH - 2.0F, 0.5F,
+                new Color(255, 255, 255, (int)(26 * alpha)).getRGB());
+        RenderUtil.drawRoundedRectWithGl(cursor, sy + cardH - 3.0F, cursor + infoW * 0.6F, sy + cardH - 2.0F, 0.5F,
+                new Color(ar, ag, ab, (int)(220 * alpha)).getRGB());
+
+        this.drawLucidText(info, cursor, sy + cardH / 2.0F + infoCap / 2.0F,
+                new Color(205, 211, 224, (int)(235 * alpha)).getRGB(), infoSize);
+
+        GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
+    }
+
+    private void renderPreviewLucid(float x, float y, float alpha, Color tc, float uiScale) {
+        float titleSize = 18.0F * this.fontScale.getValue();
+        float infoSize = 15.0F * this.fontScale.getValue();
+
+        String title = CLIENT_NAME;
+        String[] items = new String[]{"60 fps", "Player", "20 ms"};
+
+        float capH = Math.max(FontManager.getCapHeight(titleSize), FontManager.getCapHeight(infoSize));
+        float padX = 8.0F;
+        float blockH = capH + 12.0F;
+        float blockGap = 3.0F;
+        float icon = 11.0F;
+        float iconGap = 5.0F;
+        final float radius = 4.0F;
+
+        float titleW = FontManager.getStringWidth(title, titleSize);
+        float[] blockW = new float[items.length + 1];
+        blockW[0] = padX + icon + iconGap + titleW + padX;
+        for (int i = 0; i < items.length; i++) {
+            blockW[i + 1] = padX + FontManager.getStringWidth(items[i], infoSize) + padX;
+        }
+
+        final float[] blockX = new float[blockW.length];
+        float cursorX = x / uiScale;
+        for (int i = 0; i < blockW.length; i++) {
+            blockX[i] = cursorX;
+            cursorX += blockW[i] + blockGap;
+        }
+
+        int ar = tc.getRed();
+        int ag = tc.getGreen();
+        int ab = tc.getBlue();
+        Color hi = new Color(Math.min(255, ar + 60), Math.min(255, ag + 60), Math.min(255, ab + 60));
+
+        float centerY = y / uiScale + blockH / 2.0F;
+        float baseline = centerY + capH / 2.0F;
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(uiScale, uiScale, 1.0F);
+
+        float tx = blockX[0];
+        RenderUtil.drawRoundedRectGradientH(tx, y / uiScale, tx + blockW[0], y / uiScale + blockH, radius,
+                new Color(ar, ag, ab, (int)(235 * alpha)).getRGB(),
+                new Color(hi.getRed(), hi.getGreen(), hi.getBlue(), (int)(235 * alpha)).getRGB());
+
+        int ink = new Color(14, 16, 22, (int)(255 * alpha)).getRGB();
+        Icon.CROWN.drawCentered(tx + padX + icon / 2.0F, centerY, icon, ink, alpha);
+        this.drawLucidText(title, tx + padX + icon + iconGap, baseline, ink, titleSize);
+
+        int textColor = new Color(240, 243, 248, (int)(245 * alpha)).getRGB();
+        for (int i = 0; i < items.length; i++) {
+            float bx = blockX[i + 1];
+            float bw = blockW[i + 1];
+            RenderUtil.drawRoundedRectWithGl(bx, y / uiScale, bx + bw, y / uiScale + blockH, radius,
+                    Leader.hudElementManager.background("Watermark", 4, 4, alpha));
+            RenderUtil.drawRoundedRectWithGl(bx + padX, y / uiScale + blockH - 2.0F, bx + bw - padX,
+                    y / uiScale + blockH - 1.0F, 0.5F, new Color(ar, ag, ab, (int)(170 * alpha)).getRGB());
+            this.drawLucidText(items[i], bx + padX, baseline - 0.5F, textColor, infoSize);
+        }
+
+        GlStateManager.disableBlend();
         GlStateManager.popMatrix();
     }
 }

@@ -5,8 +5,10 @@ import leader.event.EventManager;
 import leader.events.Render2DEvent;
 import leader.module.modules.render.NickHider;
 import leader.module.modules.render.Shaders;
+import leader.ui.GuiHUDDesigner;
 import leader.util.shader.ShaderElement;
 import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.GuiIngameForge;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -37,7 +39,11 @@ public abstract class MixinGuiIngameForge {
                 ShaderElement.getTasks().clear();
             }
         }
-        EventManager.call(new Render2DEvent(float1));
+        // The designer supplies isolated previews itself. Do not let live HUD modules
+        // paint over the editor while it is open.
+        if (!(Minecraft.getMinecraft().currentScreen instanceof GuiHUDDesigner)) {
+            EventManager.call(new Render2DEvent(float1));
+        }
     }
 
     @Redirect(

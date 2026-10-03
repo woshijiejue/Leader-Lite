@@ -116,7 +116,11 @@ public class Indicators extends Module {
             GlStateManager.pushMatrix();
             GlStateManager.disableDepth();
             GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 0.0f);
-            GlStateManager.translate((float) new ScaledResolution(mc).getScaledWidth() / 2.0f / this.scale.getValue(), (float) new ScaledResolution(mc).getScaledHeight() / 2.0f / this.scale.getValue(), 0.0f);
+            ScaledResolution sr = new ScaledResolution(mc);
+            float radius = 10.0F + this.offset.getValue();
+            float originX = Leader.hudElementManager.x("Indicators", sr.getScaledWidth() / 2.0F - radius, sr.getScaledHeight() / 2.0F - radius);
+            float originY = Leader.hudElementManager.y("Indicators", sr.getScaledWidth() / 2.0F - radius, sr.getScaledHeight() / 2.0F - radius);
+            GlStateManager.translate((originX + radius) / this.scale.getValue(), (originY + radius) / this.scale.getValue(), 0.0f);
             GlStateManager.pushMatrix();
             GlStateManager.translate((offset + 0.0f) * x - 8.0f, (offset + 0.0f) * z - 8.0f, -300.0f);
             mc.getRenderItem().renderItemAndEffectIntoGUI(new ItemStack(this.getIndicatorItem(entity)), 0, 0);
@@ -135,5 +139,64 @@ public class Indicators extends Module {
             GlStateManager.enableDepth();
             GlStateManager.popMatrix();
         }
+    }
+
+    public float[] previewSize() {
+        float radius = 10 + offset.getValue();
+        float extent = radius * 1.3F * scale.getValue() + 18;
+        return new float[]{extent * 2, extent * 2};
+    }
+
+    public void renderPreview(float x, float y, float alpha) {
+        float uiScale = this.scale.getValue();
+        float iconSize = 16.0F;
+        float spacing = 10.0F + this.offset.getValue();
+        float centerX = x + spacing;
+        float centerY = y + spacing;
+
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(centerX, centerY, 0.0F);
+        GlStateManager.scale(uiScale, uiScale, 1.0F);
+
+        Item[] items = {Items.fire_charge, Items.ender_pearl, Items.arrow, Items.egg, Items.snowball};
+        Color[] colors = {new Color(12676363), new Color(2458740), new Color(0x969696), new Color(0xB6A890), new Color(0xD9E2EB)};
+        float[] angles = {-90, -18, 54, 126, 198};
+
+        for (int i = 0; i < items.length; i++) {
+            if ((i == 0 && !fireballs.getValue()) || (i == 1 && !pearls.getValue()) || (i == 2 && !arrows.getValue())
+                    || (i == 3 && !egg.getValue()) || (i == 4 && !snowball.getValue())) continue;
+            float rad = (float) Math.toRadians(angles[i]);
+            float offsetX = (float) Math.cos(rad) * spacing;
+            float offsetY = (float) Math.sin(rad) * spacing;
+
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(offsetX - iconSize / 2.0F, offsetY - iconSize / 2.0F, 0.0F);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, alpha);
+            mc.getRenderItem().renderItemAndEffectIntoGUI(new ItemStack(items[i]), 0, 0);
+            GlStateManager.popMatrix();
+
+            GlStateManager.color(1, 1, 1, 1);
+
+            String dist = (i + 1) * 15 + "m";
+            float textW = FontManager.getStringWidth(dist, 12);
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(offsetX - textW / 2.0F, offsetY + iconSize / 2.0F + 2.0F, 0.0F);
+            FontManager.drawString(dist, 0.0F, 0.0F,
+                    new Color(174, 185, 202, (int)(alpha * 255)).getRGB(), false, 12);
+            GlStateManager.popMatrix();
+
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(offsetX * 1.3F, offsetY * 1.3F, 0.0F);
+            GlStateManager.rotate((float) Math.toDegrees(Math.atan2(offsetY, offsetX)), 0.0F, 0.0F, 1.0F);
+            RenderUtil.enableRenderState();
+            Color arrowColor = colors[i];
+            RenderUtil.drawArrow(0.0F, 0.0F, 0.0F, 7.5F, 1.5F,
+                    new Color(arrowColor.getRed(), arrowColor.getGreen(), arrowColor.getBlue(),
+                            (int)(arrowColor.getAlpha() * alpha)).getRGB());
+            RenderUtil.disableRenderState();
+            GlStateManager.popMatrix();
+        }
+
+        GlStateManager.popMatrix();
     }
 }

@@ -38,6 +38,7 @@ public class GifDisplay extends Module {
     private int currentFrame;
     private long lastFrameTime;
     private String loadedGif = "";
+    private String previewRequest = "";
     private int originalWidth;
     private int originalHeight;
 
@@ -163,6 +164,7 @@ public class GifDisplay extends Module {
     @Override
     public void onDisabled() {
         this.unloadTextures();
+        this.previewRequest = "";
     }
 
     private void unloadTextures() {
@@ -177,5 +179,61 @@ public class GifDisplay extends Module {
         this.textureIds = null;
         this.loadedGif = "";
         this.currentFrame = 0;
+    }
+
+    public float[] previewSize() {
+        preparePreview();
+        float w = Math.max(1, this.imgWidth.getValue());
+        float h = this.lockRatio.getValue() && this.originalWidth > 0 && this.originalHeight > 0
+                ? w * this.originalHeight / this.originalWidth : this.imgHeight.getValue();
+        return new float[]{(int) w, Math.max(1, (int) h)};
+    }
+
+    public void renderPreview(float x, float y, float alpha) {
+        preparePreview();
+        int drawWidth = (int) (float) this.imgWidth.getValue();
+        int drawHeight;
+        if (this.lockRatio.getValue() && this.originalWidth > 0 && this.originalHeight > 0) {
+            drawHeight = (int) ((float) drawWidth * (float) this.originalHeight / (float) this.originalWidth);
+        } else {
+            drawHeight = (int) (float) this.imgHeight.getValue();
+        }
+
+        if (textureIds != null && !textureIds.isEmpty()) {
+            long now = System.currentTimeMillis();
+            if (now - lastFrameTime >= frameDelays.get(currentFrame)) {
+                currentFrame = (currentFrame + 1) % textureIds.size();
+                lastFrameTime = now;
+            }
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(x, y, 0);
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.enableTexture2D();
+            GlStateManager.color(1, 1, 1, alpha);
+            GlStateManager.bindTexture(textureIds.get(currentFrame));
+            Gui.drawModalRectWithCustomSizedTexture(0, 0, 0, 0, drawWidth, drawHeight, drawWidth, drawHeight);
+            GlStateManager.popMatrix();
+            GlStateManager.color(1, 1, 1, 1);
+            return;
+        }
+        leader.util.RenderUtil.drawRoundedRectWithGl(x, y, x + drawWidth, y + drawHeight, 3.0F,
+                new java.awt.Color(18, 21, 29, (int)(150 * alpha)).getRGB());
+
+        String label = leader.util.HUDPreviewUtil.fit(this.gifMode.getModeString(), drawWidth - 8, 12);
+        float labelW = FontManager.getStringWidth(label, 12);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        FontManager.drawString(label, x + drawWidth / 2.0F - labelW / 2.0F, y + drawHeight / 2.0F - FontManager.getFontHeight(12) / 2.0F,
+                new java.awt.Color(200, 210, 230, (int)(255 * alpha)).getRGB(), false, 12);
+        GlStateManager.disableBlend();
+    }
+
+    private void preparePreview() {
+        String requested = gifMode.getModeString();
+        if (!requested.equals(loadedGif) && !requested.equals(previewRequest)) {
+            previewRequest = requested;
+            loadGif(requested);
+        }
     }
 }

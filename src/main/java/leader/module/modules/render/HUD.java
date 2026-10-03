@@ -21,6 +21,7 @@ import org.lwjgl.opengl.GL11;
 
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -224,7 +225,7 @@ public class HUD extends Module {
             float height = (float) FontManager.getFontHeight() - 1.0F;
             ScaledResolution sr = new ScaledResolution(mc);
             boolean rightAlign = this.align.getValue() == 1;
-            float x = rightAlign ? sr.getScaledWidth() - 2.0F : Leader.hudElementManager.x("HUD", 2.0F, 2.0F);
+            float x = Leader.hudElementManager.x("HUD", rightAlign ? sr.getScaledWidth() - 2.0F : 2.0F, 2.0F);
             float y = Leader.hudElementManager.y("HUD", 2.0F, 2.0F);
             GlStateManager.pushMatrix();
             GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
@@ -406,5 +407,110 @@ public class HUD extends Module {
             GlStateManager.enableDepth();
             GlStateManager.popMatrix();
         }
+    }
+
+    public float[] previewSize() {
+        String[] names = {"KillAura", "Velocity", "Scaffold", "Speed"};
+        String[][] values = {{"Multi"}, {"100%"}, {"Telly"}, {"Watchdog"}};
+        float w = 0;
+        for (int i = 0; i < names.length; i++) {
+            w = Math.max(w, calculateStringWidth(lowerCase.getValue() ? names[i].toLowerCase(Locale.ROOT) : names[i],
+                    suffixes.getValue() ? values[i] : new String[0]));
+        }
+        float rowH = FontManager.getFontHeight() + 2 + 2 * rowSpacing.getValue() + (shadow.getValue() ? 1 : 0);
+        return new float[]{(w + 6) * scale.getValue(), (4 * rowH + 2) * scale.getValue()};
+    }
+
+    public void renderPreview(float x, float y, float alpha) {
+        float uiScale = this.scale.getValue();
+        long now = System.currentTimeMillis();
+        boolean rightAlign = this.align.getValue() == 1;
+
+        String[] sampleModules = {"KillAura", "Velocity", "Scaffold", "Speed"};
+        String[][] sampleSuffixes = {{"Multi"}, {"100%"}, {"Telly"}, {"Watchdog"}};
+        Integer[] order = {0, 1, 2, 3};
+        Arrays.sort(order, Comparator.comparingInt((Integer i) -> calculateStringWidth(sampleModules[i],
+                suffixes.getValue() ? sampleSuffixes[i] : new String[0])).reversed());
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(uiScale, uiScale, 1.0F);
+
+        float sx = x / uiScale;
+        float sy = y / uiScale;
+        float yOffset = 0.0F;
+
+        for (int i = 0; i < sampleModules.length; i++) {
+            int sample = order[i];
+            String moduleName = this.lowerCase.getValue() ? sampleModules[sample].toLowerCase(Locale.ROOT) : sampleModules[sample];
+            String[] suffixes = this.suffixes.getValue() ? sampleSuffixes[sample] : new String[0];
+
+            int moduleWidth = this.calculateStringWidth(moduleName, suffixes);
+            float height = FontManager.getFontHeight();
+
+            Color color = this.getColor(now, i);
+            int bgAlpha = Math.round((float) this.background.getValue() / 100.0F * 255.0F * alpha);
+            int bgColor = this.bgColor.getValue()
+                    ? new Color(color.getRed(), color.getGreen(), color.getBlue(), bgAlpha).getRGB()
+                    : Leader.hudElementManager.background("HUD", 2.0F, 2.0F,
+                            this.background.getValue() / 100.0F * alpha);
+
+            float textX = rightAlign ? sx - moduleWidth : sx;
+            float bgX1 = rightAlign ? sx - moduleWidth - 2.0F : sx - 2.0F;
+            float bgX2 = rightAlign ? sx + 2.0F : sx + moduleWidth + 2.0F;
+            float bgY1 = sy + yOffset;
+            float bgY2 = bgY1 + height + 2.0F;
+
+            RenderUtil.enableRenderState();
+            RenderUtil.drawRect(bgX1, bgY1, bgX2, bgY2, bgColor);
+
+            if (this.showBar.getValue()) {
+                int barMode = this.barMode.getValue();
+                int barless = this.barless.getValue();
+                float barY1 = bgY1 + barless;
+                float barY2 = bgY2 - barless;
+                int barColor = new Color(color.getRed(), color.getGreen(), color.getBlue(),
+                        (int)(255 * alpha)).getRGB();
+
+                if (barMode == 0) {
+                    float barX = rightAlign ? bgX2 : sx - 2.0F;
+                    RenderUtil.drawRect(barX, barY1, barX + 1.0F, barY2, barColor);
+                } else if (barMode == 1) {
+                    float barX = rightAlign ? bgX1 - 1.0F : bgX2;
+                    RenderUtil.drawRect(barX, barY1, barX + 1.0F, barY2, barColor);
+                } else if (barMode == 2 && i == 0) {
+                    RenderUtil.drawRect(bgX1, bgY1 - 1.0F, bgX2, bgY1, barColor);
+                } else if (barMode == 3 && i == sampleModules.length - 1) {
+                    RenderUtil.drawRect(bgX1, bgY2, bgX2, bgY2 + 1.0F, barColor);
+                }
+            }
+            RenderUtil.disableRenderState();
+
+            int textColor = new Color(color.getRed(), color.getGreen(), color.getBlue(),
+                    (int)(255 * alpha)).getRGB();
+            if (this.shadow.getValue()) {
+                FontManager.drawStringWithShadow(moduleName, textX, bgY1 + 1.0F, textColor);
+            } else {
+                FontManager.drawString(moduleName, textX, bgY1 + 1.0F, textColor, false);
+            }
+
+            if (this.suffixes.getValue() && suffixes.length > 0) {
+                float suffixX = textX + FontManager.getStringWidth(moduleName) + 3.0F;
+                int grayBase = ChatColors.GRAY.toAwtColor();
+                int grayColor = new Color((grayBase >> 16) & 0xFF, (grayBase >> 8) & 0xFF, grayBase & 0xFF,
+                        (int)(255 * alpha)).getRGB();
+                for (String suffix : suffixes) {
+                    if (this.shadow.getValue()) {
+                        FontManager.drawStringWithShadow(suffix, suffixX, bgY1 + 1.0F, grayColor);
+                    } else {
+                        FontManager.drawString(suffix, suffixX, bgY1 + 1.0F, grayColor, false);
+                    }
+                    suffixX += FontManager.getStringWidth(suffix) + 3.0F;
+                }
+            }
+
+            yOffset += height + 2.0F + 2 * this.rowSpacing.getValue() + (this.shadow.getValue() ? 1.0F : 0.0F);
+        }
+
+        GlStateManager.popMatrix();
     }
 }

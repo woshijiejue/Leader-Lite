@@ -208,7 +208,25 @@ public class ListClickGui extends GuiScreen {
         }
         GlStateManager.popMatrix();
         currentPanel = null;
+        drawDesignerEntry(rawX, rawY);
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
+    private float[] designerEntryBounds() {
+        float w = width("HUD Designer", 12) + 22;
+        return new float[]{this.width - w - 8, 8, w, 21};
+    }
+
+    private void drawDesignerEntry(int mouseX, int mouseY) {
+        float[] b = designerEntryBounds();
+        boolean hovered = inside(mouseX, mouseY, b[0], b[1], b[0] + b[2], b[1] + b[3]);
+        float hover = anim("designerEntry", hovered ? 1 : 0, 16);
+        RenderUtil.drawRoundedRectWithGl(b[0], b[1], b[0] + b[2], b[1] + b[3], RADIUS,
+                col(18, 20, 28, (int) (170 + 35 * hover)));
+        RenderUtil.drawRoundedRectGradientH(b[0] + 1, b[1] + b[3] - 1, b[0] + b[2] - 1,
+                b[1] + b[3], 0, col(accent, (int) (80 + 100 * hover)), col(accent, 0));
+        text("HUD Designer", b[0] + 11, b[1] + b[3] / 2,
+                mixCol(new Color(166, 174, 192), accent, hover, 255), 12);
     }
 
     private void drawPanel(final Panel panel, float slide, int mouseX, int mouseY) {
@@ -247,11 +265,7 @@ public class ListClickGui extends GuiScreen {
         int enabled = 0;
         for (Module module : panel.modules) if (module.isEnabled()) enabled++;
         String count = enabled + "/" + panel.modules.size();
-        text(count, x + PANEL_W - 40.0F - width(count, 10.0F), cy, col(100, 108, 124, 255), 10.0F);
-
-        float btnX = x + PANEL_W - 36.0F;
-        float btnY = y + HEADER_H / 2.0F;
-        Icon.FLASK.drawCentered(btnX, btnY, 9.0F, col(150, 157, 173, 255), alpha);
+        text(count, x + PANEL_W - 21.0F - width(count, 10.0F), cy, col(100, 108, 124, 255), 10.0F);
 
         chevron(x + PANEL_W - 9.0F, cy, openAnim, col(150, 157, 173, 255));
         RenderUtil.drawRoundedRectGradientH(x + 0.5F, y + HEADER_H - 1.0F, x + PANEL_W - 0.5F, y + HEADER_H, 0.0F,
@@ -261,8 +275,6 @@ public class ListClickGui extends GuiScreen {
             if (button == 0) {
                 if (mX >= panel.x + PANEL_W - 16.0F) {
                     panel.open = !panel.open;
-                } else if (mX >= panel.x + PANEL_W - 44.0F && mX < panel.x + PANEL_W - 28.0F) {
-                    mc.displayGuiScreen(new GuiHUDDesigner());
                 } else {
                     draggingPanel = panel;
                     dragOffsetX = mX - panel.x;
@@ -743,6 +755,11 @@ public class ListClickGui extends GuiScreen {
         if (bindingModule != null) {
             if (button != 0) bindingModule.setKey(button - 100);
             bindingModule = null;
+            return;
+        }
+        float[] entry = designerEntryBounds();
+        if (button == 0 && inside(rawX, rawY, entry[0], entry[1], entry[0] + entry[2], entry[1] + entry[3])) {
+            mc.displayGuiScreen(new GuiHUDDesigner(this));
             return;
         }
         for (int i = hits.size() - 1; i >= 0; i--) {

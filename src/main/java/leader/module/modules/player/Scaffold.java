@@ -567,7 +567,7 @@ public class Scaffold extends Module {
     }
 
     private boolean usesRotationMode() {
-        return this.mode.getValue() != 2 && this.mode.getValue() != 4;
+        return this.mode.getValue() != 4;
     }
 
     private boolean isRotationMode(int index) {
@@ -1262,6 +1262,33 @@ public class Scaffold extends Module {
         float contentX = pad + icon + 6.0F;
         return Math.max(84.0F, contentX + FontManager.getStringWidth(countText, valueSize) + 3.0F
                 + FontManager.getStringWidth(labelText, labelSize) + pad);
+    }
+
+    public float[] counterPreviewSize() {
+        float w = Math.max(84, 28 + FontManager.getStringWidth("128", 18) + 3
+                + FontManager.getStringWidth("blocks", 13) + 6);
+        float h = 6 + Math.max(16, FontManager.getCapHeight(18) + 4) + 12;
+        return new float[]{w, h};
+    }
+
+    public void renderCounterPreview(float x, float y, float opacity) {
+        float[] size = counterPreviewSize();
+        HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
+        Color accent = hud != null ? hud.getColor(System.currentTimeMillis()) : new Color(120, 170, 255);
+        RenderUtil.drawRoundedRectWithGl(x, y, x + size[0], y + size[1], 6,
+                Leader.hudElementManager.background("ScaffoldCounter", 40, 40, opacity));
+        RenderUtil.drawRoundedRectWithGl(x + 6, y + 7, x + 22, y + 23, 4,
+                new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (32 * opacity)).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x + 10, y + 11, x + 18, y + 19, 2,
+                new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (220 * opacity)).getRGB());
+        float baseline = y + 6 + Math.max(16, FontManager.getCapHeight(18) + 4) / 2 + FontManager.getCapHeight(18) / 2;
+        this.drawBaselineText("128", x + 28, baseline, new Color(244, 247, 252, (int) (255 * opacity)).getRGB(), 18);
+        this.drawBaselineText("blocks", x + 31 + FontManager.getStringWidth("128", 18), baseline,
+                new Color(160, 166, 180, (int) (255 * opacity)).getRGB(), 13);
+        RenderUtil.drawRoundedRectWithGl(x + 6, y + size[1] - 8, x + size[0] - 6, y + size[1] - 6, 1,
+                new Color(255, 255, 255, (int) (25 * opacity)).getRGB());
+        RenderUtil.drawRoundedRectWithGl(x + 6, y + size[1] - 8, x + 6 + (size[0] - 12) * 0.75F,
+                y + size[1] - 6, 1, new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (240 * opacity)).getRGB());
     }
 
     private float renderBlockCounter(float x, float y, Color accent, ItemStack iconStack) {

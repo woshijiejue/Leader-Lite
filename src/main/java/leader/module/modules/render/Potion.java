@@ -888,4 +888,108 @@ public class Potion extends Module {
         GL11.glEnd();
     }
 
+    public float editorAnchorWidth() {
+        switch (displayMode.getValue()) {
+            case 0: return 130;
+            case 1: return 110;
+            case 2: return 144;
+            case 3:
+            case 4: return 124;
+            case 5: {
+                float width = 110;
+                float nameSize = 14 * fontScale.getValue(), timeSize = 13 * fontScale.getValue();
+                for (PotionEffect effect : currentEffects) {
+                    float content = 5 + 18 + 7 + FontManager.getStringWidth(getPotionName(effect), nameSize) + 10
+                            + FontManager.getStringWidth(net.minecraft.potion.Potion.getDurationString(effect), timeSize) + 5 + 2;
+                    width = Math.max(width, Math.min(190, content));
+                }
+                return width;
+            }
+            default: {
+                float width = 126;
+                float nameSize = 15 * fontScale.getValue(), metaSize = 11.5F * fontScale.getValue();
+                float cardH = FontManager.getCapHeight(nameSize) + FontManager.getCapHeight(metaSize) + 17;
+                float textX = 13 + Math.min(10.5F, cardH / 2 - 5) * 2 + 10;
+                for (PotionEffect effect : currentEffects) {
+                    net.minecraft.potion.Potion type = net.minecraft.potion.Potion.potionTypes[effect.getPotionID()];
+                    float nameW = FontManager.getStringWidth(I18n.format(type.getName()), nameSize);
+                    float metaW = FontManager.getStringWidth(effect.getIsPotionDurationMax() ? "Permanent"
+                            : net.minecraft.potion.Potion.getDurationString(effect), metaSize);
+                    float pillW = FontManager.getStringWidth(intToRoman(effect.getAmplifier() + 1), metaSize) + 10;
+                    width = Math.max(width, Math.min(210, textX + Math.max(nameW, metaW) + 10 + pillW + 12));
+                }
+                return width;
+            }
+        }
+    }
+
+    public float[] previewSize() {
+        int mode = this.displayMode.getValue();
+        float h = mode == 0 ? 28 : mode == 1 ? 30 : mode == 2 ? 36 : mode == 3 || mode == 4 ? 26 : 32;
+        if (mode == 6) h = FontManager.getCapHeight(15 * fontScale.getValue())
+                + FontManager.getCapHeight(11.5F * fontScale.getValue()) + 17;
+        else if (mode == 0 || mode == 2 || mode == 5) {
+            h = Math.max(h, FontManager.getCapHeight(14 * fontScale.getValue())
+                    + FontManager.getCapHeight(11 * fontScale.getValue()) + 17);
+        }
+        float w = mode == 0 ? 130 : mode == 1 ? 110 : mode == 2 ? 144 : mode == 3 || mode == 4 ? 124 : mode == 5 ? 130 : 160;
+        return new float[]{w * scale.getValue(), h * scale.getValue()};
+    }
+
+    public void renderPreview(float x, float y, float alpha) {
+        float scale = this.scale.getValue();
+        float textScale = this.fontScale.getValue();
+        int mode = this.displayMode.getValue();
+
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(scale, scale, 1.0F);
+
+        float sx = x / scale;
+        float sy = y / scale;
+
+        float[] size = previewSize();
+        float w = size[0] / scale, h = size[1] / scale;
+        Color tint = new Color(137, 181, 219);
+        Color ink = mode == 3 ? new Color(34, 48, 67) : new Color(238, 243, 250);
+        Color dim = mode == 3 ? new Color(84, 104, 127) : new Color(147, 167, 194);
+        float radius = mode == 0 ? 0 : mode == 3 || mode == 4 || mode == 6 ? 7 : 4;
+        int bg = mode == 3 ? leader.util.HUDPreviewUtil.color(new Color(211, 230, 243, 185), alpha)
+                : Leader.hudElementManager.background("Potion", 2, 2, alpha);
+        RenderUtil.drawRoundedRectWithGl(sx, sy, sx + w, sy + h, radius, bg);
+        if (mode == 0) RenderUtil.drawRoundedRectWithGl(sx, sy, sx + w * 0.7F, sy + h, 0,
+                leader.util.HUDPreviewUtil.color(new Color(tint.getRed(), tint.getGreen(), tint.getBlue(), 28), alpha));
+        float cx = sx + 17, cy = sy + h / 2;
+        if (mode == 1 || mode == 6) leader.util.HUDPreviewUtil.ring(cx, cy, 10, 0.7F, tint, alpha);
+        else RenderUtil.drawRoundedRectWithGl(cx - 10, cy - 10, cx + 10, cy + 10, 5,
+                leader.util.HUDPreviewUtil.color(new Color(tint.getRed(), tint.getGreen(), tint.getBlue(), 18), alpha));
+        leader.util.Icon.SPEED.drawCentered(cx, cy, 12, tint.getRGB(), alpha);
+        float left = sx + 34, right = sx + w - 10;
+        float nameSize = 14 * textScale, metaSize = 11 * textScale;
+        if (mode == 3 || mode == 4) {
+            float timeW = FontManager.getStringWidth("1:24", metaSize);
+            leader.util.HUDPreviewUtil.text(leader.util.HUDPreviewUtil.fit("Speed II", right - left - timeW - 6, nameSize),
+                    left, sy + (h + FontManager.getCapHeight(nameSize)) / 2, nameSize,
+                    leader.util.HUDPreviewUtil.color(ink, alpha), false);
+            leader.util.HUDPreviewUtil.text("1:24", right - timeW, sy + (h + FontManager.getCapHeight(metaSize)) / 2,
+                    metaSize, leader.util.HUDPreviewUtil.color(dim, alpha), false);
+        } else {
+            float cap = FontManager.getCapHeight(nameSize), metaCap = FontManager.getCapHeight(metaSize);
+            float base = sy + (h - cap - metaCap - 4) / 2 + cap - (mode == 6 ? 0 : 2);
+            leader.util.HUDPreviewUtil.text(leader.util.HUDPreviewUtil.fit("Speed II", right - left, nameSize), left, base,
+                    nameSize, leader.util.HUDPreviewUtil.color(ink, alpha), false);
+            leader.util.HUDPreviewUtil.text("1:24", left, base + metaCap + 4, metaSize,
+                    leader.util.HUDPreviewUtil.color(dim, alpha), false);
+        }
+        if (mode != 1 && mode != 6) leader.util.HUDPreviewUtil.bar(sx + 7, sy + h - 3.5F, w - 14, 1.5F, 0.7F, tint, alpha);
+        if (mode == 6) {
+            float pillW = FontManager.getStringWidth("II", metaSize) + 10;
+            RenderUtil.drawRoundedRectWithGl(right - pillW, cy - 7, right, cy + 7, 4,
+                    leader.util.HUDPreviewUtil.color(new Color(tint.getRed(), tint.getGreen(), tint.getBlue(), 22), alpha));
+            leader.util.HUDPreviewUtil.text("II", right - pillW + 5, cy + FontManager.getCapHeight(metaSize) / 2,
+                    metaSize, leader.util.HUDPreviewUtil.color(tint, alpha), false);
+        }
+        GlStateManager.color(1, 1, 1, 1);
+
+        GlStateManager.popMatrix();
+    }
 }

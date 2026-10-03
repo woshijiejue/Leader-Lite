@@ -66,7 +66,33 @@ public abstract class MixinEntityRenderer {
             at = {@At("HEAD")}
     )
     private void freelookMouse(float float1, long long2, CallbackInfo callbackInfo) {
-        FreeLook.applyMouse();
+        FreeLook.updateCamera();
+    }
+
+    @Redirect(method = "updateCameraAndRender", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/entity/EntityPlayerSP;setAngles(FF)V"))
+    private void freelookTurn(EntityPlayerSP player, float yaw, float pitch) {
+        if (!FreeLook.turnCamera(yaw, pitch)) player.setAngles(yaw, pitch);
+    }
+
+    @Redirect(method = "orientCamera", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/Entity;rotationYaw:F"))
+    private float freelookYaw(Entity entity) {
+        return FreeLook.isUsing() && entity == mc.thePlayer ? FreeLook.cameraYaw : entity.rotationYaw;
+    }
+
+    @Redirect(method = "orientCamera", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/Entity;rotationPitch:F"))
+    private float freelookPitch(Entity entity) {
+        return FreeLook.isUsing() && entity == mc.thePlayer ? FreeLook.cameraPitch : entity.rotationPitch;
+    }
+
+    @Redirect(method = "orientCamera", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/Entity;prevRotationYaw:F"))
+    private float freelookPreviousYaw(Entity entity) {
+        return FreeLook.isUsing() && entity == mc.thePlayer ? FreeLook.prevCameraYaw : entity.prevRotationYaw;
+    }
+
+    @Redirect(method = "orientCamera", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/Entity;prevRotationPitch:F"))
+    private float freelookPreviousPitch(Entity entity) {
+        return FreeLook.isUsing() && entity == mc.thePlayer ? FreeLook.prevCameraPitch : entity.prevRotationPitch;
     }
 
     @Inject(
@@ -91,14 +117,6 @@ public abstract class MixinEntityRenderer {
                 ((IAccessorEntityPlayer) this.mc.thePlayer).setItemInUseCount(69000);
             }
         }
-    }
-
-    @Inject(
-            method = {"updateCameraAndRender"},
-            at = {@At("RETURN")}
-    )
-    private void freelookCapture(float float1, long long2, CallbackInfo callbackInfo) {
-        FreeLook.captureMouse();
     }
 
     @Inject(

@@ -1,701 +1,484 @@
 package leader.ui;
 
-import leader.util.shader.ShaderElement;
-
 import leader.Leader;
+import leader.config.Config;
 import leader.module.Module;
-import leader.module.modules.render.BedTracker;
-import leader.module.modules.render.FontManager;
-import leader.module.modules.render.GifDisplay;
-import leader.module.modules.render.HUD;
-import leader.module.modules.render.Indicators;
-import leader.module.modules.render.Island;
-import leader.module.modules.render.Potion;
-import leader.module.modules.render.TargetHUD;
-import leader.module.modules.render.Watermark;
-import leader.module.modules.render.notification.Notification;
 import leader.module.modules.player.Scaffold;
-import leader.property.properties.ModeProperty;
+import leader.module.modules.render.*;
+import leader.module.modules.render.notification.Notification;
 import leader.util.RenderUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
 import java.awt.Color;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 public class GuiHUDDesigner extends GuiScreen {
     private static final Minecraft mc = Minecraft.getMinecraft();
+    private Color accent = new Color(110, 170, 255);
+    private final GuiScreen parent;
+    private final List<HUDDesignerElement> elements = new ArrayList<>();
+    private final List<Fusion> fusions = new ArrayList<>();
+    private final List<float[]> selectorBoxes = new ArrayList<>();
+    private HUDDesignerElement dragging;
+    private HUDDesignerElement selected;
+    private HUDDesignerSettings settings;
+    private String pulledModule;
+    private float offsetX, offsetY, startX, startY;
+    private float pulledX, pulledY;
+    private boolean moved;
+    private long lastFrame;
+    private int previewState;
+    private float fusionPulse;
+    private boolean snap = true;
 
-    private static final String ISLAND = "Island";
-    private static final float PANEL_W = 244.0F;
-    private static final float PANEL_H = 258.0F;
-    private static final float SLIDER_LEFT = 16.0F;
-    private static final float SLIDER_RIGHT = 16.0F;
-    private static final float SLIDER_TRACK_H = 6.0F;
-    private static final float ISLAND_HEAD = 26.0F;
-    private static final int SWATCH_COUNT = 8;
-
-    private static final Color ACCENT = new Color(255, 214, 128);
-    private static final Color MUTED = new Color(146, 152, 168);
-    private static final Color VALUE = new Color(196, 202, 216);
-
-    private String draggingModule = null;
-    private float dragOffsetX = 0.0F;
-    private float dragOffsetY = 0.0F;
-    private float dragStartMouseX = 0.0F;
-    private float dragStartMouseY = 0.0F;
-    private boolean dragMoved = false;
-
-    private String settingsModule = null;
-    private int activeSlider = -1;
-    private float panelSlideProgress = 0.0F;
-    private float hoverGlow = 0.0F;
-    private String hoverElement = null;
-    private float openTime = 0.0F;
-
-    private final List<String> hudModules = new ArrayList<>();
+    private static final class Fusion {
+        HUDDesignerElement element;
+        float x, y, targetX, targetY, progress;
+        float[] bounds;
+    }
 
     public GuiHUDDesigner() {
-        collectHUDModules();
+        this(null);
     }
 
-    private void collectHUDModules() {
-        hudModules.clear();
-
+    public GuiHUDDesigner(GuiScreen parent) {
+        this.parent = parent;
         for (Module module : Leader.moduleManager.modules.values()) {
-            if (!module.isEnabled()) continue;
-
-            if (module instanceof HUD) {
-                add("HUD");
-            } else if (module instanceof TargetHUD) {
-                add("TargetHUD");
-            } else if (module instanceof Notification) {
-                add("Notification");
-            } else if (module instanceof Watermark) {
-                add("Watermark");
-            } else if (module instanceof GifDisplay) {
-                add("GifDisplay");
-            } else if (module instanceof Indicators) {
-                add("Indicators");
-            } else if (module instanceof Potion) {
-                add("Potion");
-            } else if (module instanceof BedTracker) {
-                add("BedTracker");
-            } else if (module instanceof Island) {
-                add("Island");
+            if (module.isEnabled() && (module instanceof HUD || module instanceof TargetHUD
+                    || module instanceof Notification || module instanceof Watermark || module instanceof GifDisplay
+                    || module instanceof Indicators || module instanceof Potion || module instanceof BedTracker || module instanceof Island)) {
+                elements.add(new HUDDesignerElement(module.getName(), module));
             }
         }
-
+        // The display setting is required; the movement module itself may stay disabled.
         Scaffold scaffold = (Scaffold) Leader.moduleManager.modules.get(Scaffold.class);
-        if (scaffold != null && scaffold.isEnabled() && scaffold.blockCounter.getValue()) {
-            add("ScaffoldCounter");
+        if (scaffold != null && scaffold.blockCounter.getValue()) {
+            elements.add(new HUDDesignerElement("ScaffoldCounter", scaffold));
+        }
+        // Existing fusion links remain accessible even while Island is disabled.
+        Island island = (Island) Leader.moduleManager.modules.get(Island.class);
+        if (island != null && find("Island") == null && !Leader.hudElementManager.mergedModules("Island").isEmpty()) {
+            elements.add(new HUDDesignerElement("Island", island));
         }
     }
 
-    private void add(String name) {
-        if (!hudModules.contains(name)) {
-            hudModules.add(name);
+    private HUDDesignerElement find(String name) {
+        for (HUDDesignerElement element : elements) if (element.name.equals(name)) return element;
+        return null;
+    }
+
+    private boolean counterEditable() {
+        Scaffold scaffold = (Scaffold) Leader.moduleManager.modules.get(Scaffold.class);
+        return scaffold != null && scaffold.blockCounter.getValue();
+    }
+
+    private void syncCounter() {
+        HUDDesignerElement counter = find("ScaffoldCounter");
+        if (counterEditable()) {
+            if (counter == null) elements.add(new HUDDesignerElement("ScaffoldCounter",
+                    Leader.moduleManager.modules.get(Scaffold.class)));
+        } else if (counter != null) {
+            if (selected == counter) closeSettings();
+            if (dragging == counter) {
+                if (pulledModule != null) counter.setOrigin(pulledX, pulledY);
+                dragging = null;
+                pulledModule = null;
+            }
+            elements.remove(counter);
+            fusions.removeIf(f -> f.element == counter);
         }
     }
 
-    private boolean isVisible(String name) {
-        return name.equals(ISLAND) || !Leader.hudElementManager.isSuppressed(name);
+    private boolean visible(HUDDesignerElement element) {
+        return (element == dragging && (pulledModule == null || moved)) || element.name.equals("Island")
+                || !"Island".equals(Leader.hudElementManager.mergedInto(element.name));
     }
 
-    private boolean hasAlign() {
-        return settingsModule != null && settingsModule.equals("HUD");
+    private float rowHeight() { return Math.max(20, FontManager.getFontHeight(12) + 9); }
+
+    private float rowY(HUDDesignerElement island, int index) {
+        return island.origin()[1] + island.size(previewState)[1] + 8 + index * rowHeight();
     }
 
-    private float islandRowH() {
-        return FontManager.getFontHeight() + 4.0F;
-    }
-
-    private float[] box(String name) {
-        float x = Leader.hudElementManager.x(name, 40.0F, 40.0F);
-        float y = Leader.hudElementManager.y(name, 40.0F, 40.0F);
-        float w = Math.max(148.0F, FontManager.getStringWidth(name) + 104.0F);
-        float h = 30.0F;
-
-        if (name.equals(ISLAND)) {
-            List<String> merged = Leader.hudElementManager.mergedModules(ISLAND);
-            w = Math.max(158.0F, FontManager.getStringWidth("Island") + 126.0F);
-            h = ISLAND_HEAD + Math.max(1, merged.size()) * islandRowH() + 4.0F;
-        }
-
-        return new float[]{x, y, w, h};
-    }
-
-    private float islandRowY(float cardY, int index) {
-        return cardY + ISLAND_HEAD + index * islandRowH();
-    }
-
-    private String hitTest(int mouseX, int mouseY) {
-        String found = null;
-        for (String name : hudModules) {
-            if (!isVisible(name)) continue;
-
-            float[] b = box(name);
-            if (mouseX >= b[0] && mouseX <= b[0] + b[2] && mouseY >= b[1] && mouseY <= b[1] + b[3]) {
-                found = name;
+    private float[] box(HUDDesignerElement element) {
+        float[] b = element.bounds(element.name.equals("Island") ? previewState : 0);
+        if (element.name.equals("Island")) {
+            int rows = Leader.hudElementManager.mergedModules("Island").size();
+            if (rows > 0) {
+                b[2] = Math.max(b[2], 208);
+                b[3] += 8 + rows * rowHeight() + 4;
             }
         }
-        return found;
+        return b;
+    }
+
+    private boolean inside(int mx, int my, float[] b) {
+        return mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3];
+    }
+
+    private HUDDesignerElement hit(int mx, int my) {
+        for (int i = elements.size() - 1; i >= 0; i--) {
+            HUDDesignerElement element = elements.get(i);
+            if (visible(element) && inside(mx, my, box(element))) return element;
+        }
+        return null;
+    }
+
+    private int rgba(Color color, float alpha) {
+        return (Math.max(0, Math.min(255, Math.round(alpha))) << 24) | (color.getRGB() & 0xFFFFFF);
+    }
+
+    private void text(String text, float x, float y, Color color, float size) {
+        FontManager.drawString(text, x, y, color.getRGB(), false, size);
+    }
+
+    private void border(float[] b, Color color, float alpha) {
+        int c = rgba(color, alpha);
+        RenderUtil.drawRoundedRect(b[0], b[1], b[0] + b[2], b[1] + 0.8F, 0.4F, c);
+        RenderUtil.drawRoundedRect(b[0], b[1] + b[3] - 0.8F, b[0] + b[2], b[1] + b[3], 0.4F, c);
+        RenderUtil.drawRoundedRect(b[0], b[1], b[0] + 0.8F, b[1] + b[3], 0.4F, c);
+        RenderUtil.drawRoundedRect(b[0] + b[2] - 0.8F, b[1], b[0] + b[2], b[1] + b[3], 0.4F, c);
     }
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        syncCounter();
+        long now = System.currentTimeMillis();
+        float dt = lastFrame == 0 ? 0.016F : Math.max(0, Math.min(0.05F, (now - lastFrame) / 1000.0F));
+        lastFrame = now;
         ScaledResolution sr = new ScaledResolution(mc);
-        int centerX = sr.getScaledWidth() / 2;
-        openTime = Math.min(1.0F, openTime + 0.05F);
-
-        ShaderElement.blurArea(0, 0, sr.getScaledWidth(), sr.getScaledHeight());
-        RenderUtil.drawRect(0.0F, 0.0F, (float) sr.getScaledWidth(), (float) sr.getScaledHeight(), new Color(5, 7, 12, 215).getRGB());
-
-        String currentHover = hitTest(mouseX, mouseY);
-        if (currentHover != null && currentHover.equals(hoverElement)) {
-            hoverGlow = Math.min(1.0F, hoverGlow + 0.08F);
-        } else {
-            hoverGlow = Math.max(0.0F, hoverGlow - 0.12F);
-            hoverElement = currentHover;
+        HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
+        accent = hud != null ? hud.getColor(now) : new Color(110, 170, 255);
+        RenderUtil.drawRoundedRectGradient(0, 0, sr.getScaledWidth(), sr.getScaledHeight(), 0,
+                new Color(10, 11, 16, 80).getRGB(), new Color(4, 5, 8, 120).getRGB());
+        text("HUD Designer", 8, 10, new Color(245, 247, 252), 16);
+        text("Drag to move   Click for settings   Drop onto Island to fuse", 8, 25,
+                new Color(128, 137, 155), 10);
+        text(snap ? "G: snap on / Shift: free drag" : "G: snap off", 8, sr.getScaledHeight() - 12,
+                new Color(127, 143, 166), 9);
+        updateDrag(mouseX, mouseY);
+        HUDDesignerElement hovered = settings == null ? hit(mouseX, mouseY) : null;
+        for (HUDDesignerElement element : elements) {
+            if (visible(element) && element != dragging) drawElement(element, element == hovered);
         }
-
-        float ease = openTime * openTime * (3.0F - 2.0F * openTime);
-        float titleY = 12.0F - (1.0F - ease) * 8.0F;
-        String title = "HUD Designer";
-        FontManager.drawString(title, centerX - FontManager.getStringWidth(title) / 2.0F, titleY,
-                new Color(255, 255, 255, (int) (ease * 255)).getRGB(), true);
-        RenderUtil.drawRoundedRect(centerX - 60.0F, titleY + 13.0F, centerX + 60.0F, titleY + 14.0F, 0.5F,
-                new Color(255, 214, 128, (int) (ease * 90)).getRGB());
-
-        String hint = "Drag to move  |  Click to edit background  |  Drop onto Island to merge";
-        FontManager.drawString(hint, centerX - FontManager.getStringWidth(hint) / 2.0F, 28.0F,
-                new Color(140, 146, 162, (int) (ease * 255)).getRGB(), false);
-
-        for (String name : hudModules) {
-            if (!isVisible(name)) continue;
-            drawElement(name, mouseX, mouseY);
-        }
-
-        if (draggingModule != null) {
-            drawMergeHint(mouseX, mouseY);
-        }
-
-        if (settingsModule != null) {
-            drawSettings(mouseX, mouseY);
-        }
-    }
-
-    private void drawElement(String name, int mouseX, int mouseY) {
-        float[] b = box(name);
-        float x = b[0];
-        float y = b[1];
-        float w = b[2];
-        float h = b[3];
-
-        boolean island = name.equals(ISLAND);
-        boolean hovered = mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
-        boolean active = name.equals(draggingModule);
-
-        Color base = new Color(Leader.hudElementManager.background(name, 40.0F, 40.0F), true);
-        int boost = active ? 70 : hovered ? 40 : 0;
-        int fill = new Color(
-                Math.min(255, base.getRed() + boost),
-                Math.min(255, base.getGreen() + boost),
-                Math.min(255, base.getBlue() + boost),
-                Math.max(90, base.getAlpha())).getRGB();
-
-        float shadowDepth = active ? 3.5F : hovered ? 2.0F : 0.0F;
-        if (shadowDepth > 0.0F) {
-            RenderUtil.drawRoundedRectWithGl(x, y + shadowDepth, x + w, y + h + shadowDepth, 6.0F,
-                    new Color(0, 0, 0, (int) (shadowDepth * 15)).getRGB());
-        }
-        ShaderElement.blurArea(x, y, x + w, y + h);
-        RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, 6.0F, fill);
-
-        boolean selecting = name.equals(settingsModule);
-        float pulse = hovered ? hoverGlow : 0.0F;
-        int baseAlpha = selecting ? 230 : island ? 190 : active ? 210 : hovered ? 190 : 130;
-        int ringAlpha = (int) Math.min(255, baseAlpha + pulse * 60);
-        Color ringBase = selecting ? new Color(255, 220, 130)
-                : island ? new Color(120, 210, 255)
-                : active ? new Color(255, 220, 130)
-                : hovered ? new Color(150, 190, 255)
-                : new Color(120, 130, 155);
-        int ring = new Color(ringBase.getRed(), ringBase.getGreen(), ringBase.getBlue(), ringAlpha).getRGB();
-        RenderUtil.drawRoundedRect(x, y, x + w, y + 1.0F, 0.5F, ring);
-        RenderUtil.drawRoundedRect(x, y + h - 1.0F, x + w, y + h, 0.5F, ring);
-        RenderUtil.drawRoundedRect(x, y, x + 1.0F, y + h, 0.5F, ring);
-        RenderUtil.drawRoundedRect(x + w - 1.0F, y, x + w, y + h, 0.5F, ring);
-
-        int bgSwatch = Leader.hudElementManager.background(name, 40.0F, 40.0F);
-        float swatchRight = x + w - 11.0F;
-        FontManager.drawString(name, x + 11.0F, y + 9.0F, Color.WHITE.getRGB(), true);
-
-        RenderUtil.drawRoundedRectWithGl(swatchRight - 22.0F, y + 7.0F, swatchRight, y + 25.0F, 3.0F, bgSwatch);
-        RenderUtil.drawRoundedRect(swatchRight - 22.0F, y + 7.0F, swatchRight, y + 7.8F, 0.4F, new Color(255, 255, 255, 75).getRGB());
-
-        String tag = island ? "merges" : Leader.hudElementManager.isMergeable(name) ? "mergeable" : "locked";
-        int tagColor = island ? new Color(120, 210, 255).getRGB()
-                : Leader.hudElementManager.isMergeable(name) ? new Color(140, 150, 170).getRGB()
-                : new Color(228, 148, 148).getRGB();
-        FontManager.drawString(tag, swatchRight - 28.0F - FontManager.getStringWidth(tag),
-                y + 9.0F, tagColor, false);
-
-        if (island) {
-            RenderUtil.drawRoundedRect(x + 11.0F, y + ISLAND_HEAD - 5.0F, x + w - 11.0F, y + ISLAND_HEAD - 4.4F, 0.3F,
-                    new Color(255, 255, 255, 22).getRGB());
-
-            List<String> merged = Leader.hudElementManager.mergedModules(ISLAND);
-            if (merged.isEmpty()) {
-                FontManager.drawString("nothing merged", x + 12.0F, y + ISLAND_HEAD + 2.0F,
-                        new Color(120, 126, 142).getRGB(), false);
-            } else {
-                for (int i = 0; i < merged.size(); i++) {
-                    String mergedName = merged.get(i);
-                    String label = "+ " + mergedName;
-                    float rowTop = islandRowY(y, i);
-                    float rowTextY = rowTop + 2.0F;
-                    boolean mergeHover = mouseX >= x + 12.0F && mouseX <= x + 12.0F + FontManager.getStringWidth(label)
-                            && mouseY >= rowTop && mouseY <= rowTop + islandRowH();
-
-                    if (mergeHover) {
-                        RenderUtil.drawRoundedRectWithGl(x + 10.0F, rowTop, x + 12.0F + FontManager.getStringWidth(label) + 4.0F,
-                                rowTop + islandRowH() - 1.0F, 3.0F, new Color(255, 96, 96, 45).getRGB());
-                    }
-                    RenderUtil.fillCircle(x + 15.0F, rowTop + islandRowH() / 2.0F - 0.5F, 1.8F, 16,
-                            mergeHover ? new Color(255, 100, 100).getRGB() : new Color(120, 255, 150).getRGB());
-                    FontManager.drawString(label, x + 22.0F, rowTextY,
-                            mergeHover ? new Color(255, 120, 120).getRGB() : new Color(196, 236, 208).getRGB(), false);
-                    FontManager.drawString("drag out to unmerge", x + w - 11.0F - FontManager.getStringWidth("drag out to unmerge"),
-                            rowTextY, new Color(110, 116, 132).getRGB(), false);
-                }
+        if (dragging != null) {
+            if (pulledModule == null || moved) {
+                drawElement(dragging, true);
+                drawDropHint(mouseX, mouseY);
             }
         }
+        drawFusions(dt);
+        drawSelector(mouseX, mouseY);
+        fusionPulse = Math.max(0, fusionPulse - dt * 2.6F);
+        HUDDesignerElement island = find("Island");
+        if (island != null && fusionPulse > 0) {
+            float[] b = island.bounds(previewState);
+            float pad = (1 - fusionPulse) * 7;
+            border(new float[]{b[0] - pad, b[1] - pad, b[2] + 2 * pad, b[3] + 2 * pad}, accent, fusionPulse * 170);
+        }
+        if (settings != null) settings.draw(mouseX, mouseY, dt);
+        GlStateManager.color(1, 1, 1, 1);
+        super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
-    private void drawMergeHint(int mouseX, int mouseY) {
-        float[] island = box(ISLAND);
-        boolean over = mouseX >= island[0] && mouseX <= island[0] + island[2]
-                && mouseY >= island[1] && mouseY <= island[1] + island[3];
-        boolean mergeable = Leader.hudElementManager.isMergeable(draggingModule);
+    private void drawSelector(int mx, int my) {
+        selectorBoxes.clear();
+        float x = 8, y = 40;
+        for (HUDDesignerElement element : elements) {
+            float w = FontManager.getStringWidth(element.name, 10) + 12;
+            if (x + w > width - 8) { x = 8; y += 19; }
+            float[] b = new float[]{x, y, w, 17};
+            selectorBoxes.add(b);
+            boolean fused = "Island".equals(Leader.hudElementManager.mergedInto(element.name));
+            boolean hover = settings == null && inside(mx, my, b);
+            RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + 17, 3,
+                    rgba(new Color(18, 20, 28), hover ? 195 : 115));
+            if (element == selected) RenderUtil.drawRect(x + 3, y + 16, x + w - 3, y + 17, rgba(accent, 180));
+            text(element.name, x + 6, y + 5, element == selected ? accent
+                    : fused ? new Color(145, 206, 181) : new Color(177, 192, 214), 10);
+            x += w + 5;
+        }
+    }
 
+    private void drawElement(HUDDesignerElement element, boolean hovered) {
+        float[] p = element.origin();
+        GlStateManager.pushMatrix();
+        element.preview(p[0], p[1], element == dragging ? 0.82F : 1, element.name.equals("Island") ? previewState : 0);
+        GlStateManager.color(1, 1, 1, 1);
+        GlStateManager.popMatrix();
+        float[] b = box(element);
+        boolean active = element == selected || element == dragging;
+        if (active || hovered) border(b, active ? accent : new Color(122, 145, 179), active ? 145 : 90);
+        if (hovered || active) {
+            String label = element.name + " / " + element.styleName();
+            float labelHeight = FontManager.getFontHeight(10);
+            float ly = b[1] >= labelHeight + 6 ? b[1] - labelHeight - 4 : b[1] + b[3] + 5;
+            ly = Math.min(height - labelHeight - 2, ly);
+            RenderUtil.drawRoundedRectWithGl(b[0], ly - 2, b[0] + FontManager.getStringWidth(label, 10) + 10,
+                    ly + FontManager.getFontHeight(10) + 2, 3, new Color(17, 20, 28, 140).getRGB());
+            text(label, b[0] + 5, ly, active ? accent : new Color(185, 201, 226), 10);
+        }
+        if (!element.name.equals("Island")) return;
+        List<String> merged = Leader.hudElementManager.mergedModules("Island");
+        if (merged.isEmpty()) return;
+        float y = rowY(element, 0);
+        RenderUtil.drawRoundedRectWithGl(b[0], y - 3, b[0] + b[2], b[1] + b[3], 3,
+                new Color(18, 20, 28, 160).getRGB());
+        for (int i = 0; i < merged.size(); i++) {
+            float ry = rowY(element, i);
+            String name = merged.get(i);
+            RenderUtil.fillCircle(b[0] + 10, ry + rowHeight() / 2, 2, 16, new Color(140, 206, 178).getRGB());
+            text(name, b[0] + 18, ry + 5, new Color(198, 221, 218), 12);
+            text("drag out / edit", b[0] + b[2] - FontManager.getStringWidth("drag out / edit", 9) - 8,
+                    ry + 6, new Color(119, 138, 157), 9);
+        }
+    }
+
+    private void drawFusions(float dt) {
+        Iterator<Fusion> it = fusions.iterator();
+        while (it.hasNext()) {
+            Fusion f = it.next();
+            f.progress = Math.min(1, f.progress + dt / 0.32F);
+            float t = f.progress * f.progress * (3 - 2 * f.progress);
+            float sc = 1 - 0.86F * t;
+            float cx = f.x + f.bounds[0] + f.bounds[2] / 2;
+            float cy = f.y + f.bounds[1] + f.bounds[3] / 2;
+            float fx = cx + (f.targetX - cx) * t, fy = cy + (f.targetY - cy) * t;
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(fx, fy, 0);
+            GlStateManager.scale(sc, sc, 1);
+            GlStateManager.translate(-cx, -cy, 0);
+            // Vanilla's font renderer treats near-zero alpha as opaque; stop text before that threshold.
+            if (1 - t > 0.05F) f.element.preview(f.x, f.y, 1 - t, 0);
+            border(new float[]{f.x + f.bounds[0], f.y + f.bounds[1], f.bounds[2], f.bounds[3]},
+                    accent, 200 * (1 - t));
+            GlStateManager.popMatrix();
+            if (f.progress >= 1) it.remove();
+        }
+    }
+
+    private boolean overIsland(int mx, int my) {
+        HUDDesignerElement island = find("Island");
+        return island != null && island.module.isEnabled() && inside(mx, my, box(island));
+    }
+
+    private void drawDropHint(int mx, int my) {
         String label;
-        int tone;
-        if (!mergeable) {
-            label = draggingModule + " cannot merge into Island";
-            tone = new Color(228, 148, 148).getRGB();
-        } else if (over) {
-            label = Leader.hudElementManager.isSuppressed(draggingModule) ? "Release to undo merge" : "Release to merge into Island";
-            tone = Leader.hudElementManager.isSuppressed(draggingModule)
-                    ? new Color(255, 180, 120).getRGB() : new Color(140, 255, 170).getRGB();
-        } else {
-            label = "Drop onto Island to merge";
-            tone = new Color(190, 196, 212).getRGB();
-        }
-
-        float w = FontManager.getStringWidth(label) + 18.0F;
-        float h = FontManager.getFontHeight() + 9.0F;
-        float x = mouseX + 12.0F;
-        float y = mouseY + 14.0F;
-
-        RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, 4.0F, new Color(0, 0, 0, 110).getRGB());
-        RenderUtil.drawRoundedRectWithGl(x + 1.0F, y + 1.0F, x + w - 1.0F, y + h - 1.0F, 3.5F, new Color(18, 20, 26, 232).getRGB());
-        RenderUtil.drawRoundedRect(x + 1.0F, y + 1.0F, x + w - 1.0F, y + 1.8F, 0.4F, tone);
-        FontManager.drawString(label, x + 9.0F, y + 5.0F, tone, false);
+        if (pulledModule != null) label = overIsland(mx, my) ? "Release to keep fusion" : "Release to detach";
+        else if (!Leader.hudElementManager.isMergeable(dragging.name)) label = "Standalone element";
+        else if (find("Island") == null || !find("Island").module.isEnabled()) label = "Enable Island to fuse";
+        else label = overIsland(mx, my) ? "Release to fuse into Island" : "Drop onto Island to fuse";
+        float w = FontManager.getStringWidth(label, 11) + 18;
+        float x = Math.min(width - w - 4, mx + 12), y = Math.min(height - 23, my + 16);
+        RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + 22, 3, new Color(18, 20, 28, 190).getRGB());
+        text(label, x + 9, y + 6, accent, 11);
     }
 
-    private float panelX() {
-        return new ScaledResolution(mc).getScaledWidth() / 2.0F - PANEL_W / 2.0F;
-    }
-
-    private float panelY() {
-        return new ScaledResolution(mc).getScaledHeight() / 2.0F - PANEL_H / 2.0F;
-    }
-
-    private float panelOffsetY() {
-        float p = panelSlideProgress;
-        float ease = p * p * (3.0F - 2.0F * p);
-        return (1.0F - ease) * 20.0F;
-    }
-
-    private float flowTop() {
-        return panelY() + 44.0F;
-    }
-
-    private float alignLabelY() {
-        return flowTop();
-    }
-
-    private float alignButtonY() {
-        return alignLabelY() + 12.0F;
-    }
-
-    private float presetsLabelY() {
-        return alignLabelY() + (hasAlign() ? 36.0F : 0.0F);
-    }
-
-    private float presetsY() {
-        return presetsLabelY() + 13.0F;
-    }
-
-    private float sliderY(int index) {
-        return presetsLabelY() + 40.0F + index * 26.0F;
-    }
-
-    private float sliderTrackY(int index) {
-        return sliderY(index) + 13.0F;
-    }
-
-    private float swatchX(int index) {
-        return panelX() + SLIDER_LEFT + index * 26.6F;
-    }
-
-    private int[] sliderColors(int rgb) {
-        return new int[]{rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, rgb >>> 24};
-    }
-
-    private int packColor(int[] rgba) {
-        return (rgba[3] & 255) << 24 | (rgba[0] & 255) << 16 | (rgba[1] & 255) << 8 | (rgba[2] & 255);
-    }
-
-    private int[] presets() {
-        return new int[]{
-                new Color(0, 0, 0, 100).getRGB(),
-                new Color(0, 0, 0, 180).getRGB(),
-                new Color(46, 48, 54, 150).getRGB(),
-                new Color(20, 24, 34, 190).getRGB(),
-                new Color(120, 170, 255, 130).getRGB(),
-                new Color(40, 20, 20, 150).getRGB(),
-                new Color(20, 40, 20, 150).getRGB(),
-                new Color(255, 255, 255, 60).getRGB()
-        };
-    }
-
-    private void sectionLabel(String text, float x, float y, float alpha) {
-        FontManager.drawString(text, x, y, new Color(MUTED.getRed(), MUTED.getGreen(), MUTED.getBlue(), (int) alpha).getRGB(), false);
-        float width = FontManager.getStringWidth(text);
-        RenderUtil.drawRoundedRect(x + width + 8.0F, y + 4.0F, x + PANEL_W - SLIDER_RIGHT - 2.0F, y + 4.6F, 0.3F,
-                new Color(255, 255, 255, (int) (alpha * 0.16F)).getRGB());
-    }
-
-    private void drawSettings(int mouseX, int mouseY) {
-        float px = panelX();
-        float py = panelY();
-
-        if (settingsModule != null) {
-            panelSlideProgress = Math.min(1.0F, panelSlideProgress + 0.15F);
-        } else {
-            panelSlideProgress = Math.max(0.0F, panelSlideProgress - 0.20F);
-        }
-        float slideEase = panelSlideProgress * panelSlideProgress * (3.0F - 2.0F * panelSlideProgress);
-        float oy = panelOffsetY();
-
-        ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(px, py + oy, px + PANEL_W, py + PANEL_H + oy, 12.0F,
-                new Color(18, 20, 28, (int) (slideEase * 255)).getRGB()));
-
-        for (int i = 6; i >= 1; i--) {
-            float s = i * 2.0F;
-            RenderUtil.drawRoundedRectWithGl(px - s, py - s + 3.0F + oy, px + PANEL_W + s, py + PANEL_H + s + 3.0F + oy,
-                    12.0F + s, new Color(0, 0, 0, (int) (slideEase * 7)).getRGB());
-        }
-
-        RenderUtil.drawRoundedRectWithGl(px - 0.5F, py - 0.5F + oy, px + PANEL_W + 0.5F, py + PANEL_H + 0.5F + oy,
-                12.5F, new Color(255, 255, 255, (int) (slideEase * 22)).getRGB());
-
-        RenderUtil.drawRoundedRectGradient(px, py + oy, px + PANEL_W, py + PANEL_H + oy, 12.0F,
-                new Color(18, 19, 26, (int) (slideEase * 214)).getRGB(),
-                new Color(11, 12, 16, (int) (slideEase * 222)).getRGB());
-
-        float hlMid = px + PANEL_W / 2.0F;
-        RenderUtil.drawRoundedRectGradientH(px + 28.0F, py + 0.5F + oy, hlMid, py + 1.0F + oy, 0.0F,
-                new Color(255, 255, 255, 0).getRGB(),
-                new Color(255, 255, 255, (int) (slideEase * 30)).getRGB());
-        RenderUtil.drawRoundedRectGradientH(hlMid, py + 0.5F + oy, px + PANEL_W - 28.0F, py + 1.0F + oy, 0.0F,
-                new Color(255, 255, 255, (int) (slideEase * 30)).getRGB(),
-                new Color(255, 255, 255, 0).getRGB());
-
-        float headAlpha = slideEase * 255.0F;
-        FontManager.drawString(settingsModule, px + SLIDER_LEFT, py + 14.0F + oy,
-                new Color(255, 255, 255, (int) headAlpha).getRGB(), true);
-        String kind = settingsModule.equals(ISLAND) ? "merged container" : Leader.hudElementManager.isMergeable(settingsModule) ? "merges into Island" : "standalone element";
-        FontManager.drawString(kind, px + SLIDER_LEFT, py + 26.0F + oy,
-                new Color(MUTED.getRed(), MUTED.getGreen(), MUTED.getBlue(), (int) (slideEase * 210)).getRGB(), false);
-
-        int current = Leader.hudElementManager.background(settingsModule, 40.0F, 40.0F);
-        int prevR = (current >> 16) & 255;
-        int prevG = (current >> 8) & 255;
-        int prevB = current & 255;
-        int prevA = (int) (slideEase * ((current >>> 24) & 255));
-        float previewX = px + PANEL_W - 78.0F;
-        RenderUtil.drawRoundedRectWithGl(previewX, py + 10.0F + oy, px + PANEL_W - SLIDER_RIGHT, py + 36.0F + oy,
-                5.0F, new Color(prevR, prevG, prevB, prevA).getRGB());
-        RenderUtil.drawRoundedRect(previewX, py + 10.0F + oy, px + PANEL_W - SLIDER_RIGHT, py + 10.9F + oy,
-                0.5F, new Color(255, 255, 255, (int) (slideEase * 80)).getRGB());
-        RenderUtil.drawRoundedRect(previewX, py + 35.2F + oy, px + PANEL_W - SLIDER_RIGHT, py + 36.0F + oy,
-                0.4F, new Color(0, 0, 0, (int) (slideEase * 90)).getRGB());
-
-        sectionLabel("Background", px + SLIDER_LEFT, flowTop() - 12.0F + oy, slideEase * 235.0F);
-
-        if (hasAlign()) {
-            HUD hudModule = (HUD) Leader.moduleManager.getModule(HUD.class);
-            if (hudModule != null) {
-                ModeProperty alignProp = hudModule.align;
-                String[] modes = {"LEFT", "RIGHT"};
-                int currentAlign = alignProp.getValue();
-                sectionLabel("Align", px + SLIDER_LEFT, alignLabelY() + oy, slideEase * 235.0F);
-                float btnY = alignButtonY() + oy;
-                float btnX = px + SLIDER_LEFT;
-                for (int i = 0; i < modes.length; i++) {
-                    boolean isActive = i == currentAlign;
-                    boolean btnHover = mouseX >= btnX && mouseX <= btnX + 54.0F && mouseY >= btnY && mouseY <= btnY + 17.0F;
-                    int btnFill = isActive ? new Color(ACCENT.getRed(), ACCENT.getGreen(), ACCENT.getBlue(), (int) (slideEase * 205)).getRGB()
-                            : btnHover ? new Color(62, 68, 84, (int) (slideEase * 225)).getRGB()
-                            : new Color(38, 42, 52, (int) (slideEase * 205)).getRGB();
-                    RenderUtil.drawRoundedRectWithGl(btnX, btnY, btnX + 54.0F, btnY + 17.0F, 4.0F, btnFill);
-                    if (!isActive) {
-                        RenderUtil.drawRoundedRect(btnX, btnY, btnX + 54.0F, btnY + 0.8F, 0.4F,
-                                new Color(255, 255, 255, (int) (slideEase * 30)).getRGB());
-                    }
-                    int textColor = isActive ? new Color(28, 30, 36, (int) (slideEase * 255)).getRGB()
-                            : new Color(180, 186, 202, (int) (slideEase * 255)).getRGB();
-                    FontManager.drawString(modes[i], btnX + 27.0F - FontManager.getStringWidth(modes[i]) / 2.0F, btnY + 4.5F, textColor, false);
-                    btnX += 60.0F;
-                }
-            }
-        }
-
-        sectionLabel("Presets", px + SLIDER_LEFT, presetsLabelY() + oy, slideEase * 235.0F);
-        int[] presets = presets();
-        for (int i = 0; i < presets.length && i < SWATCH_COUNT; i++) {
-            float sx = swatchX(i);
-            float sy = presetsY() + oy;
-            boolean hovered = mouseX >= sx && mouseX <= sx + 22.0F && mouseY >= sy && mouseY <= sy + 18.0F;
-            int swatchColor = new Color((presets[i] >> 16) & 255, (presets[i] >> 8) & 255, presets[i] & 255,
-                    (int) (slideEase * ((presets[i] >>> 24) & 255))).getRGB();
-            if (hovered) {
-                RenderUtil.drawRoundedRectWithGl(sx - 2.0F, sy - 2.0F, sx + 24.0F, sy + 20.0F, 4.0F,
-                        new Color(255, 255, 255, (int) (slideEase * 42)).getRGB());
-            }
-            RenderUtil.drawRoundedRectWithGl(sx, sy, sx + 22.0F, sy + 18.0F, 3.0F, swatchColor);
-            RenderUtil.drawRoundedRect(sx, sy, sx + 22.0F, sy + 0.8F, 0.4F,
-                    new Color(255, 255, 255, (int) (slideEase * (hovered ? 200 : 55))).getRGB());
-        }
-
-        int[] rgba = sliderColors(current);
-        String[] labels = {"R", "G", "B", "A"};
-        int[] tints = {
-                new Color(232, 96, 96).getRGB(),
-                new Color(120, 214, 120).getRGB(),
-                new Color(110, 160, 255).getRGB(),
-                new Color(210, 214, 226).getRGB()
-        };
-
-        for (int i = 0; i < 4; i++) {
-            float sy = sliderY(i) + oy;
-            float trackY = sliderTrackY(i) + oy;
-            float left = px + SLIDER_LEFT;
-            float right = px + PANEL_W - SLIDER_RIGHT;
-            float value = rgba[i] / 255.0F;
-            float knobX = left + (right - left) * value;
-            int tint = tints[i];
-            FontManager.drawString(labels[i], left, sy,
-                    new Color((tint >> 16) & 255, (tint >> 8) & 255, tint & 255, (int) (slideEase * 255)).getRGB(), true);
-            String valueText = String.valueOf(rgba[i]);
-            FontManager.drawString(valueText, right - FontManager.getStringWidth(valueText), sy,
-                    new Color(VALUE.getRed(), VALUE.getGreen(), VALUE.getBlue(), (int) (slideEase * 255)).getRGB(), false);
-
-            RenderUtil.drawRoundedRectWithGl(left, trackY, right, trackY + SLIDER_TRACK_H, SLIDER_TRACK_H / 2.0F,
-                    new Color(255, 255, 255, (int) (slideEase * 24)).getRGB());
-            RenderUtil.drawRoundedRectWithGl(left, trackY, Math.max(left + SLIDER_TRACK_H, knobX), trackY + SLIDER_TRACK_H,
-                    SLIDER_TRACK_H / 2.0F, new Color((tint >> 16) & 255, (tint >> 8) & 255, tint & 255, (int) (slideEase * 255)).getRGB());
-            RenderUtil.fillCircle(knobX, trackY + SLIDER_TRACK_H / 2.0F, 6.5F, 28,
-                    new Color(10, 11, 15, (int) (slideEase * 235)).getRGB());
-            RenderUtil.fillCircle(knobX, trackY + SLIDER_TRACK_H / 2.0F, 4.4F, 28,
-                    new Color(255, 255, 255, (int) (slideEase * 255)).getRGB());
-        }
-
-        float footerY = py + PANEL_H - 18.0F + oy;
-        RenderUtil.drawRoundedRect(px + SLIDER_LEFT, footerY - 8.0F, px + PANEL_W - SLIDER_RIGHT, footerY - 7.4F, 0.3F,
-                new Color(255, 255, 255, (int) (slideEase * 16)).getRGB());
-        String hex = String.format("#%02X%02X%02X%02X", rgba[0], rgba[1], rgba[2], rgba[3]);
-        FontManager.drawString(hex, px + SLIDER_LEFT, footerY,
-                new Color(168, 174, 190, (int) (slideEase * 255)).getRGB(), false);
-        String close = "Click outside to close";
-        FontManager.drawString(close, px + PANEL_W - SLIDER_RIGHT - FontManager.getStringWidth(close), footerY,
-                new Color(126, 132, 148, (int) (slideEase * 255)).getRGB(), false);
-    }
-
-    private boolean inPanel(int mouseX, int mouseY) {
-        float px = panelX();
-        float py = panelY();
-        return mouseX >= px && mouseX <= px + PANEL_W && mouseY >= py && mouseY <= py + PANEL_H;
-    }
-
-    private void applySlider(int mouseX) {
-        if (settingsModule == null || activeSlider < 0) return;
-
-        float left = panelX() + SLIDER_LEFT;
-        float right = panelX() + PANEL_W - SLIDER_RIGHT;
-        float value = (mouseX - left) / (right - left);
-        value = Math.max(0.0F, Math.min(1.0F, value));
-
-        int current = Leader.hudElementManager.background(settingsModule, 40.0F, 40.0F);
-        int[] rgba = sliderColors(current);
-        rgba[activeSlider] = Math.round(value * 255.0F);
-        Leader.hudElementManager.setBackground(settingsModule, packColor(rgba));
+    private void beginDrag(HUDDesignerElement element, int mx, int my) {
+        dragging = element;
+        float[] p = element.origin();
+        offsetX = mx - p[0]; offsetY = my - p[1];
+        startX = mx; startY = my;
+        moved = false;
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
-        if (mouseButton != 0) return;
-
-        if (settingsModule != null) {
-            if (inPanel(mouseX, mouseY)) {
-                float px = panelX();
-                float py = panelY();
-                float oy = panelOffsetY();
-
-                if (hasAlign()) {
-                    HUD hudModule = (HUD) Leader.moduleManager.getModule(HUD.class);
-                    if (hudModule != null) {
-                        ModeProperty alignProp = hudModule.align;
-                        float btnY = alignButtonY() + oy;
-                        float btnX = px + SLIDER_LEFT;
-                        for (int i = 0; i < 2; i++) {
-                            if (mouseX >= btnX && mouseX <= btnX + 54.0F && mouseY >= btnY && mouseY <= btnY + 17.0F) {
-                                alignProp.setValue(i);
-                                return;
-                            }
-                            btnX += 60.0F;
-                        }
-                    }
-                }
-
-                int[] presets = presets();
-                for (int i = 0; i < presets.length && i < SWATCH_COUNT; i++) {
-                    float sx = swatchX(i);
-                    float sy = presetsY() + oy;
-                    if (mouseX >= sx && mouseX <= sx + 22.0F && mouseY >= sy && mouseY <= sy + 18.0F) {
-                        Leader.hudElementManager.setBackground(settingsModule, presets[i]);
-                        return;
-                    }
-                }
-
-                for (int i = 0; i < 4; i++) {
-                    float trackY = sliderTrackY(i) + oy;
-                    if (mouseY >= trackY - 8.0F && mouseY <= trackY + SLIDER_TRACK_H + 8.0F) {
-                        activeSlider = i;
-                        applySlider(mouseX);
-                        return;
-                    }
-                }
-                return;
-            }
-
-            settingsModule = null;
-            activeSlider = -1;
-        }
-
-        String hit = hitTest(mouseX, mouseY);
-        if (hit != null && hit.equals(ISLAND)) {
-            float[] island = box(ISLAND);
-            List<String> merged = Leader.hudElementManager.mergedModules(ISLAND);
-            for (int i = 0; i < merged.size(); i++) {
-                String mergedName = merged.get(i);
-                String label = "+ " + mergedName;
-                float rowTop = islandRowY(island[1], i);
-                if (mouseX >= island[0] + 12.0F && mouseX <= island[0] + 12.0F + FontManager.getStringWidth(label)
-                        && mouseY >= rowTop && mouseY <= rowTop + islandRowH()) {
-                    Leader.hudElementManager.unmerge(mergedName);
-                    return;
-                }
-            }
-        }
-        if (hit != null) {
-            Leader.hudElementManager.getOrCreate(hit, 40.0F, 40.0F);
-            draggingModule = hit;
-            dragOffsetX = mouseX - Leader.hudElementManager.x(hit, 40.0F, 40.0F);
-            dragOffsetY = mouseY - Leader.hudElementManager.y(hit, 40.0F, 40.0F);
-            dragStartMouseX = mouseX;
-            dragStartMouseY = mouseY;
-            dragMoved = false;
+    protected void mouseClicked(int mx, int my, int button) throws IOException {
+        if (settings != null) {
+            if (settings.contains(mx, my)) settings.click(mx, my, button);
+            else closeSettings();
             return;
         }
+        if (button != 0) return;
+        for (int i = 0; i < selectorBoxes.size() && i < elements.size(); i++) {
+            if (inside(mx, my, selectorBoxes.get(i))) { openSettings(elements.get(i)); return; }
+        }
+        HUDDesignerElement element = hit(mx, my);
+        if (element == null) return;
+        if (element.name.equals("Island")) {
+            List<String> merged = Leader.hudElementManager.mergedModules("Island");
+            float[] b = box(element);
+            for (int i = 0; i < merged.size(); i++) {
+                if (!inside(mx, my, new float[]{b[0], rowY(element, i), b[2], rowHeight()})) continue;
+                String name = merged.get(i);
+                if (name.equals("ScaffoldCounter") && !counterEditable()) return;
+                HUDDesignerElement child = find(name);
+                if (child == null) {
+                    Module module = name.equals("ScaffoldCounter") ? Leader.moduleManager.modules.get(Scaffold.class)
+                            : Leader.moduleManager.modules.values().stream().filter(m -> m.getName().equals(name)).findFirst().orElse(null);
+                    if (module == null) { unmerge(name); return; }
+                    child = new HUDDesignerElement(name, module);
+                    elements.add(child);
+                }
+                beginDrag(child, mx, my);
+                pulledModule = name;
+                float[] p = child.origin();
+                pulledX = p[0]; pulledY = p[1];
+                offsetX = 12; offsetY = 10;
+                return;
+            }
+        }
+        beginDrag(element, mx, my);
+        // Keep draw order and hit order consistent while overlapping elements are edited.
+        elements.remove(element);
+        elements.add(element);
+    }
 
-        super.mouseClicked(mouseX, mouseY, mouseButton);
+    private void updateDrag(int mx, int my) {
+        if (settings != null) { settings.drag(mx); return; }
+        if (dragging == null) return;
+        if (Math.abs(mx - startX) > 2 || Math.abs(my - startY) > 2) moved = true;
+        if (!moved) return;
+        float x = mx - offsetX, y = my - offsetY;
+        float[] b = box(dragging);
+        float[] p = dragging.origin();
+        float dx = b[0] - p[0], dy = b[1] - p[1];
+        float left = x + dx, top = y + dy;
+        if (snap && !isShiftKeyDown()) {
+            float centerX = width / 2.0F, centerY = height / 2.0F;
+            if (Math.abs(left + b[2] / 2 - centerX) < 5) {
+                left = centerX - b[2] / 2;
+                RenderUtil.drawRect(centerX, 45, centerX + 0.5F, height, rgba(accent, 80));
+            }
+            if (Math.abs(top + b[3] / 2 - centerY) < 5) {
+                top = centerY - b[3] / 2;
+                RenderUtil.drawRect(0, centerY, width, centerY + 0.5F, rgba(accent, 80));
+            }
+            if (Math.abs(left) < 5) left = 0;
+            if (Math.abs(width - left - b[2]) < 5) left = width - b[2];
+        }
+        left = Math.max(0, Math.min(Math.max(0, width - b[2]), left));
+        top = Math.max(0, Math.min(Math.max(0, height - b[3]), top));
+        dragging.setOrigin(left - dx, top - dy);
     }
 
     @Override
-    protected void mouseReleased(int mouseX, int mouseY, int state) {
-        if (activeSlider >= 0) {
-            activeSlider = -1;
-        }
-
-        if (draggingModule != null) {
-            String released = draggingModule;
-            draggingModule = null;
-
-            if (dragMoved) {
-                if (Leader.hudElementManager.isMergeable(released)) {
-                    float[] island = box(ISLAND);
-                    boolean overIsland = mouseX >= island[0] && mouseX <= island[0] + island[2]
-                            && mouseY >= island[1] && mouseY <= island[1] + island[3];
-
-                    if (overIsland && !released.equals("HUD")) {
-                        if (Leader.hudElementManager.isSuppressed(released)) {
-                            Leader.hudElementManager.unmerge(released);
-                        } else {
-                            Leader.hudElementManager.merge(released, ISLAND);
-                        }
-                    } else if (Leader.hudElementManager.isSuppressed(released)) {
-                        Leader.hudElementManager.unmerge(released);
-                    }
-                }
-            } else {
-                settingsModule = released;
-                activeSlider = -1;
+    protected void mouseReleased(int mx, int my, int button) {
+        if (button != 0) return;
+        if (settings != null) settings.release();
+        if (dragging == null) return;
+        // A fast drag can start and finish between GUI ticks.
+        updateDrag(mx, my);
+        HUDDesignerElement element = dragging;
+        if (pulledModule != null) {
+            if (moved && !overIsland(mx, my)) unmerge(pulledModule);
+            else {
+                element.setOrigin(pulledX, pulledY);
+                if (!moved) openSettings(element);
             }
-        }
+        } else if (moved) {
+            if (Leader.hudElementManager.isMergeable(element.name) && overIsland(mx, my)) fuse(element);
+        } else openSettings(element);
+        dragging = null;
+        pulledModule = null;
+        Leader.hudElementManager.save();
+    }
 
-        super.mouseReleased(mouseX, mouseY, state);
+    private void fuse(HUDDesignerElement element) {
+        HUDDesignerElement island = find("Island");
+        if (island == null || !island.module.isEnabled()) return;
+        float[] p = element.origin(), b = element.bounds(0), target = island.bounds(previewState);
+        Fusion f = new Fusion();
+        f.element = element; f.x = p[0]; f.y = p[1];
+        f.bounds = new float[]{b[0] - p[0], b[1] - p[1], b[2], b[3]};
+        f.targetX = target[0] + target[2] / 2; f.targetY = target[1] + target[3] / 2;
+        fusions.add(f);
+        Leader.hudElementManager.merge(element.name, "Island");
+        fusionPulse = 1;
+    }
+
+    void unmerge(String name) {
+        Leader.hudElementManager.unmerge(name);
+        HUDDesignerElement element = find(name);
+        if (element != null) keepOnScreen(element);
+        Leader.hudElementManager.save();
+    }
+
+    private void openSettings(HUDDesignerElement element) {
+        if (element.name.equals("ScaffoldCounter") && !counterEditable()) return;
+        selected = element;
+        settings = new HUDDesignerSettings(this, element);
+    }
+
+    void closeSettings() {
+        if (settings != null) settings.release();
+        settings = null;
+        selected = null;
+        Leader.hudElementManager.save();
+    }
+
+    int islandState() { return previewState; }
+    Color accent() { return accent; }
+    void setIslandState(int state) { previewState = state; }
+
+    void alignElement(HUDDesignerElement element, int axis) {
+        float[] b = element.bounds(element.name.equals("Island") ? previewState : 0), p = element.origin();
+        if (axis == 0) p[0] += (width - b[2]) / 2 - b[0];
+        else p[1] += (height - b[3]) / 2 - b[1];
+        element.setOrigin(p[0], p[1]);
+    }
+
+    void nudge(HUDDesignerElement element, float x, float y) {
+        float[] p = element.origin();
+        element.setOrigin(p[0] + x, p[1] + y);
+        keepOnScreen(element);
+    }
+
+    void bottomRight(HUDDesignerElement element) {
+        float[] b = element.bounds(element.name.equals("Island") ? previewState : 0);
+        float[] p = element.origin();
+        element.setOrigin(p[0] + width - b[0] - b[2], p[1] + height - b[1] - b[3]);
+    }
+
+    void resetPosition(HUDDesignerElement element) {
+        float[] p = element.defaults();
+        Leader.hudElementManager.set(element.name, p[0], p[1]);
+        keepOnScreen(element);
+    }
+
+    void keepOnScreen(HUDDesignerElement element) {
+        float[] b = element.bounds(element.name.equals("Island") ? previewState : 0), p = element.origin();
+        float x = Math.max(0, Math.min(Math.max(0, width - b[2]), b[0]));
+        float y = Math.max(0, Math.min(Math.max(0, height - b[3]), b[1]));
+        element.setOrigin(p[0] + x - b[0], p[1] + y - b[1]);
+    }
+
+    @Override
+    public void handleMouseInput() throws IOException {
+        super.handleMouseInput();
+        int wheel = Mouse.getEventDWheel();
+        if (settings != null && wheel != 0) {
+            int mx = Mouse.getEventX() * width / mc.displayWidth;
+            int my = height - Mouse.getEventY() * height / mc.displayHeight - 1;
+            if (settings.contains(mx, my)) settings.wheel(wheel);
+        }
     }
 
     @Override
     protected void keyTyped(char typedChar, int keyCode) throws IOException {
-        if (keyCode == Keyboard.KEY_ESCAPE && settingsModule != null) {
-            settingsModule = null;
-            activeSlider = -1;
-            return;
-        }
+        if (keyCode == Keyboard.KEY_ESCAPE && settings != null) { closeSettings(); return; }
+        if (keyCode == Keyboard.KEY_G && settings == null) { snap = !snap; return; }
+        if (keyCode == Keyboard.KEY_ESCAPE && parent != null) { mc.displayGuiScreen(parent); return; }
         super.keyTyped(typedChar, keyCode);
     }
 
     @Override
-    public void updateScreen() {
-        int mouseX = Mouse.getX() * this.width / mc.displayWidth;
-        int mouseY = this.height - Mouse.getY() * this.height / mc.displayHeight - 1;
-
-        if (activeSlider >= 0) {
-            applySlider(mouseX);
-            return;
-        }
-
-        if (draggingModule != null) {
-            if (Math.abs(mouseX - dragStartMouseX) > 2.0F || Math.abs(mouseY - dragStartMouseY) > 2.0F) {
-                dragMoved = true;
-            }
-
-            Leader.hudElementManager.set(draggingModule, mouseX - dragOffsetX, mouseY - dragOffsetY);
-        }
+    public void onGuiClosed() {
+        if (settings != null) settings.release();
+        if (pulledModule != null && dragging != null) dragging.setOrigin(pulledX, pulledY);
+        dragging = null;
+        Leader.hudElementManager.save();
+        new Config(Config.lastConfig == null ? "default" : Config.lastConfig, false).save();
     }
 
     @Override
-    public boolean doesGuiPauseGame() {
-        return false;
-    }
+    public boolean doesGuiPauseGame() { return false; }
 }
