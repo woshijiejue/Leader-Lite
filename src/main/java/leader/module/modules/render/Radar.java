@@ -22,9 +22,6 @@ import java.util.stream.Collectors;
 public class Radar extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     public final ModeProperty colorMode = new ModeProperty("color", 0, new String[]{"DEFAULT", "TEAMS", "HUD"});
-    public final IntProperty position = new IntProperty("position", 0, 0, 4);
-    public final IntProperty offsetX = new IntProperty("offset-x", 60, 0, 1000, () -> position.getValue() != 4);
-    public final IntProperty offsetY = new IntProperty("offset-y", 60, 0, 1000, () -> position.getValue() != 4);
     public final IntProperty radarRadius = new IntProperty("radar-radius", 55, 10, 200);
     public final FloatProperty dotRadius = new FloatProperty("dot-radius", 1.5F, 0.1F, 5.0F);
     public final BooleanProperty showPlayers = new BooleanProperty("players", true);
@@ -82,19 +79,13 @@ public class Radar extends Module {
 
     @EventTarget(Priority.LOWEST)
     public void onRender(Render2DEvent event) {
-        if (!this.isEnabled()) return;
+        if (!this.isEnabled() || Leader.hudElementManager.isSuppressed("Radar")) return;
 
         ScaledResolution sr = new ScaledResolution(mc);
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
 
-        double centerX, centerY;
-        if (position.getValue() == 4) {
-            centerX = sr.getScaledWidth() / 2.0F;
-            centerY = sr.getScaledHeight() / 2.0F;
-        } else {
-            centerX = (position.getValue() & 0x1) == 0x1 ? Math.max(sr.getScaledWidth() - offsetX.getValue(), 0) : Math.min(offsetX.getValue(), sr.getScaledWidth());
-            centerY = (position.getValue() & 0x2) == 0x2 ? Math.max(sr.getScaledHeight() - offsetY.getValue(), 0) : Math.min(offsetY.getValue(), sr.getScaledHeight());
-        }
+        double centerX = Leader.hudElementManager.x("Radar", 60.0F, 60.0F);
+        double centerY = Leader.hudElementManager.y("Radar", 60.0F, 60.0F);
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(hud.scale.getValue(), hud.scale.getValue(), 1.0f);

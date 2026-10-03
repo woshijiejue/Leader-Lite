@@ -26,6 +26,7 @@ import leader.module.Module;
 import leader.property.properties.BooleanProperty;
 import leader.property.properties.FloatProperty;
 import leader.property.properties.IntProperty;
+import leader.property.properties.ModeProperty;
 import leader.util.MoveUtil;
 import leader.util.PacketUtil;
 import leader.util.RotationUtil;
@@ -38,6 +39,8 @@ public class AutoProjectiles extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     public final FloatProperty range = new FloatProperty("MaxRange", 8.0F, 3.0F, 20.0F);
     public final FloatProperty minRange = new FloatProperty("MinRange", 5.0F, 3.0F, 20.0F);
+    public final ModeProperty targetMode = new ModeProperty("Target", 0, new String[]{"Nearest", "Priority", "KillAura", "Health", "FOV"});
+    public final BooleanProperty kaFallback = new BooleanProperty("KillAura Fallback", true, () -> this.targetMode.getValue() == 2);
 
     public final BooleanProperty smartDelay = new BooleanProperty("Smart Delay", false);
     public final IntProperty throwDelay = new IntProperty("Throw Delay Ticks", 3, 1, 15, () -> !smartDelay.getValue());
@@ -88,6 +91,12 @@ public class AutoProjectiles extends Module {
     }
 
     private EntityLivingBase getTarget() {
+        if (this.targetMode.getValue() == 2) {
+            KillAura aura = (KillAura) Leader.moduleManager.modules.get(KillAura.class);
+            EntityLivingBase auraTarget = aura.isEnabled() ? aura.getTarget() : null;
+            if (auraTarget != null && this.isValidTarget(auraTarget)) return auraTarget;
+            if (!this.kaFallback.getValue()) return null;
+        }
         ArrayList<EntityLivingBase> targets = new ArrayList<>();
         for (Object obj : mc.theWorld.loadedEntityList) {
             if (obj instanceof EntityLivingBase) {
@@ -96,7 +105,21 @@ public class AutoProjectiles extends Module {
             }
         }
         if (targets.isEmpty()) return null;
-        targets.sort(Comparator.comparingDouble(RotationUtil::distanceToEntity));
+        if (this.targetMode.getValue() == 1 && targets.stream().anyMatch(e -> TeamUtil.isTarget((EntityPlayer) e))) {
+            targets.removeIf(e -> !TeamUtil.isTarget((EntityPlayer) e));
+        }
+        Comparator<EntityLivingBase> byDistance = Comparator.comparingDouble(RotationUtil::distanceToEntity);
+        switch (this.targetMode.getValue()) {
+            case 3:
+                targets.sort(Comparator.comparingDouble((EntityLivingBase e) -> TeamUtil.getHealthScore(e)).thenComparing(byDistance));
+                break;
+            case 4:
+                targets.sort(Comparator.comparingDouble((EntityLivingBase e) -> RotationUtil.angleToEntity(e)).thenComparing(byDistance));
+                break;
+            default:
+                targets.sort(byDistance);
+                break;
+        }
         return targets.get(0);
     }
 
@@ -104,7 +127,7 @@ public class AutoProjectiles extends Module {
         if (!smartDelay.getValue()) {
             return throwDelay.getValue();
         }
-        EntityLivingBase t = getTarget();
+        EntityLivingBase t = this.target != null ? this.target : getTarget();
         if (t == null) return throwDelay.getValue();
         if (mc.gameSettings.keyBindBack.isKeyDown()) return 1;
         double dist = RotationUtil.distanceToEntity(t);
@@ -141,6 +164,76 @@ public class AutoProjectiles extends Module {
         return -1;
     }
 
+    private Vec3 predictTargetPos(EntityLivingBase target, double flightTicks) {
+        double relVelX = (target.posX - target.prevPosX) - (mc.thePlayer.posX - mc.thePlayer.prevPosX);
+        double relVelZ = (target.posZ - target.prevPosZ) - (mc.thePlayer.posZ - mc.thePlayer.prevPosZ);
+        double predictedX = target.posX + relVelX * flightTicks;
+        double predictedZ = target.posZ + relVelZ * flightTicks;
+        double predictedY = target.posY + (target.posY - target.prevPosY) * Math.min(flightTicks, 2.0);
+        return new Vec3(predictedX, predictedY, predictedZ);
+    }
+
+    private float yawTo(Vec3 aimPoint) {
+        double diffX = aimPoint.xCoord - mc.thePlayer.posX;
+        double diffZ = aimPoint.zCoord - mc.thePlayer.posZ;
+        return (float) (Math.atan2(diffZ, diffX) * 180.0 / Math.PI) - 90.0F;
+    }
+
+    private double horizontalDistanceTo(Vec3 aimPoint) {
+        double diffX = aimPoint.xCoord - mc.thePlayer.posX;
+        double diffZ = aimPoint.zCoord - mc.thePlayer.posZ;
+        return Math.sqrt(diffX * diffX + diffZ * diffZ);
+    }
+
+    private double estimateFlightTicks(double horizontalDist, float pitch) {
+        double vH = Math.cos(Math.toRadians(pitch)) * 1.5;
+        double travelled = 0.0;
+        for (int t = 1; t <= 100; t++) {
+            travelled += vH;
+            vH *= 0.99;
+            if (travelled >= horizontalDist) return t;
+        }
+        return 100.0;
+    }
+
+    private double arcClosestDistance(Vec3 aimPoint, float yaw, float pitch) {
+        double vX = -Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * 1.5;
+        double vY = -Math.sin(Math.toRadians(pitch)) * 1.5;
+        double vZ = Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * 1.5;
+        double x = mc.thePlayer.posX - Math.cos(Math.toRadians(yaw)) * 0.16;
+        double y = mc.thePlayer.posY + mc.thePlayer.getEyeHeight() - 0.1;
+        double z = mc.thePlayer.posZ - Math.sin(Math.toRadians(yaw)) * 0.16;
+        double best = Double.MAX_VALUE;
+        for (int i = 0; i < 100; i++) {
+            x += vX;
+            y += vY;
+            z += vZ;
+            vX *= 0.99;
+            vY *= 0.99;
+            vZ *= 0.99;
+            vY -= 0.03;
+            double dx = x - aimPoint.xCoord;
+            double dy = y - aimPoint.yCoord;
+            double dz = z - aimPoint.zCoord;
+            double distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq < best) best = distSq;
+        }
+        return Math.sqrt(best);
+    }
+
+    private float searchPitch(Vec3 aimPoint, float yaw) {
+        float bestPitch = 0.0F;
+        double bestDist = Double.MAX_VALUE;
+        for (float pitch = -80.0F; pitch <= 80.0F; pitch += 0.5F) {
+            double dist = this.arcClosestDistance(aimPoint, yaw, pitch);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestPitch = pitch;
+            }
+        }
+        return bestPitch;
+    }
+
     private float[] calculateSimulatedRotations(EntityLivingBase target) {
         double ping = 0;
         try {
@@ -150,58 +243,25 @@ public class AutoProjectiles extends Module {
         double diffX = target.posX - mc.thePlayer.posX;
         double diffZ = target.posZ - mc.thePlayer.posZ;
         double horizontalDist = Math.sqrt(diffX * diffX + diffZ * diffZ);
-        double flightTicks = horizontalDist / 1.5;
-        double totalPredictTicks = flightTicks + (ping / 50.0) + 1.0;
-        Vec3 predictedPos;
-        if (this.prediction.getValue()) {
-            double predictedX = target.posX + (target.posX - target.prevPosX) * totalPredictTicks;
-            double predictedZ = target.posZ + (target.posZ - target.prevPosZ) * totalPredictTicks;
-            double predictedY = target.posY + (target.posY - target.prevPosY) * Math.min(totalPredictTicks, 2.0);
-            predictedPos = new Vec3(predictedX, predictedY, predictedZ);
-        } else {
-            predictedPos = new Vec3(target.posX, target.posY, target.posZ);
-        }
-        double pDiffX = predictedPos.xCoord - mc.thePlayer.posX;
-        double pDiffZ = predictedPos.zCoord - mc.thePlayer.posZ;
-        double pDiffY = (predictedPos.yCoord + target.getEyeHeight() * 0.7) - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
-        float yaw = (float) (Math.atan2(pDiffZ, pDiffX) * 180.0 / Math.PI) - 90.0F;
-        double pHorizontalDist = Math.sqrt(pDiffX * pDiffX + pDiffZ * pDiffZ);
-        float bestPitch = 0;
-        double minDiff = Double.MAX_VALUE;
-        boolean found = false;
-        for (float pitch = -90; pitch < 90; pitch += 0.5F) {
-            double simulatedY = simulateProjectile(pHorizontalDist, pitch);
-            double currentDiff = Math.abs(simulatedY - pDiffY);
-            if (currentDiff < minDiff) {
-                minDiff = currentDiff;
-                bestPitch = pitch;
-                found = true;
-            }
-        }
-        if (!found) return null;
-        MovingObjectPosition mop = mc.theWorld.rayTraceBlocks(
-                new Vec3(mc.thePlayer.posX, mc.thePlayer.posY + mc.thePlayer.getEyeHeight(), mc.thePlayer.posZ),
-                new Vec3(predictedPos.xCoord, predictedPos.yCoord + target.getEyeHeight(), predictedPos.zCoord),
-                false, true, false);
-        if (mop != null && mop.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) return null;
-        return new float[]{yaw, bestPitch};
-    }
 
-    private double simulateProjectile(double dist, float pitch) {
-        double v = 1.5;
-        double vY = -Math.sin(Math.toRadians(pitch)) * v;
-        double vH = Math.cos(Math.toRadians(pitch)) * v;
-        double curH = 0;
-        double curY = 0;
-        for (int i = 0; i < 100; i++) {
-            curH += vH;
-            curY += vY;
-            vH *= 0.99;
-            vY *= 0.99;
-            vY -= 0.03;
-            if (curH >= dist) return curY;
+        Vec3 predicted;
+        if (this.prediction.getValue()) {
+            predicted = this.predictTargetPos(target, horizontalDist / 1.5 + ping / 50.0 + 1.0);
+            float yaw = this.yawTo(predicted);
+            float pitch = this.searchPitch(new Vec3(predicted.xCoord,
+                    predicted.yCoord + target.getEyeHeight() * 0.7, predicted.zCoord), yaw);
+            double flightTicks = this.estimateFlightTicks(this.horizontalDistanceTo(predicted), pitch)
+                    + ping / 50.0 + 1.0;
+            predicted = this.predictTargetPos(target, flightTicks);
+        } else {
+            predicted = new Vec3(target.posX, target.posY, target.posZ);
         }
-        return curY;
+
+        Vec3 aimPoint = new Vec3(predicted.xCoord,
+                predicted.yCoord + target.getEyeHeight() * 0.7, predicted.zCoord);
+        float yaw = this.yawTo(aimPoint);
+        float pitch = this.searchPitch(aimPoint, yaw);
+        return new float[]{yaw, pitch};
     }
 
     private void switchToProjectile() {
@@ -274,19 +334,14 @@ public class AutoProjectiles extends Module {
                 this.switchToProjectile();
                 this.throwState = 2;
                 break;
-
             case 2:
                 float[] rots = calculateSimulatedRotations(this.target);
-                if (rots != null) {
-                    if (this.useRotations.getValue()) {
-                        event.setRotation(rots[0], rots[1], 2);
-                        event.setPervRotation(rots[0], 2);
-                    }
-                    this.hasRotated = this.useRotations.getValue();
-                    this.throwState = 3;
-                } else {
-                    this.throwState = 4;
+                if (this.useRotations.getValue()) {
+                    event.setRotation(rots[0], rots[1], 2);
+                    event.setPervRotation(rots[0], 2);
                 }
+                this.hasRotated = this.useRotations.getValue();
+                this.throwState = 3;
                 break;
 
             case 3:

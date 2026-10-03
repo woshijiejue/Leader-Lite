@@ -36,10 +36,10 @@ public class BindComponent implements Component {
         int h = getHeight() - 2;
         int color = isBinding ? new Color(70, 132, 220, 210).getRGB() : new Color(255, 255, 255, 10).getRGB();
 
-        RenderUtil.drawRoundedRectWithGl(x, y + 1, x + w, y + h, 4, color);
+        RenderUtil.drawRoundedRectWithGl(x, y + 1, x + w, y + h, 6, color);
         String displayText = this.isBinding ? "Press a key" : GuiText.trimLabelValue("Bind · ",
                 KeyBindUtil.getKeyName(this.parentModule.mod.getKey()), Math.max(0, w - 4));
-        GuiText.draw(displayText, x + 2, y + (getHeight() - GuiText.height()) / 2,
+        GuiText.drawShadow(displayText, x + 2, y + (getHeight() - GuiText.height()) / 2,
                 isBinding ? 0xFFFFFFFF : new Color(196, 208, 228).getRGB());
     }
 

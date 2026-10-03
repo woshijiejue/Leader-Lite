@@ -6,11 +6,14 @@ import leader.event.EventManager;
 import leader.events.PickEvent;
 import leader.events.RaytraceEvent;
 import leader.events.Render3DEvent;
+import leader.management.RotationState;
 import leader.module.modules.combat.KillAura;
 import leader.module.modules.misc.AntiDebuff;
 import leader.module.modules.player.AutoBlockIn;
 import leader.module.modules.player.GhostHand;
 import leader.module.modules.player.Scaffold;
+import leader.module.modules.render.EnvModifier;
+import leader.module.modules.render.FreeLook;
 import leader.module.modules.render.NoHurtCam;
 import leader.module.modules.render.ViewClip;
 import net.minecraft.block.Block;
@@ -43,10 +46,28 @@ public abstract class MixinEntityRenderer {
     private Box<ItemStack> using = null;
     @Unique
     private Box<Integer> useCount = null;
+    @Unique
+    private boolean silentMouseOver = false;
+    @Unique
+    private float silentYaw;
+    @Unique
+    private float silentPitch;
+    @Unique
+    private float silentPrevYaw;
+    @Unique
+    private float silentPrevPitch;
     @Shadow
     private Minecraft mc;
     @Shadow
     private float thirdPersonDistance;
+
+    @Inject(
+            method = {"updateCameraAndRender"},
+            at = {@At("HEAD")}
+    )
+    private void freelookMouse(float float1, long long2, CallbackInfo callbackInfo) {
+        FreeLook.applyMouse();
+    }
 
     @Inject(
             method = {"updateCameraAndRender"},
@@ -76,6 +97,14 @@ public abstract class MixinEntityRenderer {
             method = {"updateCameraAndRender"},
             at = {@At("RETURN")}
     )
+    private void freelookCapture(float float1, long long2, CallbackInfo callbackInfo) {
+        FreeLook.captureMouse();
+    }
+
+    @Inject(
+            method = {"updateCameraAndRender"},
+            at = {@At("RETURN")}
+    )
     private void postUpdateCameraAndRender(float float1, long long2, CallbackInfo callbackInfo) {
         if (this.slot != null) {
             this.mc.thePlayer.inventory.currentItem = this.slot.value;
@@ -89,6 +118,33 @@ public abstract class MixinEntityRenderer {
             ((IAccessorEntityPlayer) this.mc.thePlayer).setItemInUseCount(this.useCount.value);
             this.useCount = null;
         }
+    }
+
+    @Inject(
+            method = {"updateCameraAndRender"},
+            at = {@At("HEAD")}
+    )
+    private void applyEnvironment(float float1, long long2, CallbackInfo callbackInfo) {
+        EnvModifier envModifier = this.envModifier();
+        if (envModifier != null && envModifier.isEnabled()) {
+            envModifier.applyWorldState();
+        }
+    }
+
+    @Inject(
+            method = {"updateCameraAndRender"},
+            at = {@At("RETURN")}
+    )
+    private void restoreEnvironment(float float1, long long2, CallbackInfo callbackInfo) {
+        EnvModifier envModifier = this.envModifier();
+        if (envModifier != null) {
+            envModifier.restoreWorldState();
+        }
+    }
+
+    @Unique
+    private EnvModifier envModifier() {
+        return Leader.moduleManager == null ? null : (EnvModifier) Leader.moduleManager.modules.get(EnvModifier.class);
     }
 
     @Inject(
@@ -165,6 +221,40 @@ public abstract class MixinEntityRenderer {
         PickEvent event = new PickEvent(range);
         EventManager.call(event);
         return event.getRange();
+    }
+
+    @Inject(
+            method = {"getMouseOver"},
+            at = {@At("HEAD")}
+    )
+    private void preGetMouseOver(float partialTicks, CallbackInfo callbackInfo) {
+        if (this.mc.thePlayer != null && RotationState.isActived()) {
+            this.silentYaw = this.mc.thePlayer.rotationYaw;
+            this.silentPitch = this.mc.thePlayer.rotationPitch;
+            this.silentPrevYaw = this.mc.thePlayer.prevRotationYaw;
+            this.silentPrevPitch = this.mc.thePlayer.prevRotationPitch;
+            this.silentMouseOver = true;
+            float yaw = RotationState.getRotationYawHead();
+            float pitch = RotationState.getRotationPitch();
+            this.mc.thePlayer.rotationYaw = yaw;
+            this.mc.thePlayer.rotationPitch = pitch;
+            this.mc.thePlayer.prevRotationYaw = yaw;
+            this.mc.thePlayer.prevRotationPitch = pitch;
+        }
+    }
+
+    @Inject(
+            method = {"getMouseOver"},
+            at = {@At("RETURN")}
+    )
+    private void postGetMouseOver(float partialTicks, CallbackInfo callbackInfo) {
+        if (this.silentMouseOver && this.mc.thePlayer != null) {
+            this.mc.thePlayer.rotationYaw = this.silentYaw;
+            this.mc.thePlayer.rotationPitch = this.silentPitch;
+            this.mc.thePlayer.prevRotationYaw = this.silentPrevYaw;
+            this.mc.thePlayer.prevRotationPitch = this.silentPrevPitch;
+            this.silentMouseOver = false;
+        }
     }
 
     @ModifyVariable(

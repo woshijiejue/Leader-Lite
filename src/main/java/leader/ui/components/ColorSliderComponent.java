@@ -36,7 +36,7 @@ public class ColorSliderComponent implements Component {
         int colorPreviewSize = 7;
         int colorPreviewX = x + width - colorPreviewSize;
         int textY = y + (Math.max(10, GuiText.height() + 3) - GuiText.height()) / 2;
-        GuiText.draw(GuiText.trimLabelValue(property.getName().replace("-", " ") + ": ",
+        GuiText.drawShadow(GuiText.trimLabelValue(property.getName().replace("-", " ") + ": ",
                         ChatColors.formatColor(property.formatValue()),
                         colorPreviewX - x - 4),
                 x, textY, new Color(215, 218, 225).getRGB());

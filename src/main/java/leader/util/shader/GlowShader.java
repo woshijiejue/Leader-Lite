@@ -31,10 +31,14 @@ public class GlowShader extends Shader {
         GL20.glUseProgram(this.programId);
         int texLoc = this.getUniformLocationCached("texture");
         GL20.glUniform1i(texLoc, 0);
-        GL20.glUniform4f(texLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+        int colorLoc = this.getUniformLocationCached("color");
+        GL20.glUniform4f(colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     public void W(Color color) {
+        if (!this.isUsable()) {
+            return;
+        }
         GL20.glUniform4f(
                 this.getUniformLocationCached("color"),
                 (float) color.getRed() / 255.0F,

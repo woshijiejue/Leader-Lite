@@ -7,6 +7,7 @@ import me.ksyz.accountmanager.auth.SessionManager;
 import me.ksyz.accountmanager.utils.Notification;
 import me.ksyz.accountmanager.utils.TextFormatting;
 import net.minecraft.client.gui.*;
+import net.minecraft.util.Session;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.lwjgl.input.Keyboard;
 
@@ -23,6 +24,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * This modified version is licensed under the GNU GPL v3.
  */
 public class GuiAddToken extends GuiScreen {
+    private static final String CLIENT_ID = "00000000402b5328";
+    private static final String SCOPE = "service::user.auth.xboxlive.com::MBI_SSL";
     private final GuiScreen previousScreen;
     private final String state;
 
@@ -137,16 +140,25 @@ public class GuiAddToken extends GuiScreen {
                     }
                     AtomicReference<String> refreshToken = new AtomicReference<>("");
                     AtomicReference<String> accessToken = new AtomicReference<>("");
-                    MicrosoftAuth.CLIENT_ID = "00000000402b5328";
-                    MicrosoftAuth.SCOPE = "service::user.auth.xboxlive.com::MBI_SSL";
-                    task = MicrosoftAuth.login(tokenField.getText(), executor)
-                            .handle((session, error) -> session != null)
+                    String input = tokenField.getText().trim();
+                    status = "&7Checking token...&r";
+                    cause = null;
+                    MicrosoftAuth.CLIENT_ID = CLIENT_ID;
+                    MicrosoftAuth.SCOPE = SCOPE;
+                    task = MicrosoftAuth.login(input, executor)
+                            .handle((session, error) -> {
+                                if (session != null) {
+                                    addAccount(session, "", input);
+                                    return true;
+                                }
+                                return false;
+                            })
                             .thenComposeAsync(completed -> {
                                 if (completed) {
                                     throw new NoSuchElementException();
                                 }
                                 status = "&7Refreshing Microsoft access tokens...&r";
-                                return MicrosoftAuth.refreshMSAccessTokens(tokenField.getText(), executor);
+                                return MicrosoftAuth.refreshMSAccessTokens(input, executor);
                             })
                             .thenComposeAsync(msAccessTokens -> {
                                 status = "&fAcquiring Xbox access token&r";
@@ -168,32 +180,36 @@ public class GuiAddToken extends GuiScreen {
                                 accessToken.set(mcToken);
                                 return MicrosoftAuth.login(mcToken, executor);
                             })
-                            .thenAccept(session -> {
-                                status = null;
-                                Account acc = new Account(
-                                        refreshToken.get(), accessToken.get(), session.getUsername(),"00000000402b5328","service::user.auth.xboxlive.com::MBI_SSL"
-                                );
-                                for (Account account : AccountManager.accounts) {
-                                    if (acc.getUsername().equals(account.getUsername())) {
-                                        acc.setUnban(account.getUnban());
-                                        break;
-                                    }
-                                }
-                                AccountManager.accounts.add(acc);
-                                AccountManager.save();
-                                SessionManager.set(session);
-                                success = true;
-                            })
+                            .thenAccept(session -> addAccount(session, refreshToken.get(), accessToken.get()))
                             .exceptionally(error -> {
+                                Throwable root = error.getCause() != null ? error.getCause() : error;
+                                if (root instanceof NoSuchElementException) {
+                                    task = null;
+                                    return null;
+                                }
                                 openButtonEnabled = false;
                                 status = String.format("&c%s&r", error.getMessage());
-                                cause = String.format("&c%s&r", error.getCause().getMessage());
-                                task.cancel(true);
+                                cause = root.getMessage() != null ? String.format("&c%s&r", root.getMessage()) : null;
                                 task = null;
                                 return null;
                             });
                 }
             }
         }
+    }
+
+    private void addAccount(Session session, String refresh, String access) {
+        status = null;
+        Account acc = new Account(refresh, access, session.getUsername(), CLIENT_ID, SCOPE);
+        for (Account account : AccountManager.accounts) {
+            if (acc.getUsername().equals(account.getUsername())) {
+                acc.setUnban(account.getUnban());
+                break;
+            }
+        }
+        AccountManager.accounts.add(acc);
+        AccountManager.save();
+        SessionManager.set(session);
+        success = true;
     }
 }

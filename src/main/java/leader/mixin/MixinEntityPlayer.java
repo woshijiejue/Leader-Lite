@@ -3,7 +3,6 @@ package leader.mixin;
 import leader.Leader;
 import leader.event.EventManager;
 import leader.events.HitSlowDownEvent;
-import leader.module.modules.combat.Velocity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -25,12 +24,6 @@ public abstract class MixinEntityPlayer extends MixinEntityLivingBase {
     private void setSprinting(EntityPlayer entityPlayer, boolean sprinting) {
         if (Leader.moduleManager == null) {
             entityPlayer.setSprinting(sprinting);
-            return;
-        }
-        if (Velocity.blinkActive) {
-            // Undo the vanilla 0.6 slow-down that was applied right before this call.
-            entityPlayer.motionX /= 0.6;
-            entityPlayer.motionZ /= 0.6;
             return;
         }
         HitSlowDownEvent event = (HitSlowDownEvent) EventManager.call(new HitSlowDownEvent());

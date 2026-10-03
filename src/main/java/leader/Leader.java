@@ -40,6 +40,7 @@ public class Leader {
     public static PropertyManager propertyManager;
     public static ModuleManager moduleManager;
     public static CommandManager commandManager;
+    public static HUDElementManager hudElementManager;
     public Leader() {
         this.init();
     }
@@ -56,6 +57,7 @@ public class Leader {
         propertyManager = new PropertyManager();
         moduleManager = new ModuleManager();
         commandManager = new CommandManager();
+        hudElementManager = new HUDElementManager();
         EventManager.register(rotationManager);
         EventManager.register(floatManager);
         EventManager.register(blinkManager);
@@ -92,6 +94,7 @@ public class Leader {
         moduleManager.modules.put(Eagle.class, new Eagle());
         moduleManager.modules.put(ESP.class, new ESP());
         moduleManager.modules.put(FastPlace.class, new FastPlace());
+        moduleManager.modules.put(FreeLook.class, new FreeLook());
         moduleManager.modules.put(Stuck.class, new Stuck());
         moduleManager.modules.put(Fly.class, new Fly());
         moduleManager.modules.put(FontManager.class, new FontManager());
@@ -116,10 +119,12 @@ public class Leader {
         moduleManager.modules.put(LightningTracker.class, new LightningTracker());
         moduleManager.modules.put(LongJump.class, new LongJump());
         moduleManager.modules.put(MCF.class, new MCF());
+        moduleManager.modules.put(EnvModifier.class, new EnvModifier());
         moduleManager.modules.put(NameTags.class, new NameTags());
         moduleManager.modules.put(Notification.class, new Notification());
         moduleManager.modules.put(Watermark.class, new Watermark());
         moduleManager.modules.put(Potion.class, new Potion());
+        moduleManager.modules.put(Island.class, new Island());
         moduleManager.modules.put(NickHider.class, new NickHider());
         moduleManager.modules.put(NoFall.class, new NoFall());
         moduleManager.modules.put(NoHitDelay.class, new NoHitDelay());
@@ -140,6 +145,7 @@ public class Leader {
         moduleManager.modules.put(SmartAttack.class, new SmartAttack());
         moduleManager.modules.put(AutoWeapon.class, new AutoWeapon());
         moduleManager.modules.put(TargetHUD.class, new TargetHUD());
+        moduleManager.modules.put(Shaders.class, new Shaders());
         moduleManager.modules.put(TargetESP.class, new TargetESP());
         moduleManager.modules.put(TargetStrafe.class, new TargetStrafe());
         moduleManager.modules.put(Tracers.class, new Tracers());
@@ -192,6 +198,7 @@ public class Leader {
             targetManager.load();
         }
         Runtime.getRuntime().addShutdownHook(new Thread(config::save));
+        Runtime.getRuntime().addShutdownHook(new Thread(hudElementManager::save));
 
         try (InputStreamReader reader = new InputStreamReader(Objects.requireNonNull(Leader.class.getResourceAsStream("/version.json")), StandardCharsets.UTF_8)) {
             JsonObject modInfo = new JsonParser().parse(reader).getAsJsonObject();

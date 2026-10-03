@@ -32,8 +32,8 @@ public class CheckBoxComponent implements Component {
         int rowY = module.category.getY() + offsetY;
         int rowW = module.category.getWidth() - 16;
         int textY = rowY + (getHeight() - GuiText.height()) / 2;
-        RenderUtil.drawRoundedRectWithGl(rowX, rowY + 1, rowX + rowW, rowY + getHeight() - 1, 4, new Color(255, 255, 255, 14).getRGB());
-        GuiText.draw(GuiText.trimLabelValue(this.property.getName().replace("-", " ") + ": ",
+        RenderUtil.drawRoundedRectWithGl(rowX, rowY + 1, rowX + rowW, rowY + getHeight() - 1, 6, new Color(255, 255, 255, 14).getRGB());
+        GuiText.drawShadow(GuiText.trimLabelValue(this.property.getName().replace("-", " ") + ": ",
                         ChatColors.formatColor(this.property.formatValue()), rowW - 4),
                 rowX + 2, textY, new Color(215, 218, 225).getRGB());
     }
