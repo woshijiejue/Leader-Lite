@@ -30,6 +30,22 @@ import java.util.stream.Collectors;
 public class HUD extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private List<Module> activeModules = new ArrayList<>();
+    private final List<HUDRow> cachedRows = new ArrayList<>();
+    private boolean cachedRowsReady;
+
+    private static final class HUDRow {
+        final Module module;
+        final String name;
+        final String[] suffix;
+        final int width, nameWidth;
+        final int[] suffixWidths;
+        HUDRow(Module module, String name, String[] suffix, int width) {
+            this.module = module; this.name = name; this.suffix = suffix; this.width = width;
+            nameWidth = FontManager.getStringWidth(name);
+            suffixWidths = new int[suffix.length];
+            for (int i = 0; i < suffix.length; i++) suffixWidths[i] = FontManager.getStringWidth(suffix[i]);
+        }
+    }
     public final ModeProperty colorMode = new ModeProperty(
             "color", 3, new String[]{"RAINBOW", "CHROMA", "ASTOLFO", "CUSTOM1", "CUSTOM12", "CUSTOM123"}
     );
@@ -65,10 +81,10 @@ public class HUD extends Module {
     }
 
     private String[] getModuleSuffix(Module module) {
-        String[] moduleSuffix = module.getSuffix();
+        String[] moduleSuffix = module.getSuffix().clone();
         if (this.lowerCase.getValue()) {
             for (int i = 0; i < moduleSuffix.length; i++) {
-                moduleSuffix[i] = moduleSuffix[i].toLowerCase();
+                moduleSuffix[i] = moduleSuffix[i].toLowerCase(Locale.ROOT);
             }
         }
         return moduleSuffix;
@@ -155,9 +171,31 @@ public class HUD extends Module {
     @EventTarget
     public void onTick(TickEvent event) {
         if (this.isEnabled() && event.getType() == EventType.POST) {
-            this.activeModules = Leader.moduleManager.modules.values().stream().filter(module -> module.isEnabled() && !module.isHidden()).sorted(Comparator.comparingInt(this::getModuleWidth).reversed()).collect(Collectors.<Module>toList());
+            if (BetterFPS.optimizedHUD()) refreshRows();
+            else {
+                cachedRowsReady = false;
+                this.activeModules = Leader.moduleManager.modules.values().stream().filter(module -> module.isEnabled() && !module.isHidden())
+                        .sorted(Comparator.comparingInt(this::getModuleWidth).reversed()).collect(Collectors.<Module>toList());
+            }
         }
     }
+
+    private void refreshRows() {
+        cachedRows.clear();
+        for (Module module : Leader.moduleManager.modules.values()) {
+            if (!module.isEnabled() || module.isHidden()) continue;
+            String name = getModuleName(module);
+            String[] suffix = suffixes.getValue() ? getModuleSuffix(module) : new String[0];
+            cachedRows.add(new HUDRow(module, name, suffix, calculateStringWidth(name, suffix)));
+        }
+        cachedRows.sort(Comparator.comparingInt((HUDRow row) -> row.width).reversed());
+        activeModules = new ArrayList<>(cachedRows.size());
+        for (HUDRow row : cachedRows) activeModules.add(row.module);
+        cachedRowsReady = true;
+    }
+
+    @Override
+    public void verifyValue(String name) { cachedRowsReady = false; }
 
     private void drawGlowOutline(float x1, float y1, float x2, float y2, int color, int passes, float step,
                                  boolean top, boolean bottom, boolean left, boolean right) {
@@ -222,6 +260,8 @@ public class HUD extends Module {
             }
         }
         if (this.isEnabled() && !mc.gameSettings.showDebugInfo && !Leader.hudElementManager.isSuppressed("HUD")) {
+            boolean cached = BetterFPS.optimizedHUD();
+            if (cached && !cachedRowsReady) refreshRows();
             float height = (float) FontManager.getFontHeight() - 1.0F;
             ScaledResolution sr = new ScaledResolution(mc);
             boolean rightAlign = this.align.getValue() == 1;
@@ -231,17 +271,11 @@ public class HUD extends Module {
             GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
             long l = System.currentTimeMillis();
             long offset = 0L;
-            float listMinX = Float.MAX_VALUE, listMinY = Float.MAX_VALUE;
-            float listMaxX = Float.MIN_VALUE, listMaxY = Float.MIN_VALUE;
-            int count = this.activeModules.size();
-            float[] rowX1 = new float[count];
-            float[] rowX2 = new float[count];
-            float[] rowY1 = new float[count];
-            float[] rowY2 = new float[count];
             for (Module module : this.activeModules) {
-                String moduleName = this.getModuleName(module);
-                String[] moduleSuffix = this.getModuleSuffix(module);
-                float totalWidth = (float) (this.calculateStringWidth(moduleName, moduleSuffix) - (this.shadow.getValue() ? 0 : 1));
+                HUDRow row = cached ? cachedRows.get((int) offset) : null;
+                String moduleName = cached ? row.name : this.getModuleName(module);
+                String[] moduleSuffix = cached ? row.suffix : this.getModuleSuffix(module);
+                float totalWidth = (float) ((cached ? row.width : this.calculateStringWidth(moduleName, moduleSuffix)) - (this.shadow.getValue() ? 0 : 1));
                 Color themeColor = this.getColor(l, offset);
                 int color = themeColor.getRGB();
                 float sx = x / this.scale.getValue();
@@ -259,14 +293,6 @@ public class HUD extends Module {
                 float bgY1 = sy - this.rowSpacing.getValue() - (offset == 0L ? 1.0F : 0.0F);
                 float bgY2 = sy + height + this.rowSpacing.getValue() + (this.shadow.getValue() ? 1.0F : 0.0F);
                 float textY = sy;
-                listMinX = Math.min(listMinX, bgX1);
-                listMinY = Math.min(listMinY, bgY1);
-                listMaxX = Math.max(listMaxX, bgX2);
-                listMaxY = Math.max(listMaxY, bgY2);
-                rowX1[(int)offset] = bgX1;
-                rowX2[(int)offset] = bgX2;
-                rowY1[(int)offset] = bgY1;
-                rowY2[(int)offset] = bgY2;
                 boolean hasBg = this.background.getValue() > 0;
                 boolean useThemeBg = this.bgColor.getValue();
                 int bgAlphaColor;
@@ -299,7 +325,7 @@ public class HUD extends Module {
                     boolean outerLeft = false;
                     RenderUtil.enableRenderState();
                     drawGlowOutline(
-                            bgX1, bgY1, bgX2, bgY2, glowColor, 6, 0.5F,
+                            bgX1, bgY1, bgX2, bgY2, glowColor, BetterFPS.glowPasses(6), 0.5F,
                             firstRow, lastRow, outerLeft, !outerLeft
                     );
                     RenderUtil.disableRenderState();
@@ -343,7 +369,7 @@ public class HUD extends Module {
                 GlStateManager.disableDepth();
 
                 if (this.glow.getValue()) {
-                    drawGlowText(moduleName, textX, textY, glowColor, 4, 0.65F);
+                    drawGlowText(moduleName, textX, textY, glowColor, BetterFPS.glowPasses(4), 0.65F);
                 }
                 if (this.shadow.getValue()) {
                     FontManager.drawStringWithShadow(moduleName, textX, textY, color);
@@ -357,10 +383,11 @@ public class HUD extends Module {
                             );
                 }
                 if (this.suffixes.getValue() && moduleSuffix.length > 0) {
-                    float suffixX = (float) FontManager.getStringWidth(moduleName) + 3.0F;
+                    float suffixX = (cached ? row.nameWidth : FontManager.getStringWidth(moduleName)) + 3.0F;
+                    int suffixIndex = 0;
                     for (String string : moduleSuffix) {
                         if (this.glow.getValue()) {
-                            drawGlowText(string, textX + suffixX, textY, ChatColors.GRAY.toAwtColor(), 2, 0.35F);
+                            drawGlowText(string, textX + suffixX, textY, ChatColors.GRAY.toAwtColor(), BetterFPS.glowPasses(2), 0.35F);
                         }
                         if (this.shadow.getValue()) {
                             FontManager.drawStringWithShadow(
@@ -378,7 +405,8 @@ public class HUD extends Module {
                                             false
                                     );
                         }
-                        suffixX += (float) FontManager.getStringWidth(string) + (this.shadow.getValue() ? 3.0F : 2.0F);
+                        suffixX += (cached ? row.suffixWidths[suffixIndex] : FontManager.getStringWidth(string)) + (this.shadow.getValue() ? 3.0F : 2.0F);
+                        suffixIndex++;
                     }
                 }
                 y += (height + 2 * this.rowSpacing.getValue() + (this.shadow.getValue() ? 1.0F : 0.0F)) * this.scale.getValue();

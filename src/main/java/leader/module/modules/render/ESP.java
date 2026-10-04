@@ -108,7 +108,7 @@ public class ESP extends Module {
     @EventTarget(Priority.HIGH)
     public void onRender(Render2DEvent event) {
         if (this.isEnabled() && (this.mode.getValue() == 1 || this.mode.getValue() == 3 || this.healthBar.getValue() == 1)) {
-            List<EntityPlayer> renderedEntities = TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRenderPlayer((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList());
+            List<EntityPlayer> renderedEntities = TeamUtil.getRenderPlayersSorted().stream().filter(this::shouldRenderPlayer).collect(Collectors.toList());
             if (!renderedEntities.isEmpty()) {
                 if (this.mode.getValue() == 3) {
                     GlStateManager.pushMatrix();
@@ -187,7 +187,7 @@ public class ESP extends Module {
     public void onRender(Render3DEvent event) {
         if (this.isEnabled() && (this.mode.getValue() == 2 || this.mode.getValue() == 4 || this.mode.getValue() == 5 || this.healthBar.getValue() == 2)) {
             RenderUtil.enableRenderState();
-            for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRenderPlayer((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
+            for (EntityPlayer player : TeamUtil.getRenderPlayersSorted().stream().filter(this::shouldRenderPlayer).collect(Collectors.toList())) {
                 if (player.ignoreFrustumCheck || RenderUtil.isInViewFrustum(player.getEntityBoundingBox(), 0.1F)) {
                     if (this.mode.getValue() == 2) {
                         Color color = this.getEntityColor(player);

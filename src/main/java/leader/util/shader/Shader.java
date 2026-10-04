@@ -69,6 +69,14 @@ public abstract class Shader {
         this.uniformLocations.put(name, GL20.glGetUniformLocation(this.programId, name));
     }
 
+    protected int uniform(String name) {
+        Integer cached = uniformLocations.get(name);
+        if (cached != null) return cached;
+        int location = GL20.glGetUniformLocation(programId, name);
+        uniformLocations.put(name, location);
+        return location;
+    }
+
     public abstract void onLink();
 
     public abstract void onUse();

@@ -1,6 +1,7 @@
 package leader.util;
 
 import leader.module.modules.render.FontManager;
+import leader.module.modules.render.BetterFPS;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
@@ -80,6 +81,12 @@ public final class HUDPreviewUtil {
     }
 
     public static void ring(float x, float y, float radius, float ratio, Color tint, float opacity) {
+        if (BetterFPS.optimizedHUD()) {
+            RenderUtil.drawArcRing(x, y, radius, 1.5F, -90, 360,
+                    color(new Color(tint.getRed(), tint.getGreen(), tint.getBlue(), 28), opacity));
+            if (ratio > 0) RenderUtil.drawArcRing(x, y, radius, 1.5F, -90, 360 * Math.min(1, ratio), color(tint, opacity));
+            return;
+        }
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
         GlStateManager.disableDepth();

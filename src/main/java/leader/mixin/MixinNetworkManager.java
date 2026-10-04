@@ -6,9 +6,12 @@ import leader.Leader;
 import leader.event.EventManager;
 import leader.event.types.EventType;
 import leader.events.PacketEvent;
+import leader.management.PingTracker;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.INetHandlerPlayClient;
+import net.minecraft.network.play.client.C16PacketClientStatus;
+import net.minecraft.network.play.server.S37PacketStatistics;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.spongepowered.asm.mixin.Mixin;
@@ -27,6 +30,8 @@ public abstract class MixinNetworkManager {
             cancellable = true
     )
     private void channelRead0(ChannelHandlerContext channelHandlerContext, Packet<?> packet, CallbackInfo callbackInfo) {
+        // Timestamp at network arrival, before artificial packet delay or main-thread processing.
+        if (packet instanceof S37PacketStatistics) PingTracker.INSTANCE.received((NetworkManager) (Object) this, packet);
         if (!packet.getClass().getName().startsWith("net.minecraft.network.play.client")) {
             if (Leader.delayManager != null && Leader.delayManager.shouldDelay((Packet<INetHandlerPlayClient>) packet)) {
                 callbackInfo.cancel();
@@ -38,6 +43,12 @@ public abstract class MixinNetworkManager {
                 }
             }
         }
+    }
+
+    @Inject(method = "dispatchPacket", at = @At("HEAD"))
+    private void trackPingSend(Packet<?> packet, GenericFutureListener<? extends Future<? super Void>>[] listeners,
+                               CallbackInfo ci) {
+        if (packet instanceof C16PacketClientStatus) PingTracker.INSTANCE.sent((NetworkManager) (Object) this, packet);
     }
 
     @Inject(

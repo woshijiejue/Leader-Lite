@@ -1,6 +1,7 @@
 package leader.module.modules.render;
 
 import leader.Leader;
+import leader.management.PingTracker;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
 import leader.events.LoadWorldEvent;
@@ -46,6 +47,8 @@ public class Island extends Module {
     public final FloatProperty animationSpeed = new FloatProperty("animation-speed", 1.0F, 0.5F, 2.0F);
     public final BooleanProperty showMetrics = new BooleanProperty("show-metrics", true);
     public final BooleanProperty healthWarning = new BooleanProperty("health-warning", true);
+    public final BooleanProperty fontGlow = new BooleanProperty("font-glow", false);
+    public final FloatProperty glowStrength = new FloatProperty("glow-strength", 0.65F, 0.1F, 1.0F, fontGlow::getValue);
 
     private static final int IDLE = 0;
     private static final int BLOCKS = 1;
@@ -66,7 +69,6 @@ public class Island extends Module {
     private float hpAnim;
     private float hpGhost;
     private float blocksAnim;
-    private int lastPing = 0;
     private long alertStart;
     private String alertTitle = "";
     private String alertDescription = "";
@@ -88,7 +90,6 @@ public class Island extends Module {
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
         resetAnimation();
-        lastPing = 0;
     }
 
     private void resetAnimation() {
@@ -138,15 +139,6 @@ public class Island extends Module {
         return IDLE;
     }
 
-    private int getPing() {
-        if (mc.thePlayer == null || mc.getNetHandler() == null) return lastPing;
-        NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
-        if (info != null) {
-            int ping = info.getResponseTime();
-            if (ping >= 2) lastPing = ping;
-        }
-        return lastPing;
-    }
 
     private static int alpha(Color c, float a) {
         int v = Math.max(0, Math.min(255, (int) a));
@@ -182,7 +174,8 @@ public class Island extends Module {
 
     private void text(String s, float x, float baseline, float size, int color) {
         if ((color >>> 24) < 4) return;
-        FontManager.drawString(s, x, baseline - FontManager.getBaseline(size), color, false, size);
+        if (fontGlow.getValue()) FontManager.drawStringWithGlow(s, x, baseline - FontManager.getBaseline(size), color, size, glowStrength.getValue());
+        else FontManager.drawString(s, x, baseline - FontManager.getBaseline(size), color, false, size);
     }
 
     public float contentWidth(int state, float nameSize, float metaSize, EntityLivingBase target) {
@@ -192,10 +185,10 @@ public class Island extends Module {
                 return Math.max(168.0F, 12.0F + 26.0F + 9.0F + nameW + 46.0F + 12.0F);
             }
             case BLOCKS:
-                return Math.max(210, 70 + FontManager.getStringWidth("999", nameSize + 4)
+                return Math.max(170, 60 + FontManager.getStringWidth("999", nameSize + 4)
                         + FontManager.getStringWidth("blocks", metaSize) + FontManager.getStringWidth("9.99 b/s", metaSize));
             case DANGER:
-                return Math.max(192, 80 + FontManager.getStringWidth("Low health", nameSize)
+                return Math.max(154, 70 + FontManager.getStringWidth("Low health", nameSize)
                         + FontManager.getStringWidth("6.0", nameSize + 2));
             case ALERT:
                 return alertWidth(Notification.latestText(), Notification.latestDescription(),
@@ -212,13 +205,13 @@ public class Island extends Module {
             case TARGET:
                 return Math.max(34.0F, cap + 22.0F);
             case BLOCKS:
-                return Math.max(30, cap + 20);
+                return Math.max(26, cap + 17);
             case DANGER:
-                return Math.max(30, cap + 20);
+                return Math.max(26, cap + 17);
             case ALERT:
-                return Math.max(30, cap + 20);
+                return Math.max(26, cap + 17);
             default:
-                return Math.max(24, cap + 16);
+                return Math.max(21, cap + 13);
         }
     }
 
@@ -364,20 +357,24 @@ public class Island extends Module {
     private float alertWidth(String title, String description, NoticeMode mode, float nameSize, float metaSize) {
         float textWidth = Math.max(FontManager.getStringWidth(title, nameSize),
                 FontManager.getStringWidth(noticeDetail(description, mode), metaSize));
-        return Math.max(172, Math.min(286, 76 + textWidth));
+        return Math.max(146, Math.min(260, 65 + textWidth));
     }
 
     private float titleBaseline(float y, float h, float nameSize, float metaSize) {
         float titleCap = FontManager.getCapHeight(nameSize), metaCap = FontManager.getCapHeight(metaSize);
-        return y + (h - titleCap - metaCap - 5) / 2 + titleCap;
+        return y + (h - titleCap - metaCap - 3) / 2 + titleCap;
     }
 
     private void iconTile(float x, float y, Icon icon, Color tint, float opacity) {
-        RenderUtil.drawRoundedRectWithGl(x, y, x + 24, y + 24, 6, fade(tint, 15, opacity));
-        icon.drawCentered(x + 12, y + 12, 13, tint.getRGB(), opacity);
+        RenderUtil.drawRoundedRectWithGl(x, y, x + 18, y + 18, 4, fade(tint, 13, opacity));
+        icon.drawCentered(x + 9, y + 9, 11, tint.getRGB(), opacity);
     }
 
     private void noticeGlyph(float x, float y, NoticeMode mode, Color tint, float opacity) {
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x, y, 0);
+        GlStateManager.scale(0.75F, 0.75F, 1);
+        x = y = 0;
         RenderUtil.drawRoundedRectWithGl(x, y, x + 24, y + 24, 6, fade(tint, 18, opacity));
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
@@ -395,10 +392,17 @@ public class Island extends Module {
         }
         GlStateManager.enableTexture2D();
         GlStateManager.color(1, 1, 1, 1);
+        GlStateManager.popMatrix();
     }
 
     private void lifetimeRing(float cx, float cy, float progress, Color tint, float opacity) {
         progress = Math.max(0, Math.min(1, progress));
+        if (BetterFPS.optimizedHUD()) {
+            // Previously 32 glBegin/glEnd calls plus repeated GL state changes for a five-pixel ring.
+            RenderUtil.drawArcRing(cx, cy, 4.5F, 1, -90, 360, fade(tint, 24, opacity));
+            if (progress > 0) RenderUtil.drawArcRing(cx, cy, 4.5F, 1, -90, progress * 360, fade(tint, 145, opacity));
+            return;
+        }
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
         GlStateManager.disableDepth();
@@ -540,13 +544,13 @@ public class Island extends Module {
                 mc.thePlayer.posZ - mc.thePlayer.prevPosZ) * 20;
         String speedText = String.format(Locale.ROOT, "%.2f b/s", bps);
         float numberSize = nameSize + 4;
-        float textX = x + 37;
+        float textX = x + 32;
         float numberW = FontManager.getStringWidth(countText, numberSize);
         float valueBase = y + (h + FontManager.getCapHeight(numberSize)) / 2 - 1;
         Color countColor = count <= 16 ? new Color(225, 144, 156) : count <= 48 ? new Color(222, 192, 139) : new Color(174, 181, 230);
         text(countText, textX, valueBase, numberSize, fade(FOREGROUND, 255, ease));
         text("blocks", textX + numberW + 5, valueBase, metaSize, fade(SECONDARY, 255, ease));
-        float barLeft = textX + numberW + 5 + FontManager.getStringWidth("blocks", metaSize) + 16;
+        float barLeft = textX + numberW + 5 + FontManager.getStringWidth("blocks", metaSize) + 12;
         float barRight = x + w - 12;
         float barY = y + h / 2 + 5;
         float barH = 2;
@@ -563,7 +567,7 @@ public class Island extends Module {
     private void drawDanger(float x, float y, float w, float h, float ease, long now, float nameSize, float metaSize, boolean preview) {
         Color red = new Color(225, 144, 156);
         float pulse = 0.5F + 0.5F * (float) Math.sin(now / 360.0);
-        iconTile(x + 10, y + (h - 24) / 2, Icon.HEAL, red, ease * (0.8F + pulse * 0.2F));
+        iconTile(x + 8, y + (h - 18) / 2, Icon.HEAL, red, ease * (0.8F + pulse * 0.2F));
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
@@ -574,8 +578,8 @@ public class Island extends Module {
         float valueSize = nameSize + 2;
         float pillW = FontManager.getStringWidth(hp, valueSize) + 16;
         float pillX = x + w - 10 - pillW;
-        text(fit("Low health", pillX - x - 51, nameSize), x + 43, base, nameSize, fade(FOREGROUND, 255, ease));
-        text("Take cover", x + 43, base + FontManager.getCapHeight(metaSize) + 5,
+        text(fit("Low health", pillX - x - 39, nameSize), x + 32, base, nameSize, fade(FOREGROUND, 255, ease));
+        text("Take cover", x + 32, base + FontManager.getCapHeight(metaSize) + 3,
                 metaSize, fade(SECONDARY, 255, ease));
         RenderUtil.drawRoundedRectWithGl(pillX, y + h / 2 - 10, pillX + pillW, y + h / 2 + 10,
                 5, fade(red, 14, ease));
@@ -588,23 +592,23 @@ public class Island extends Module {
         Color tint = noticeTint(mode);
         String title = preview ? "Scaffold" : alertTitle;
         String description = preview ? "" : alertDescription;
-        noticeGlyph(x + 10, y + (h - 24) / 2, mode, tint, ease);
-        float left = x + 43, available = Math.max(0, w - 76);
+        noticeGlyph(x + 8, y + (h - 18) / 2, mode, tint, ease);
+        float left = x + 32, available = Math.max(0, w - 65);
         float base = titleBaseline(y, h, nameSize, metaSize);
         text(fit(title, available, nameSize), left, base, nameSize, fade(FOREGROUND, 255, ease));
         text(fit(noticeDetail(description, mode), available, metaSize), left,
-                base + 5 + FontManager.getCapHeight(metaSize), metaSize, fade(tint, 205, ease));
+                base + 3 + FontManager.getCapHeight(metaSize), metaSize, fade(tint, 205, ease));
         float progress = preview ? 0.65F : 1 - (System.currentTimeMillis() - alertStart) / Math.max(1, alertDuration);
         lifetimeRing(x + w - 16, y + h / 2, progress, tint, ease);
     }
 
     private String idleMetrics(boolean preview) {
-        return (preview ? 60 : Minecraft.getDebugFPS()) + " fps / " + (preview ? 20 : getPing()) + " ms";
+        return (preview ? 60 : Minecraft.getDebugFPS()) + " fps / " + (preview ? "20" : PingTracker.INSTANCE.display()) + " ms";
     }
 
     private float idleWidth(float nameSize, float metaSize, boolean preview) {
-        return 39 + FontManager.getStringWidth("Leader", nameSize) + 12
-                + (showMetrics.getValue() ? 24 + FontManager.getStringWidth(idleMetrics(preview), metaSize) : 0);
+        return 29 + FontManager.getStringWidth("Leader", nameSize) + 9
+                + (showMetrics.getValue() ? 18 + FontManager.getStringWidth(idleMetrics(preview), metaSize) : 0);
     }
 
     public NoticeMode getPreviewNoticeMode() { return previewNoticeMode; }
@@ -636,21 +640,21 @@ public class Island extends Module {
     }
 
     private void drawIdle(float x, float y, float w, float h, float ease, float nameSize, float metaSize, boolean preview) {
-        iconTile(x + 8, y + (h - 24) / 2, Icon.CROWN, new Color(174, 181, 230), ease);
-        float brandX = x + 39;
+        iconTile(x + 6, y + (h - 18) / 2, Icon.CROWN, new Color(174, 181, 230), ease);
+        float brandX = x + 29;
         text("Leader", brandX, y + (h + FontManager.getCapHeight(nameSize)) / 2,
                 nameSize, fade(FOREGROUND, 255, ease));
         if (!showMetrics.getValue()) return;
         String right = idleMetrics(preview);
         float brandW = FontManager.getStringWidth("Leader", nameSize);
-        float sep = brandX + brandW + 10;
-        float infoX = sep + 12;
+        float sep = brandX + brandW + 7;
+        float infoX = sep + 9;
         // Width is animated and may temporarily lag behind a longer FPS/ping value.
         // Fade the complete metrics in as space becomes available, never truncate its units.
-        float available = w - (39 + brandW + 22) - 12;
+        float available = w - (29 + brandW + 16) - 9;
         float metricsEase = ease * Math.max(0, Math.min(1,
                 (available - FontManager.getStringWidth(right, metaSize) + 2) / 2));
-        RenderUtil.drawRect(sep, y + 9, sep + 0.6F, y + h - 9, fade(SECONDARY, 45, metricsEase));
+        RenderUtil.drawRect(sep, y + 7, sep + 0.6F, y + h - 7, fade(SECONDARY, 45, metricsEase));
         text(right, infoX, y + (h + FontManager.getCapHeight(metaSize)) / 2,
                 metaSize, fade(SECONDARY, 255, metricsEase));
     }

@@ -103,7 +103,12 @@ public class Indicators extends Module {
         if (!this.isEnabled() || Leader.hudElementManager.isSuppressed("Indicators")) {
             return;
         }
-        List<Entity> targets = TeamUtil.getLoadedEntitiesSorted().stream().filter(this::shouldRender).collect(Collectors.toList());
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+        List<Entity> targets = new java.util.ArrayList<>();
+        // Filter cheap projectile types BEFORE sorting or calculating direction vectors for the entire world.
+        for (Entity entity : TeamUtil.getRenderProjectilesSorted()) {
+            if (!entity.isDead && shouldRender(entity)) targets.add(entity);
+        }
         trackedCount = targets.size();
         for (Entity entity : targets) {
             float offset = 10.0f + this.offset.getValue();

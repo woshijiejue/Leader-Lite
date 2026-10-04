@@ -2,6 +2,7 @@ package leader.util;
 
 import leader.enums.ChatColors;
 import leader.module.modules.render.FontManager;
+import leader.module.modules.render.BetterFPS;
 import leader.mixin.IAccessorEntityRenderer;
 import leader.mixin.IAccessorMinecraft;
 import leader.mixin.IAccessorRenderManager;
@@ -60,8 +61,29 @@ public class RenderUtil {
 
 
     private static final float[] AA_BOUNDARY = new float[4];
+    private static final float[][] ROUND_COS = new float[49][];
+    private static final float[][] ROUND_SIN = new float[49][];
+
+    static {
+        for (int steps = 1; steps < ROUND_COS.length; steps++) {
+            ROUND_COS[steps] = new float[4 * (steps + 1)];
+            ROUND_SIN[steps] = new float[4 * (steps + 1)];
+            for (int i = 0; i < ROUND_COS[steps].length; i++) {
+                int corner = i / (steps + 1);
+                double angle = Math.toRadians(180 + corner * 90 + 90.0 * (i % (steps + 1)) / steps);
+                ROUND_COS[steps][i] = (float) Math.cos(angle);
+                ROUND_SIN[steps][i] = (float) Math.sin(angle);
+            }
+        }
+    }
 
     public static void drawRoundedRect(float x, float y, float x2, float y2, float radius, int color) {
+        if ((color >>> 24) == 0 || x2 <= x || y2 <= y) return;
+        if (BetterFPS.optimizedHUD()) {
+            // Two batched draws instead of a rectangle plus four separate corner fans.
+            drawRoundedRectStyled(x, y, x2, y2, radius, 0, color, color);
+            return;
+        }
         float a = (color >> 24 & 255) / 255.0F;
         float r = (color >> 16 & 255) / 255.0F;
         float g = (color >> 8 & 255) / 255.0F;
@@ -142,6 +164,7 @@ public class RenderUtil {
         float iy2 = maxY - feather;
         float ir = Math.max(0.0F, r - feather);
         int steps = r < 0.05F ? 0 : Math.max(6, Math.min(48, (int) Math.ceil(r * 1.5F) + 3));
+        if (BetterFPS.optimizedHUD()) steps = Math.min(steps, 12);
         int total = steps <= 0 ? 4 : 4 * (steps + 1);
 
         boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
@@ -206,10 +229,8 @@ public class RenderUtil {
             return;
         }
         int corner = idx / (steps + 1);
-        int j = idx - corner * (steps + 1);
-        double angle = Math.toRadians(180.0 + corner * 90.0 + 90.0 * j / (double) steps);
-        float cos = (float) Math.cos(angle);
-        float sin = (float) Math.sin(angle);
+        float cos = ROUND_COS[steps][idx];
+        float sin = ROUND_SIN[steps][idx];
         float cx = corner == 1 || corner == 2 ? x2 - r : x1 + r;
         float cy = corner == 0 || corner == 1 ? y1 + r : y2 - r;
         out[0] = cx + cos * r;
@@ -676,6 +697,7 @@ public class RenderUtil {
         float feather = (float) Math.min(0.5F, radius / 2.5D);
         float inner = (float) radius - feather;
         int steps = Math.max(segments, Math.min(96, 8 + (int) Math.ceil(radius * 3.0D)));
+        if (BetterFPS.optimizedHUD()) steps = Math.max(12, Math.min(32, steps));
 
         boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
         if (cull) {

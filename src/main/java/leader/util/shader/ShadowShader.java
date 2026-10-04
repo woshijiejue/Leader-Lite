@@ -37,26 +37,26 @@ public class ShadowShader extends Shader {
     }
 
     public void setInTexture(int tex) {
-        GL20.glUniform1i(GL20.glGetUniformLocation(programId, "inTexture"), tex);
+        GL20.glUniform1i(uniform("inTexture"), tex);
     }
 
     public void setTextureToCheck(int tex) {
-        GL20.glUniform1i(GL20.glGetUniformLocation(programId, "textureToCheck"), tex);
+        GL20.glUniform1i(uniform("textureToCheck"), tex);
     }
 
     public void setTexelSize(float x, float y) {
-        GL20.glUniform2f(GL20.glGetUniformLocation(programId, "texelSize"), x, y);
+        GL20.glUniform2f(uniform("texelSize"), x, y);
     }
 
     public void setDirection(float x, float y) {
-        GL20.glUniform2f(GL20.glGetUniformLocation(programId, "direction"), x, y);
+        GL20.glUniform2f(uniform("direction"), x, y);
     }
 
     public void setRadius(float r) {
-        GL20.glUniform1f(GL20.glGetUniformLocation(programId, "radius"), r);
+        GL20.glUniform1f(uniform("radius"), r);
     }
 
     public void setWeights(FloatBuffer buffer) {
-        GL20.glUniform1(GL20.glGetUniformLocation(programId, "weights"), buffer);
+        GL20.glUniform1(uniform("weights"), buffer);
     }
 }

@@ -21,9 +21,7 @@ public class Shaders extends Module {
     public final IntProperty bloomRadius = new IntProperty("bloom-radius", 3, 1, 10, bloom::getValue);
     public final IntProperty bloomOffset = new IntProperty("bloom-offset", 1, 1, 10, bloom::getValue);
 
-    private Framebuffer blurStencil;
-    private Framebuffer shadowStencil;
-    private Framebuffer bloomStencil;
+    private Framebuffer maskStencil;
 
     public Shaders() {
         super("Shaders", true);
@@ -39,20 +37,24 @@ public class Shaders extends Module {
     }
 
     public void renderShaders() {
+        // A fullscreen shader chain is unnecessary when no HUD supplied a mask.
+        if (ShaderElement.getTasks().isEmpty()) return;
+        boolean extras = !BetterFPS.skipExtraPostFX();
+        if (!(blur.getValue() || extras && (shadow.getValue() || bloom.getValue()))) {
+            ShaderElement.getTasks().clear();
+            return;
+        }
+        maskStencil = ShaderElement.createFrameBuffer(maskStencil);
+        // All three effects consume the same mask. Build it once, not once per effect.
+        runMaskTasks(maskStencil);
         if (this.blur.getValue()) {
-            blurStencil = ShaderElement.createFrameBuffer(blurStencil);
-            runMaskTasks(blurStencil);
-            KawaseBlur.renderBlur(blurStencil.framebufferTexture, this.blurRadius.getValue(), this.blurOffset.getValue());
+            KawaseBlur.renderBlur(maskStencil.framebufferTexture, BetterFPS.limitShaderPasses(this.blurRadius.getValue()), this.blurOffset.getValue());
         }
-        if (this.shadow.getValue()) {
-            shadowStencil = ShaderElement.createFrameBuffer(shadowStencil);
-            runMaskTasks(shadowStencil);
-            Shadow.renderShadow(shadowStencil.framebufferTexture, this.shadowRadius.getValue(), this.shadowOffset.getValue());
+        if (extras && this.shadow.getValue()) {
+            Shadow.renderShadow(maskStencil.framebufferTexture, BetterFPS.limitShaderPasses(this.shadowRadius.getValue()), this.shadowOffset.getValue());
         }
-        if (this.bloom.getValue()) {
-            bloomStencil = ShaderElement.createFrameBuffer(bloomStencil);
-            runMaskTasks(bloomStencil);
-            Bloom.renderBloom(bloomStencil.framebufferTexture, this.bloomRadius.getValue(), this.bloomOffset.getValue());
+        if (extras && this.bloom.getValue()) {
+            Bloom.renderBloom(maskStencil.framebufferTexture, BetterFPS.limitShaderPasses(this.bloomRadius.getValue()), this.bloomOffset.getValue());
         }
         ShaderElement.getTasks().clear();
     }

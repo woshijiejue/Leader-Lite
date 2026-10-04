@@ -1,6 +1,7 @@
 package leader.util;
 
 import leader.mixin.FontRendererAccessor;
+import leader.module.modules.render.BetterFPS;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
@@ -15,6 +16,9 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 
 public class CustomFontRenderer {
 
@@ -30,6 +34,10 @@ public class CustomFontRenderer {
     private final int[] textures = new int[256];
     private final Map<Integer, CodePointGlyph> glyphCache = new HashMap<>();
     private final Map<Integer, Font> fallbackFontCache = new HashMap<>();
+    private final Map<String, TextLayout> textLayouts = new LinkedHashMap<String, TextLayout>(64, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, TextLayout> eldest) { return size() > 256; }
+    };
     private final FontRenderContext context;
     private Font font;
     private int fontWidth;
@@ -128,6 +136,10 @@ public class CustomFontRenderer {
             matrix = true;
             GL11.glScaled(0.5, 0.5, 0.5);
             int[] mcColors = ((FontRendererAccessor) mc.fontRendererObj).getColorCode();
+            if (BetterFPS.optimizedHUD()) {
+                drawBatched(text, x, y, r, g, b, a, darken, mcColors);
+                return;
+            }
             int offset = 0;
             int i = 0;
             int len = text.length();
@@ -177,6 +189,170 @@ public class CustomFontRenderer {
     public int drawStringInternal(String text, float posX, float posY, int color, boolean shadowColors) {
         drawString(text, posX, posY, color, shadowColors);
         return (int) posX;
+    }
+
+    private static final class LayoutGlyph {
+        int texture, width, height, offset, colorIndex = -1;
+        float u1, v1, u2, v2;
+    }
+
+    private static final class TextLayout {
+        final LayoutGlyph[] glyphs;
+        TextLayout(List<LayoutGlyph> glyphs) { this.glyphs = glyphs.toArray(new LayoutGlyph[0]); }
+    }
+
+    private void drawBatched(String text, float x, float y, float red, float green, float blue, float alpha,
+                             boolean darken, int[] colors) {
+        if (BetterFPS.cachedTextLayout() && text.length() <= 256) {
+            drawCachedLayout(text, x, y, red, green, blue, alpha, darken, colors);
+            return;
+        }
+        // Texture uploads must happen BEFORE glBegin; warm only the glyphs actually used.
+        for (int i = 0; i < text.length();) {
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if (cp == '\u00a7') {
+                if (i < text.length()) i += Character.charCount(text.codePointAt(i));
+                continue;
+            }
+            if (cp > 0xFFFF || !font.canDisplay(cp)) getOrGenerateGlyph(cp);
+            else {
+                getOrGenerateCharWidthMap(cp >> 8);
+                getOrGenerateCharTexture(cp >> 8);
+            }
+        }
+        GlStateManager.color(red, green, blue, alpha);
+        int activeTexture = -1;
+        boolean drawing = false;
+        int offset = 0;
+        try {
+            for (int i = 0; i < text.length();) {
+                int cp = text.codePointAt(i);
+                i += Character.charCount(cp);
+                if (cp == '\u00a7' && i < text.length()) {
+                    int code = text.codePointAt(i);
+                    i += Character.charCount(code);
+                    int index = "0123456789abcdef".indexOf(code);
+                    if (index >= 0) {
+                        if (darken) index |= 0x10;
+                        int color = colors[index];
+                        GlStateManager.color((color >> 16 & 255) / 255.0F, (color >> 8 & 255) / 255.0F,
+                                (color & 255) / 255.0F, alpha);
+                    }
+                    continue;
+                }
+                int texture, width, height;
+                float u1, v1, u2, v2;
+                if (cp > 0xFFFF || !font.canDisplay(cp)) {
+                    CodePointGlyph glyph = getOrGenerateGlyph(cp);
+                    texture = glyph.textureId; width = glyph.width; height = glyph.height;
+                    u1 = v1 = 0;
+                    u2 = (float) width / nextPowerOfTwo(width);
+                    v2 = (float) height / nextPowerOfTwo(height);
+                } else {
+                    int id = cp & 255;
+                    texture = textures[cp >> 8];
+                    width = charWidths[cp >> 8][id] & 255;
+                    height = fontHeight;
+                    int tx = (id & 15) * fontWidth, ty = (id >> 4) * fontHeight;
+                    u1 = (float) tx / textureWidth; v1 = (float) ty / textureHeight;
+                    u2 = (float) (tx + width) / textureWidth; v2 = (float) (ty + height) / textureHeight;
+                }
+                if (texture != activeTexture) {
+                    if (drawing) GL11.glEnd();
+                    drawing = false;
+                    GlStateManager.bindTexture(texture);
+                    GL11.glBegin(GL11.GL_QUADS);
+                    drawing = true;
+                    activeTexture = texture;
+                }
+                float left = x + offset;
+                GL11.glTexCoord2f(u1, v1); GL11.glVertex2f(left, y);
+                GL11.glTexCoord2f(u1, v2); GL11.glVertex2f(left, y + height);
+                GL11.glTexCoord2f(u2, v2); GL11.glVertex2f(left + width, y + height);
+                GL11.glTexCoord2f(u2, v1); GL11.glVertex2f(left + width, y);
+                offset += width;
+            }
+        } finally {
+            if (drawing) GL11.glEnd();
+        }
+    }
+
+    private TextLayout layout(String text) {
+        TextLayout cached = textLayouts.get(text);
+        if (cached != null) return cached;
+        List<LayoutGlyph> glyphs = new ArrayList<>();
+        int offset = 0, colorIndex = -1;
+        for (int i = 0; i < text.length();) {
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if (cp == '\u00a7' && i < text.length()) {
+                int code = text.codePointAt(i);
+                i += Character.charCount(code);
+                int index = "0123456789abcdef".indexOf(code);
+                if (index >= 0) colorIndex = index;
+                continue;
+            }
+            LayoutGlyph glyph = new LayoutGlyph();
+            glyph.offset = offset;
+            glyph.colorIndex = colorIndex;
+            if (cp > 0xFFFF || !font.canDisplay(cp)) {
+                CodePointGlyph source = getOrGenerateGlyph(cp);
+                glyph.texture = source.textureId; glyph.width = source.width; glyph.height = source.height;
+                glyph.u2 = (float) source.width / nextPowerOfTwo(source.width);
+                glyph.v2 = (float) source.height / nextPowerOfTwo(source.height);
+            } else {
+                int id = cp & 255, region = cp >> 8;
+                glyph.width = getOrGenerateCharWidthMap(region)[id] & 255;
+                glyph.height = fontHeight;
+                glyph.texture = getOrGenerateCharTexture(region);
+                int tx = (id & 15) * fontWidth, ty = (id >> 4) * fontHeight;
+                glyph.u1 = (float) tx / textureWidth; glyph.v1 = (float) ty / textureHeight;
+                glyph.u2 = (float) (tx + glyph.width) / textureWidth; glyph.v2 = (float) (ty + fontHeight) / textureHeight;
+            }
+            offset += glyph.width;
+            glyphs.add(glyph);
+        }
+        cached = new TextLayout(glyphs);
+        textLayouts.put(text, cached);
+        return cached;
+    }
+
+    private void drawCachedLayout(String text, float x, float y, float red, float green, float blue, float alpha,
+                                  boolean darken, int[] colors) {
+        // Build all UVs/textures before glBegin, then reuse across shadows, glow layers and frames.
+        TextLayout layout = layout(text);
+        GlStateManager.color(red, green, blue, alpha);
+        int activeTexture = -1, activeColor = -1;
+        boolean drawing = false;
+        try {
+            for (LayoutGlyph glyph : layout.glyphs) {
+                if (glyph.colorIndex != activeColor) {
+                    if (glyph.colorIndex < 0) GlStateManager.color(red, green, blue, alpha);
+                    else {
+                        int color = colors[glyph.colorIndex | (darken ? 16 : 0)];
+                        GlStateManager.color((color >> 16 & 255) / 255.0F, (color >> 8 & 255) / 255.0F,
+                                (color & 255) / 255.0F, alpha);
+                    }
+                    activeColor = glyph.colorIndex;
+                }
+                if (glyph.texture != activeTexture) {
+                    if (drawing) GL11.glEnd();
+                    drawing = false;
+                    GlStateManager.bindTexture(glyph.texture);
+                    GL11.glBegin(GL11.GL_QUADS);
+                    drawing = true;
+                    activeTexture = glyph.texture;
+                }
+                float left = x + glyph.offset;
+                GL11.glTexCoord2f(glyph.u1, glyph.v1); GL11.glVertex2f(left, y);
+                GL11.glTexCoord2f(glyph.u1, glyph.v2); GL11.glVertex2f(left, y + glyph.height);
+                GL11.glTexCoord2f(glyph.u2, glyph.v2); GL11.glVertex2f(left + glyph.width, y + glyph.height);
+                GL11.glTexCoord2f(glyph.u2, glyph.v1); GL11.glVertex2f(left + glyph.width, y);
+            }
+        } finally {
+            if (drawing) GL11.glEnd();
+        }
     }
 
     private int drawChar(int codePoint, float x, float y) {
@@ -282,6 +458,7 @@ public class CustomFontRenderer {
     }
 
     public void setFont(Font font, boolean antiAlias) {
+        dispose();
         this.font = font;
         Arrays.fill(textures, -1);
         Arrays.fill(charWidths, null);
@@ -443,6 +620,7 @@ public class CustomFontRenderer {
     }
 
     public void dispose() {
+        textLayouts.clear();
         for (int i = 0; i < textures.length; i++) {
             if (textures[i] != -1) {
                 GL11.glDeleteTextures(textures[i]);

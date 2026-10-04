@@ -102,7 +102,7 @@ public class Radar extends Module {
 
         Color fill = new Color(fillColor.getValue());
         this.drawRadarCircle(0.0, 0, yaw, radarRadius.getValue(), 64, new Color(fill.getRed(),fill.getGreen(),fill.getBlue(),100).getRGB(), outlineColor.getValue(), crossColor.getValue());
-        for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRender((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
+        for (EntityPlayer player : TeamUtil.getRenderPlayersSorted().stream().filter(this::shouldRender).collect(Collectors.toList())) {
             double dx = (player.lastTickPosX + (player.posX - player.lastTickPosX) * event.getPartialTicks()) - mc.thePlayer.posX;
             double dz = (player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * event.getPartialTicks()) - mc.thePlayer.posZ;
 

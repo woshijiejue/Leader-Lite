@@ -3,6 +3,7 @@ package leader.mixin;
 import leader.Leader;
 import leader.module.modules.render.BedESP;
 import leader.module.modules.render.Xray;
+import leader.module.modules.render.BetterFPS;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockBed;
 import net.minecraft.block.BlockBed.EnumPartType;
@@ -23,7 +24,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MixinBlockRendererDispatcher {
     @Inject(
             method = {"renderBlock"},
-            at = {@At("HEAD")}
+            at = {@At("HEAD")},
+            cancellable = true
     )
     private void renderBlock(
             IBlockState iBlockState,
@@ -32,6 +34,10 @@ public abstract class MixinBlockRendererDispatcher {
             WorldRenderer worldRenderer,
             CallbackInfoReturnable<Boolean> callbackInfoReturnable
     ) {
+        if (BetterFPS.shouldCancelBlock(iBlockState)) {
+            callbackInfoReturnable.setReturnValue(false);
+            return;
+        }
         if (Leader.moduleManager != null) {
             BedESP bedESP = (BedESP) Leader.moduleManager.modules.get(BedESP.class);
             if (bedESP.isEnabled() && iBlockState.getBlock() instanceof BlockBed && iBlockState.getValue(BlockBed.PART) == EnumPartType.HEAD) {

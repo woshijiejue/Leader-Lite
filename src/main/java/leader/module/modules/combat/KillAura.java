@@ -1510,20 +1510,9 @@ public class KillAura extends Module {
                                                             break;
                                                         case 3:
                                                             attack = false;
-                                                            int handle1 = mc.thePlayer.inventory.currentItem;
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(handle1)));
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(handle1 % 7 + 2));
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(handle1));
-                                                            this.stopBlock();
                                                             this.blockTick = 4;
                                                             break;
                                                         case 4:
-                                                            int handle = mc.thePlayer.inventory.currentItem;
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(Disabler.getAltSlot(handle)));
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(handle % 7 + 2));
-                                                            PacketUtil.sendPacket(new C09PacketHeldItemChange(handle));
-                                                            this.stopBlock();
-                                                            attack = false;
                                                             if (this.attackDelayMS <= 50L) {
                                                                 this.blockTick = 0;
                                                             }

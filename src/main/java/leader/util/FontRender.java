@@ -3,13 +3,18 @@ package leader.util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
+import leader.module.modules.render.BetterFPS;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 public final class FontRender {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    private static final Map<Integer, CustomFontRenderer> renderers = new HashMap<>();
+    private static final Map<Integer, CustomFontRenderer> renderers = new LinkedHashMap<>(32, 0.75F, true);
+    private static final Map<String, Integer> widths = new LinkedHashMap<String, Integer>(256, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Integer> eldest) { return size() > 1024; }
+    };
     private static int fontMode = 0;
 
     private FontRender() {
@@ -95,6 +100,19 @@ public final class FontRender {
     }
 
     public static int getStringWidth(String text, float size, boolean customFont) {
+        if (text == null || text.isEmpty()) return 0;
+        if (BetterFPS.optimizedHUD()) {
+            String key = (customFont ? "C" : "V") + fontMode + ":" + Float.floatToIntBits(normalizeSize(size)) + ":" + text;
+            Integer cached = widths.get(key);
+            if (cached != null) return cached;
+            int width = measureWidth(text, size, customFont);
+            widths.put(key, width);
+            return width;
+        }
+        return measureWidth(text, size, customFont);
+    }
+
+    private static int measureWidth(String text, float size, boolean customFont) {
         if (customFont) {
             CustomFontRenderer renderer = getRenderer(size);
             if (renderer != null) {
@@ -143,6 +161,7 @@ public final class FontRender {
             renderer.dispose();
         }
         renderers.clear();
+        widths.clear();
     }
 
     private static CustomFontRenderer getRenderer(float size) {
@@ -151,6 +170,12 @@ public final class FontRender {
         if (renderer == null) {
             renderer = new CustomFontRenderer(getFontPath(fontMode), normalizeSize(size), true);
             renderers.put(key, renderer);
+            // Dragging font-size sliders used to retain one texture atlas per tiny size change.
+            if (renderers.size() > 32) {
+                Integer oldest = renderers.keySet().iterator().next();
+                CustomFontRenderer removed = renderers.remove(oldest);
+                if (removed != null) removed.dispose();
+            }
         }
         return renderer;
     }

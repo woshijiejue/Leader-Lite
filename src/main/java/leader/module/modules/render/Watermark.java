@@ -1,10 +1,12 @@
 package leader.module.modules.render;
 
 import leader.Leader;
+import leader.management.PingTracker;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
 import leader.module.Module;
 import leader.property.properties.FloatProperty;
+import leader.property.properties.BooleanProperty;
 import leader.property.properties.IntProperty;
 import leader.property.properties.ModeProperty;
 import leader.util.Icon;
@@ -12,7 +14,6 @@ import leader.util.RenderUtil;
 import leader.util.shader.ShaderElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.client.network.NetworkPlayerInfo;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
 
@@ -28,11 +29,12 @@ public class Watermark extends Module {
     private long lastFrameTime = System.currentTimeMillis();
     private int displayFps = 0;
     private int frameCount = 0;
-    private int lastPing = 0;
 
     public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN", "LUCID"});
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
+    public final BooleanProperty fontGlow = new BooleanProperty("font-glow", false);
+    public final FloatProperty glowStrength = new FloatProperty("glow-strength", 0.65F, 0.1F, 1.0F, fontGlow::getValue);
 
     public Watermark() {
         super("Watermark", false);
@@ -113,7 +115,7 @@ public class Watermark extends Module {
         String[] items = new String[]{
                 this.displayFps + " fps",
                 mc.thePlayer != null ? mc.thePlayer.getName() : "-",
-                this.getPing() + " ms"
+                PingTracker.INSTANCE.display() + " ms"
         };
 
         float capH = Math.max(FontManager.getCapHeight(titleSize), FontManager.getCapHeight(infoSize));
@@ -319,18 +321,14 @@ public class Watermark extends Module {
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        FontManager.drawString(text, x, baseline - FontManager.getBaseline(size), color, false, size);
+        drawLabel(text, x, baseline - FontManager.getBaseline(size), color, size);
     }
 
-    private int getPing() {
-        if (mc.thePlayer == null || mc.getNetHandler() == null) return lastPing;
-        NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
-        if (info != null) {
-            int ping = info.getResponseTime();
-            if (ping > 1) lastPing = ping;
-        }
-        return lastPing;
+    private void drawLabel(String text, float x, float y, int color, float size) {
+        if (fontGlow.getValue()) FontManager.drawStringWithGlow(text, x, y, color, size, glowStrength.getValue());
+        else FontManager.drawString(text, x, y, color, false, size);
     }
+
 
     private void renderClassic(String curText, String nextText, float anim, Color themeColor) {
         float uiScale = this.scale.getValue();
@@ -364,7 +362,7 @@ public class Watermark extends Module {
         GlStateManager.translate(x, y, 0.0F);
         GlStateManager.scale(textScale, textScale, 1.0F);
         FontManager.drawString(text, 0.8F, 0.8F, shadowColor, false);
-        FontManager.drawString(text, 0.0F, 0.0F, textColor, false);
+        drawLabel(text, 0.0F, 0.0F, textColor, 18);
         GlStateManager.popMatrix();
     }
 
@@ -415,7 +413,7 @@ public class Watermark extends Module {
         GlStateManager.translate(x / uiScale, y / uiScale, 0.0F);
         GlStateManager.scale(textScale, textScale, 1.0F);
         FontManager.drawString(text, 0.8F, 0.8F, shadowColor, false);
-        FontManager.drawString(text, 0.0F, 0.0F, textColor, false);
+        drawLabel(text, 0.0F, 0.0F, textColor, 18);
         GlStateManager.disableBlend();
         GlStateManager.popMatrix();
     }

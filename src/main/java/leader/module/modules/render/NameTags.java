@@ -104,7 +104,7 @@ public class NameTags extends Module {
     @EventTarget
     public void onRender(Render3DEvent event) {
         if (this.isEnabled()) {
-            for (Entity entity : TeamUtil.getLoadedEntitiesSorted()) {
+            for (Entity entity : TeamUtil.getRenderEntitiesSorted(EntityLivingBase.class)) {
                 if (entity instanceof EntityLivingBase
                         && this.shouldRenderTags((EntityLivingBase) entity)
                         && (entity.ignoreFrustumCheck || RenderUtil.isInViewFrustum(entity.getEntityBoundingBox(), 10.0))) {

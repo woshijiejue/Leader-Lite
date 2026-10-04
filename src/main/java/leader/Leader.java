@@ -64,6 +64,7 @@ public class Leader {
         EventManager.register(delayManager);
         EventManager.register(lagManager);
         EventManager.register(moduleManager);
+        EventManager.register(PingTracker.INSTANCE);
         EventManager.register(commandManager);
         moduleManager.modules.put(Animations.class, new Animations());
         moduleManager.modules.put(AutoProjectiles.class, new AutoProjectiles());
@@ -77,7 +78,6 @@ public class Leader {
         moduleManager.modules.put(AutoClicker.class, new AutoClicker());
         moduleManager.modules.put(AutoHeal.class, new AutoHeal());
         moduleManager.modules.put(AutoTool.class, new AutoTool());
-        moduleManager.modules.put(AutoHypixel.class,new AutoHypixel());//todo testing
         moduleManager.modules.put(BetterFPS.class, new BetterFPS());
         moduleManager.modules.put(BlockHit.class,new BlockHit());
         moduleManager.modules.put(BackTrack.class,new BackTrack());

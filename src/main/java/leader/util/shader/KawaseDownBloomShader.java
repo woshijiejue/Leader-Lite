@@ -44,18 +44,18 @@ public class KawaseDownBloomShader extends Shader {
     }
 
     public void setOffset(float x, float y) {
-        GL20.glUniform2f(GL20.glGetUniformLocation(programId, "offset"), x, y);
+        GL20.glUniform2f(uniform("offset"), x, y);
     }
 
     public void setHalfPixel(float x, float y) {
-        GL20.glUniform2f(GL20.glGetUniformLocation(programId, "halfpixel"), x, y);
+        GL20.glUniform2f(uniform("halfpixel"), x, y);
     }
 
     public void setInTexture(int tex) {
-        GL20.glUniform1i(GL20.glGetUniformLocation(programId, "inTexture"), tex);
+        GL20.glUniform1i(uniform("inTexture"), tex);
     }
 
     public void setResolution(float w, float h) {
-        GL20.glUniform2f(GL20.glGetUniformLocation(programId, "iResolution"), w, h);
+        GL20.glUniform2f(uniform("iResolution"), w, h);
     }
 }

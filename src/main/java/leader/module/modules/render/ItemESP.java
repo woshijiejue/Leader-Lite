@@ -111,7 +111,7 @@ public class ItemESP extends Module {
     public void onRender(Render3DEvent event) {
         if (this.isEnabled()) {
             LinkedHashMap<ItemData, Integer> itemMap = new LinkedHashMap<>();
-            for (Entity entity : TeamUtil.getLoadedEntitiesSorted()) {
+            for (Entity entity : TeamUtil.getRenderEntitiesSorted(EntityItem.class)) {
                 if (entity.ticksExisted >= 3
                         && (entity.ignoreFrustumCheck || RenderUtil.isInViewFrustum(entity.getEntityBoundingBox(), 0.125))
                         && entity instanceof EntityItem) {

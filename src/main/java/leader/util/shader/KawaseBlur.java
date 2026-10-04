@@ -1,6 +1,7 @@
 package leader.util.shader;
 
 import leader.util.RenderUtil;
+import leader.module.modules.render.BetterFPS;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
@@ -21,6 +22,12 @@ public class KawaseBlur {
     public static Framebuffer framebuffer = new Framebuffer(1, 1, false);
 
     private static int currentIterations;
+    private static long lastRefresh;
+    private static Object lastWorld;
+    private static Object lastScreen;
+    private static int lastOffset;
+    private static int currentDivisor = 1;
+    private static int sourceWidth, sourceHeight;
     private static final List<Framebuffer> framebufferList = new ArrayList<>();
 
     private static void initFramebuffers(float iterations) {
@@ -30,10 +37,16 @@ public class KawaseBlur {
             }
         }
         framebufferList.clear();
-        framebufferList.add(framebuffer = ShaderElement.createFrameBuffer(null));
         Minecraft mc = Minecraft.getMinecraft();
+        sourceWidth = mc.displayWidth; sourceHeight = mc.displayHeight;
+        currentDivisor = BetterFPS.blurResolutionDivisor();
+        framebuffer = new Framebuffer(Math.max(1, mc.displayWidth / currentDivisor),
+                Math.max(1, mc.displayHeight / currentDivisor), false);
+        framebuffer.setFramebufferFilter(GL11.GL_LINEAR);
+        framebufferList.add(framebuffer);
         for (int i = 1; i <= iterations; i++) {
-            Framebuffer currentBuffer = new Framebuffer((int) (mc.displayWidth / Math.pow(2, i)), (int) (mc.displayHeight / Math.pow(2, i)), false);
+            Framebuffer currentBuffer = new Framebuffer(Math.max(1, (int) (framebuffer.framebufferWidth / Math.pow(2, i))),
+                    Math.max(1, (int) (framebuffer.framebufferHeight / Math.pow(2, i))), false);
             currentBuffer.setFramebufferFilter(GL11.GL_LINEAR);
             int prevTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
             GlStateManager.bindTexture(currentBuffer.framebufferTexture);
@@ -50,20 +63,30 @@ public class KawaseBlur {
                 || !kawaseDown.isUsable() || !kawaseUp.isUsable()) {
             return;
         }
-        if (currentIterations != iterations || framebuffer.framebufferWidth != mc.displayWidth || framebuffer.framebufferHeight != mc.displayHeight) {
+        boolean resized = currentIterations != iterations || sourceWidth != mc.displayWidth || sourceHeight != mc.displayHeight
+                || currentDivisor != BetterFPS.blurResolutionDivisor();
+        if (resized) {
             initFramebuffers(iterations);
             currentIterations = iterations;
         }
-        renderFBO(framebufferList.get(1), mc.getFramebuffer().framebufferTexture, kawaseDown, offset);
-        for (int i = 1; i < iterations; i++) {
-            renderFBO(framebufferList.get(i + 1), framebufferList.get(i).framebufferTexture, kawaseDown, offset);
-        }
-        for (int i = iterations; i > 1; i--) {
-            renderFBO(framebufferList.get(i - 1), framebufferList.get(i).framebufferTexture, kawaseUp, offset);
+        int refreshRate = BetterFPS.blurRefreshRate();
+        long now = System.nanoTime();
+        boolean refresh = resized || refreshRate == 0 || lastRefresh == 0 || now - lastRefresh >= 1000000000L / refreshRate
+                || lastWorld != mc.theWorld || lastScreen != mc.currentScreen || lastOffset != offset;
+        if (refresh) {
+            // Cache only the blurred scene, not its alpha mask. Current HUD shapes are composited every frame.
+            renderFBO(framebufferList.get(1), mc.getFramebuffer().framebufferTexture, kawaseDown, offset);
+            for (int i = 1; i < iterations; i++) {
+                renderFBO(framebufferList.get(i + 1), framebufferList.get(i).framebufferTexture, kawaseDown, offset);
+            }
+            for (int i = iterations; i > 1; i--) {
+                renderFBO(framebufferList.get(i - 1), framebufferList.get(i).framebufferTexture, kawaseUp, offset);
+            }
+            lastRefresh = now; lastWorld = mc.theWorld; lastScreen = mc.currentScreen; lastOffset = offset;
         }
         Framebuffer lastBuffer = framebufferList.get(0);
         lastBuffer.framebufferClear();
-        lastBuffer.bindFramebuffer(false);
+        lastBuffer.bindFramebuffer(true);
         GL20.glUseProgram(kawaseUp.programId);
         kawaseUp.setOffset(offset, offset);
         kawaseUp.setInTexture(0);
@@ -94,7 +117,7 @@ public class KawaseBlur {
 
     private static void renderFBO(Framebuffer framebuffer, int framebufferTexture, KawaseDownShader shader, float offset) {
         framebuffer.framebufferClear();
-        framebuffer.bindFramebuffer(false);
+        framebuffer.bindFramebuffer(true);
         GL20.glUseProgram(shader.programId);
         RenderUtil.bindTexture(framebufferTexture);
         shader.setOffset(offset, offset);
@@ -107,7 +130,7 @@ public class KawaseBlur {
 
     private static void renderFBO(Framebuffer framebuffer, int framebufferTexture, KawaseUpShader shader, float offset) {
         framebuffer.framebufferClear();
-        framebuffer.bindFramebuffer(false);
+        framebuffer.bindFramebuffer(true);
         GL20.glUseProgram(shader.programId);
         RenderUtil.bindTexture(framebufferTexture);
         shader.setOffset(offset, offset);

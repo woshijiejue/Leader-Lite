@@ -131,7 +131,7 @@ public class Tracers extends Module {
                         );
             }
             position = new Vec3(position.xCoord, position.yCoord + (double) mc.getRenderViewEntity().getEyeHeight(), position.zCoord);
-            for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRender((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
+            for (EntityPlayer player : TeamUtil.getRenderPlayersSorted().stream().filter(this::shouldRender).collect(Collectors.toList())) {
                 Color color = this.getEntityColor(player, (float) this.opacity.getValue() / 100.0F);
                 double x = RenderUtil.lerpDouble(player.posX, player.lastTickPosX, event.getPartialTicks());
                 double y = RenderUtil.lerpDouble(player.posY, player.lastTickPosY, event.getPartialTicks()) - (player.isSneaking() ? 0.125 : 0.0);
@@ -155,7 +155,7 @@ public class Tracers extends Module {
     @EventTarget
     public void onRender(Render2DEvent event) {
         if (this.isEnabled() && this.drawArrows.getValue()) {
-            for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRender((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
+            for (EntityPlayer player : TeamUtil.getRenderPlayersSorted().stream().filter(this::shouldRender).collect(Collectors.toList())) {
                 float yawBetween = RotationUtil.getYawBetween(
                         RenderUtil.lerpDouble(mc.thePlayer.posX, mc.thePlayer.prevPosX, event.getPartialTicks()),
                         RenderUtil.lerpDouble(mc.thePlayer.posZ, mc.thePlayer.prevPosZ, event.getPartialTicks()),

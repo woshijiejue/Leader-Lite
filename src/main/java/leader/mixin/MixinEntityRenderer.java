@@ -13,6 +13,7 @@ import leader.module.modules.player.AutoBlockIn;
 import leader.module.modules.player.GhostHand;
 import leader.module.modules.player.Scaffold;
 import leader.module.modules.render.EnvModifier;
+import leader.module.modules.render.BetterFPS;
 import leader.module.modules.render.FreeLook;
 import leader.module.modules.render.NoHurtCam;
 import leader.module.modules.render.ViewClip;
@@ -60,6 +61,11 @@ public abstract class MixinEntityRenderer {
     private Minecraft mc;
     @Shadow
     private float thirdPersonDistance;
+
+    @Inject(method = "renderRainSnow", at = @At("HEAD"), cancellable = true)
+    private void betterFPSWeather(float partialTicks, CallbackInfo ci) {
+        if (BetterFPS.using && BetterFPS.noWeather.getValue()) ci.cancel();
+    }
 
     @Inject(
             method = {"updateCameraAndRender"},
