@@ -4,6 +4,7 @@ import com.google.gson.*;
 import leader.Leader;
 import leader.mixin.IAccessorMinecraft;
 import leader.module.Module;
+import leader.module.modules.player.Scaffold;
 import leader.util.ChatUtil;
 import leader.property.Property;
 import net.minecraft.client.Minecraft;
@@ -58,6 +59,7 @@ public class Config {
                     JsonObject object = moduleObj.getAsJsonObject();
 
                     ArrayList<Property<?>> list = Leader.propertyManager.properties.get(module.getClass());
+                    if (module instanceof Scaffold) ((Scaffold) module).beginConfigLoad();
                     if (list != null) {
                         for (Property<?> property : list) {
                             if (object.has(property.getName())) {
@@ -69,6 +71,8 @@ public class Config {
                             }
                         }
                     }
+
+                    if (module instanceof Scaffold) ((Scaffold) module).finishConfigLoad(object);
 
                     if (object.has("toggled")) {
                         JsonElement toggled = object.get("toggled");
@@ -127,6 +131,7 @@ public class Config {
                         }
                     }
                 }
+                if (module instanceof Scaffold) ((Scaffold) module).writeRotationProfiles(moduleObject);
                 object.add(module.getName(), moduleObject);
             }
 

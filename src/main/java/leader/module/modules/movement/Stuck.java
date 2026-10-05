@@ -10,6 +10,7 @@ import leader.mixin.IAccessorMinecraft;
 import leader.module.Module;
 import leader.property.properties.IntProperty;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.INetHandlerPlayClient;
@@ -29,6 +30,8 @@ public class Stuck extends Module {
     private boolean knockbackRelease = false;
     private boolean internalToggle = false;
     private boolean releasing = false;
+    private EntityPlayerSP motionOwner;
+    private boolean internalReleasePending;
 
     public Stuck() {
         super("Stuck",false,false);
@@ -37,7 +40,16 @@ public class Stuck extends Module {
     @Override
     public void setEnabled(boolean enabled) {
         if (enabled && this.knockbackRelease && !this.internalToggle) return;
-        if (!enabled && !this.internalToggle) this.knockbackRelease = false;
+        if (!enabled && !this.internalToggle) {
+            boolean cleanup = this.using || this.knockbackRelease || this.motionOwner != null;
+            this.knockbackRelease = false;
+            // Internal release temporarily sets enabled=false while leaving using=true.
+            // Module.setEnabled(false) is a no-op in that window, so explicitly stop its restart cycle.
+            if (!this.isEnabled()) {
+                if (cleanup) this.onDisabled();
+                return;
+            }
+        }
         super.setEnabled(enabled);
     }
 
@@ -59,9 +71,11 @@ public class Stuck extends Module {
         if (mc.thePlayer != null) {
             tick = 0;
             using = true;
+            internalReleasePending = false;
             savedMotionX = mc.thePlayer.motionX;
             savedMotionY = mc.thePlayer.motionY;
             savedMotionZ = mc.thePlayer.motionZ;
+            motionOwner = mc.thePlayer;
         }
     }
     @EventTarget
@@ -84,16 +98,21 @@ public class Stuck extends Module {
     }
     @EventTarget
     public void onTick(TickEvent event){
-        if (using && event.getType() == EventType.PRE) {
+        if (event.getType() != EventType.PRE) return;
+        if (mc.thePlayer == null || mc.theWorld == null || mc.thePlayer != motionOwner || mc.thePlayer.isDead) {
+            this.setEnabled(false);
+            return;
+        }
+        if (using) {
             int releaseTick = this.stuckTicks.getValue();
-            if (tick == releaseTick){
-                this.setEnabledInternal(false);
-                using = true;
-            }
-            if (tick == releaseTick + 1){
+            if (internalReleasePending) {
+                internalReleasePending = false;
                 this.knockbackRelease = false;
                 this.setEnabledInternal(true);
-                tick = 0;
+            } else if (tick >= releaseTick) {
+                this.setEnabledInternal(false);
+                using = true;
+                internalReleasePending = true;
             }
             tick++;
         }
@@ -101,7 +120,7 @@ public class Stuck extends Module {
 
     @EventTarget
     public void onUpdate(UpdateEvent event) {
-        if (this.isEnabled()) {
+        if (this.isEnabled() && mc.thePlayer != null) {
             Leader.blinkManager.setBlinkState(true, BlinkModules.BLINK);
             KeyBinding.unPressAllKeys();
             mc.thePlayer.motionX = 0.0;
@@ -112,7 +131,7 @@ public class Stuck extends Module {
 
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
-        if (this.isEnabled()) {
+        if (this.isEnabled() && mc.thePlayer != null) {
             mc.thePlayer.movementInput.moveForward = 0.0f;
             mc.thePlayer.movementInput.moveStrafe = 0.0f;
             mc.thePlayer.movementInput.jump = false;
@@ -122,7 +141,7 @@ public class Stuck extends Module {
 
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
-        if (this.isEnabled()) {
+        if (this.isEnabled() && mc.thePlayer != null) {
             mc.thePlayer.motionX = 0.0;
             mc.thePlayer.motionY = 0.0;
             mc.thePlayer.motionZ = 0.0;
@@ -139,19 +158,42 @@ public class Stuck extends Module {
 
     @Override
     public void onDisabled() {
-        if (mc.thePlayer != null) {
-            using = false;
+        using = false;
+        if (!internalToggle) { tick = 0; internalReleasePending = false; }
+        if (!internalToggle) knockbackRelease = false;
+        if (mc.thePlayer != null && mc.thePlayer == motionOwner) {
             mc.thePlayer.motionX = savedMotionX;
             mc.thePlayer.motionZ = savedMotionZ;
             mc.thePlayer.motionY = savedMotionY;
-            this.releasing = true;
-            try {
-                Leader.delayManager.setDelayState(false, DelayModules.VELOCITY);
-                Leader.blinkManager.setBlinkState(false, BlinkModules.BLINK);
-            } finally {
-                this.releasing = false;
-            }
-            ((IAccessorMinecraft)mc).getTimer().timerSpeed = 1.0F;
         }
+        if (!internalToggle) motionOwner = null;
+        this.releasing = true;
+        try {
+            if (Leader.delayManager != null && Leader.delayManager.getDelayModule() == DelayModules.VELOCITY) {
+                if (mc.getNetHandler() == null) {
+                    Leader.delayManager.delayedPacket.clear();
+                    Leader.delayManager.delayModule = DelayModules.NONE;
+                } else {
+                    Leader.delayManager.setDelayState(false, DelayModules.VELOCITY);
+                }
+            }
+            if (Leader.blinkManager != null && Leader.blinkManager.getBlinkingModule() == BlinkModules.BLINK) {
+                if (mc.getNetHandler() == null) {
+                    Leader.blinkManager.blinkedPackets.clear();
+                    Leader.blinkManager.blinking = false;
+                    Leader.blinkManager.blinkModule = BlinkModules.NONE;
+                } else {
+                    Leader.blinkManager.setBlinkState(false, BlinkModules.BLINK);
+                }
+            }
+        } finally {
+            this.releasing = false;
+        }
+        ((IAccessorMinecraft)mc).getTimer().timerSpeed = 1.0F;
+    }
+
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) {
+        this.setEnabled(false);
     }
 }

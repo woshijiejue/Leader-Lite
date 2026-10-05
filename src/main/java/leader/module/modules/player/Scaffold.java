@@ -1,13 +1,15 @@
 package leader.module.modules.player;
 
 import leader.Leader;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonElement;
+import leader.property.Property;
 import leader.module.modules.movement.Stuck;
 import leader.module.modules.render.FontManager;
 import leader.module.modules.render.HUD;
 import leader.module.modules.render.notification.NoticeMode;
 import leader.module.modules.render.notification.Notification;
 import leader.util.shader.ShaderElement;
-import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
@@ -34,10 +36,15 @@ import leader.property.properties.FloatProperty;
 import leader.property.properties.IntProperty;
 import leader.property.properties.ModeProperty;
 import leader.util.*;
+import org.lwjgl.input.Mouse;
+import org.lwjgl.opengl.Display;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Arrays;
 
 public class Scaffold extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -66,7 +73,9 @@ public class Scaffold extends Module {
     public final BooleanProperty blockCounter = new BooleanProperty("Block Counter", false);
     public final BooleanProperty airRescue = new BooleanProperty("Air Rescue", true);
     public final BooleanProperty strictRaytrace = new BooleanProperty("Strict Raytrace", false);
-    public final BooleanProperty ctrlToSwitchTelly = new BooleanProperty("Ctrl To Switch Telly", false);
+    public final BooleanProperty rightClickToSwitchTelly = new BooleanProperty("Right Click To Switch Telly", false);
+    public final BooleanProperty warningLowBlocks = new BooleanProperty("Warning Low Blocks", false);
+    public final IntProperty lowBlocksThreshold = new IntProperty("Low Blocks Threshold", 16, 0, 64, warningLowBlocks::getValue);
     public final FloatProperty edgeThreshold = new FloatProperty("Edge Threshold", 0.15F, 0.01F, 0.5F, () -> this.isRotationMode(6));
     public final FloatProperty snapForwardSpeed = new FloatProperty("Forward Speed", 180.0F, 1.0F, 180.0F, () -> this.isRotationMode(6));
     public final FloatProperty snapBackSpeed = new FloatProperty("Back Speed", 180.0F, 1.0F, 180.0F, () -> this.isRotationMode(6));
@@ -98,7 +107,6 @@ public class Scaffold extends Module {
     private boolean towering = false;
     private boolean clutchActive = false;
     private boolean clutchOwnsStuck = false;
-    private int clutchTickCounter = 0;
     private EnumFacing targetFacing = null;
     public static int count = 0;
     private int placeDelayCounter = 0;
@@ -122,9 +130,15 @@ public class Scaffold extends Module {
     private float legitTellySilentPitch;
     private BlockData legitTellyLockedBlockData;
     private UpdateEvent currentEvent;
-    private boolean ctrlTellyActive = false;
-    private int ctrlSavedMode = -1;
-    private int ctrlSavedRotationMode = -1;
+    private boolean rightClickTellyActive = false;
+    private int rightClickSavedMode = -1;
+    private int rightClickSavedRotationMode = -1;
+    private boolean lowBlocksWarned = false;
+    private boolean rightClickBlockedUntilRelease;
+    private final Map<Integer, JsonObject> rotationProfiles = new HashMap<>();
+    private int profileMode;
+    private boolean loadingRotationProfile;
+    private boolean changingTellyOverride;
     private float godBridgeDiag = Float.NaN;
     private int snapHoldCounter = 0;
     private float snapLastYaw = Float.NaN;
@@ -135,6 +149,7 @@ public class Scaffold extends Module {
 
     public Scaffold() {
         super("Scaffold", false);
+        profileMode = mode.getValue();
     }
 
     @Override
@@ -717,20 +732,196 @@ public class Scaffold extends Module {
     }
 
     private void updateClutch() {
-        if (!this.clutch.getValue()) { if (this.clutchActive) this.clutchReset(); return; }
-        if (mc.thePlayer.onGround) { if (this.clutchActive) this.clutchReset(); return; }
-        if (this.bbUnC()) { if (this.clutchActive) this.clutchReset(); return; }
+        if (!this.clutch.getValue() || mc.thePlayer.onGround || this.bbUnC()) {
+            this.clutchReset();
+            return;
+        }
         double fallDistance = mc.thePlayer.fallDistance;
         boolean shouldClutch = fallDistance > 2 && !PlayerUtil.isAirAbove() && !mc.thePlayer.isCollidedHorizontally && (!this.onlyInVoid.getValue() || this.isFallingIntoVoid());
-        if (shouldClutch && !this.clutchActive) { this.clutchActive = true; this.clutchTickCounter = 0; }
-        if (this.clutchActive) {
-            this.clutchTickCounter++;
-        }
+        if (shouldClutch && !this.clutchActive) this.clutchActive = true;
     }
 
     private void clutchReset() {
-        if (this.clutchActive || this.clutchOwnsStuck) Leader.moduleManager.getModule(Stuck.class).setEnabled(false);
-        this.clutchActive = false; this.clutchOwnsStuck = false; this.clutchTickCounter = 0;
+        Stuck stuck = Leader.moduleManager == null ? null : (Stuck) Leader.moduleManager.getModule(Stuck.class);
+        if (this.clutchOwnsStuck && stuck != null) stuck.setEnabled(false);
+        this.clutchActive = false; this.clutchOwnsStuck = false;
+    }
+
+    private void updateRightClickTelly() {
+        // Raw input is intentional: Stuck.unPressAllKeys clears KeyBinding's logical pressed state.
+        boolean down = Mouse.isButtonDown(1);
+        if (!down) rightClickBlockedUntilRelease = false;
+        boolean allowed = isEnabled() && rightClickToSwitchTelly.getValue() && mc.thePlayer != null
+                && mc.theWorld != null && !mc.thePlayer.isDead && mc.currentScreen == null
+                && mc.inGameHasFocus && Display.isActive();
+        if (!allowed) {
+            if (down) rightClickBlockedUntilRelease = true;
+            restoreRightClickTelly();
+            return;
+        }
+        if (down && !rightClickBlockedUntilRelease && !rightClickTellyActive && mode.getValue() == 0) {
+            rightClickSavedMode = mode.getValue();
+            rightClickSavedRotationMode = rotationMode.getValue();
+            rotationProfiles.put(rightClickSavedMode, captureRotationProfile());
+            rightClickTellyActive = true;
+            changingTellyOverride = true;
+            try { mode.setValue(1); } finally { changingTellyOverride = false; }
+            applyRotationProfile(1);
+            resetSwitchRotation();
+        } else if (!down && rightClickTellyActive) {
+            restoreRightClickTelly();
+        }
+    }
+
+    private void resetSwitchRotation() {
+        yaw = -180.0F; pitch = 0.0F; canRotate = false;
+        stage = 0; rotationTick = 1; godBridgeDiag = Float.NaN;
+        pendingSpeedLimitRot = false; forwardRotateTicksLeft = 0; tellyJumpDelayTimer = 0;
+    }
+
+    private void restoreRightClickTelly() {
+        if (!rightClickTellyActive) return;
+        // A manual mode change while the override is active takes precedence over the saved mode.
+        if (mode.getValue() == 1) {
+            rotationProfiles.put(1, captureRotationProfile());
+            changingTellyOverride = true;
+            try { if (rightClickSavedMode >= 0) mode.setValue(rightClickSavedMode); }
+            finally { changingTellyOverride = false; }
+            applyRotationProfile(rightClickSavedMode);
+            if (!rotationProfiles.containsKey(rightClickSavedMode) && rightClickSavedRotationMode >= 0) {
+                rotationMode.setValue(rightClickSavedRotationMode);
+            }
+        }
+        rightClickTellyActive = false;
+        profileMode = mode.getValue();
+        rightClickSavedMode = rightClickSavedRotationMode = -1;
+        resetSwitchRotation();
+    }
+
+    private void updateLowBlockWarning() {
+        if (!warningLowBlocks.getValue()) { lowBlocksWarned = false; return; }
+        int total = 0;
+        // Count inventory + hotbar independently of the block-counter HUD.
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
+            if (ItemUtil.isBlock(stack)) total += Math.max(0, stack.stackSize);
+        }
+        int threshold = lowBlocksThreshold.getValue();
+        if (total >= threshold) lowBlocksWarned = false;
+        else if (!lowBlocksWarned) {
+            lowBlocksWarned = true;
+            Notification.addNotification("Low blocks", "Scaffold: " + total + " blocks remaining", NoticeMode.Info);
+        }
+    }
+
+    private List<Property<?>> rotationSettings() {
+        return Arrays.asList(rotationMode, noUpdateWhenCanPlace, edgeLimit, godBridgeTolerance,
+                moveFix, startRotSpeed, normalRotSpeed, normalModeSpeed, legitModeSpeed, strictRaytrace, airRescue,
+                edgeThreshold, snapForwardSpeed, snapBackSpeed, earlySnap, snapForwardPitch, snapHoldTicks,
+                delayPlacement, forwardSpeed, backSpeed, placeSpeed);
+    }
+
+    private JsonObject captureRotationProfile() {
+        JsonObject object = new JsonObject();
+        for (Property<?> property : rotationSettings()) property.write(object);
+        return object;
+    }
+
+    private void applyRotationProfile(int selectedMode) {
+        JsonObject profile = rotationProfiles.get(selectedMode);
+        if (profile == null) return;
+        boolean previous = loadingRotationProfile;
+        loadingRotationProfile = true;
+        try {
+            for (Property<?> property : rotationSettings()) {
+                if (!profile.has(property.getName())) continue;
+                try { property.read(profile); } catch (RuntimeException ignored) { }
+            }
+        } finally { loadingRotationProfile = previous; }
+    }
+
+    @Override
+    public void verifyValue(String name) {
+        if (loadingRotationProfile) return;
+        if ("Mode".equals(name)) {
+            int selectedMode = mode.getValue();
+            if (rightClickTellyActive && !changingTellyOverride) {
+                rotationProfiles.put(1, captureRotationProfile());
+                rightClickTellyActive = false;
+                rightClickSavedMode = rightClickSavedRotationMode = -1;
+                rightClickBlockedUntilRelease = Mouse.isButtonDown(1);
+                profileMode = selectedMode;
+                applyRotationProfile(selectedMode);
+                resetSwitchRotation();
+                return;
+            }
+            if (selectedMode != profileMode && !rightClickTellyActive) {
+                rotationProfiles.put(profileMode, captureRotationProfile());
+                profileMode = selectedMode;
+                applyRotationProfile(selectedMode);
+                resetSwitchRotation();
+            }
+        } else if ("Right Click To Switch Telly".equals(name) && !rightClickToSwitchTelly.getValue()) {
+            restoreRightClickTelly();
+        } else if ("Warning Low Blocks".equals(name) || "Low Blocks Threshold".equals(name)) {
+            lowBlocksWarned = false;
+        }
+    }
+
+    public void beginConfigLoad() {
+        restoreRightClickTelly();
+        rotationProfiles.clear();
+        loadingRotationProfile = true;
+    }
+
+    public void finishConfigLoad(JsonObject config) {
+        loadingRotationProfile = false;
+        profileMode = mode.getValue();
+        if (config.has("rotation-profiles") && config.get("rotation-profiles").isJsonObject()) {
+            JsonObject profiles = config.getAsJsonObject("rotation-profiles");
+            for (int i = 0; i < mode.getModes().length; i++) {
+                JsonElement profile = profiles.get(mode.getModes()[i]);
+                if (profile != null && profile.isJsonObject()) rotationProfiles.put(i, profile.getAsJsonObject());
+            }
+        }
+        // Old configs have no profiles; preserve their current rotation settings.
+        rotationProfiles.put(profileMode, captureRotationProfile());
+    }
+
+    public void writeRotationProfiles(JsonObject config) {
+        if (!rightClickTellyActive) rotationProfiles.put(mode.getValue(), captureRotationProfile());
+        JsonObject profiles = new JsonObject();
+        for (Map.Entry<Integer, JsonObject> entry : rotationProfiles.entrySet()) {
+            profiles.add(mode.getModes()[entry.getKey()], entry.getValue());
+        }
+        config.add("rotation-profiles", profiles);
+        if (rightClickTellyActive && rightClickSavedMode >= 0) {
+            config.addProperty(mode.getName(), mode.getModes()[rightClickSavedMode]);
+            JsonObject original = rotationProfiles.get(rightClickSavedMode);
+            if (original != null) {
+                for (Map.Entry<String, JsonElement> property : original.entrySet()) config.add(property.getKey(), property.getValue());
+            } else if (rightClickSavedRotationMode >= 0) {
+                config.addProperty(rotationMode.getName(), rotationMode.getModes()[rightClickSavedRotationMode]);
+            }
+        }
+    }
+
+    @EventTarget
+    public void onTick(TickEvent event) {
+        if (event.getType() != EventType.PRE) return;
+        updateRightClickTelly();
+        if (isEnabled() && (mc.thePlayer == null || mc.theWorld == null || mc.thePlayer.isDead)) {
+            clutchReset();
+        }
+    }
+
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) {
+        clutchReset();
+        restoreRightClickTelly();
+        rightClickBlockedUntilRelease = Mouse.isButtonDown(1);
+        lowBlocksWarned = false;
+        currentEvent = null;
     }
 
     private boolean isFallingIntoVoid() {
@@ -755,6 +946,9 @@ public class Scaffold extends Module {
     @EventTarget(Priority.HIGH)
     public void onUpdate(UpdateEvent event) {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
+            if (mc.thePlayer == null || mc.theWorld == null || mc.thePlayer.isDead) return;
+            updateRightClickTelly();
+            updateLowBlockWarning();
             this.currentEvent = event;
             boolean tellyMode = this.mode.getValue() == 1;
             boolean legitTellyMode = this.isLegitTellyMode();
@@ -784,8 +978,11 @@ public class Scaffold extends Module {
             else { this.jumpDelayOverride = -1; this.tellyJumpDelayTimer = 0; }
             this.updateClutch();
             if (this.clutchActive) {
-                this.clutchOwnsStuck = true;
-                Leader.moduleManager.getModule(Stuck.class).setEnabled(this.clutchTickCounter % 10 != 0);
+                Stuck stuck = (Stuck) Leader.moduleManager.getModule(Stuck.class);
+                if (stuck != null && !stuck.isStuckActive()) {
+                    stuck.setEnabled(true);
+                    this.clutchOwnsStuck = stuck.isStuckActive();
+                }
             }
 
             if (legitTellyMode) {
@@ -1136,22 +1333,8 @@ public class Scaffold extends Module {
     }
 
     @EventTarget
-    public void onStrafe(StrafeEvent event) {
-        if (this.isEnabled() && this.clutchActive && this.clutchTickCounter % 10 != 0) {
-            event.setForward(0.0F); event.setStrafe(0.0F);
-        }
-    }
-
-    @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (this.isEnabled()) {
-            if (this.clutchActive && this.clutchTickCounter % 10 != 0) {
-                mc.thePlayer.movementInput.moveForward = 0.0F;
-                mc.thePlayer.movementInput.moveStrafe = 0.0F;
-                mc.thePlayer.movementInput.jump = false;
-                mc.thePlayer.movementInput.sneak = false;
-                return;
-            }
             if (this.moveFix.getValue() == 1 && RotationState.isActived() && RotationState.getPriority() == 3.0F && MoveUtil.isForwardPressed()) {
                 MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
             }
@@ -1184,10 +1367,6 @@ public class Scaffold extends Module {
             this.currentBps = (float) (dist * 20.0);
             this.prevBpsX = mc.thePlayer.posX;
             this.prevBpsZ = mc.thePlayer.posZ;
-            if (this.clutchActive && this.clutchTickCounter % 10 != 0) {
-                mc.thePlayer.motionX = 0.0; mc.thePlayer.motionY = 0.0; mc.thePlayer.motionZ = 0.0;
-                return;
-            }
             if (this.shouldStopSprint()) mc.thePlayer.setSprinting(false);
         }
     }
@@ -1426,49 +1605,25 @@ public class Scaffold extends Module {
     }
 
     @EventTarget
-    public void onKey(KeyEvent event) {
-        if (!this.isEnabled() || !this.ctrlToSwitchTelly.getValue()) return;
-        if (event.getKey() != Keyboard.KEY_LCONTROL && event.getKey() != Keyboard.KEY_RCONTROL) return;
-        if (!this.ctrlTellyActive) {
-            this.ctrlSavedMode = this.mode.getValue();
-            this.ctrlSavedRotationMode = this.rotationMode.getValue();
-            this.mode.setValue(1);
-            this.rotationMode.setValue(4);
-            this.ctrlTellyActive = true;
-            Notification.addNotification("Scaffold", "Telly / Strict", NoticeMode.Info);
-        } else {
-            this.restoreCtrlTelly();
-            Notification.addNotification("Scaffold", this.mode.getModeString() + " / " + this.rotationMode.getModeString(), NoticeMode.Info);
-        }
-        this.yaw = -180.0F; this.pitch = 0.0F; this.canRotate = false;
-        this.stage = 0; this.rotationTick = 1;
-        this.godBridgeDiag = Float.NaN;
-    }
-
-    private void restoreCtrlTelly() {
-        if (!this.ctrlTellyActive) return;
-        if (this.ctrlSavedMode >= 0) this.mode.setValue(this.ctrlSavedMode);
-        if (this.ctrlSavedRotationMode >= 0) this.rotationMode.setValue(this.ctrlSavedRotationMode);
-        this.ctrlTellyActive = false;
-        this.ctrlSavedMode = -1;
-        this.ctrlSavedRotationMode = -1;
-    }
-
-    @EventTarget
     public void onSwap(SwapItemEvent event) {
         if (this.isEnabled()) { this.lastSlot = event.setSlot(this.lastSlot); event.setCancelled(true); }
     }
 
     @Override
     public void onEnabled() {
-        this.clutchOwnsStuck = false;
+        clutchReset();
+        restoreRightClickTelly();
+        rightClickBlockedUntilRelease = Mouse.isButtonDown(1);
+        lowBlocksWarned = false;
         this.lastSlot = mc.thePlayer != null ? mc.thePlayer.inventory.currentItem : -1;
         this.blockCount = -1;
         this.rotationTick = 3;
         this.yaw = -180.0F; this.pitch = 0.0F; this.canRotate = false; this.towering = false;
         this.godBridgeDiag = Float.NaN;
         this.placeDelayCounter = 0;
-        this.prevBpsX = mc.thePlayer.posX; this.prevBpsZ = mc.thePlayer.posZ; this.currentBps = 0.0F;
+        this.prevBpsX = mc.thePlayer != null ? mc.thePlayer.posX : 0;
+        this.prevBpsZ = mc.thePlayer != null ? mc.thePlayer.posZ : 0;
+        this.currentBps = 0.0F;
         this.animBps = 0.0F; this.animPercent = 0.0F; this.lastHudFrame = 0L;
         this.airTicks = 0;
         this.pendingSpeedLimitRot = false; this.forwardRotateTicksLeft = 0;
@@ -1492,10 +1647,15 @@ public class Scaffold extends Module {
 
     @Override
     public void onDisabled() {
-        this.clutchReset();
-        this.restoreCtrlTelly();
-        this.resetVisionState();
-        if (mc.thePlayer != null && this.lastSlot != -1) mc.thePlayer.inventory.currentItem = this.lastSlot;
+        try {
+            this.clutchReset();
+        } finally {
+            this.restoreRightClickTelly();
+            this.lowBlocksWarned = false;
+            this.currentEvent = null;
+            this.resetVisionState();
+            if (mc.thePlayer != null && this.lastSlot != -1) mc.thePlayer.inventory.currentItem = this.lastSlot;
+        }
     }
 
     public int getSlot() { return this.lastSlot; }
