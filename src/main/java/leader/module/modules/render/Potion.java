@@ -1,6 +1,8 @@
 package leader.module.modules.render;
 
 import leader.Leader;
+import leader.ui.theme.ObsidianTheme;
+import leader.util.HUDPreviewUtil;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
 import leader.module.Module;
@@ -38,7 +40,7 @@ public class Potion extends Module {
     private long auraLastFrame;
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"RIGHT", "LEFT"});
-    public final ModeProperty displayMode = new ModeProperty("display-mode", 0, new String[]{"Bar", "Circle", "Modern", "Frost", "Lucid", "Slate", "Aura"});
+    public final ModeProperty displayMode = new ModeProperty("display-mode", 0, new String[]{"Bar", "Circle", "Modern", "Frost", "Lucid", "Slate", "Aura", "Xylitol"});
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
 
@@ -101,7 +103,7 @@ public class Potion extends Module {
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!this.isEnabled() || mc.thePlayer.getActivePotionEffects().isEmpty() || Leader.hudElementManager.isSuppressed("Potion")) return;
+        if (!this.isEnabled() || mc.thePlayer == null || mc.thePlayer.getActivePotionEffects().isEmpty() || Leader.hudElementManager.isSuppressed("Potion")) return;
 
         currentEffects = mc.thePlayer.getActivePotionEffects().stream()
                 .sorted(Comparator.comparingInt(e -> -(
@@ -109,6 +111,10 @@ public class Potion extends Module {
                 )))
                 .collect(Collectors.toList());
         updateMaxDurations();
+        if (displayMode.getValue() == 7) {
+            renderObsidianEffects();
+            return;
+        }
         GlStateManager.pushMatrix();
         GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 1.0F);
 
@@ -889,6 +895,7 @@ public class Potion extends Module {
     }
 
     public float editorAnchorWidth() {
+        if (displayMode.getValue() == 7) return obsidianWidth() * scale.getValue();
         switch (displayMode.getValue()) {
             case 0: return 130;
             case 1: return 110;
@@ -923,7 +930,79 @@ public class Potion extends Module {
         }
     }
 
+    private float obsidianHeight() {
+        return Math.max(25, FontManager.getCapHeight(11 * fontScale.getValue()) + 15);
+    }
+
+    private float obsidianWidth() { return Math.max(132, 68 + FontManager.getStringWidth("Speed II", 11 * fontScale.getValue())); }
+
+    private float effectsHeaderHeight() { return Math.max(18, FontManager.getCapHeight(12 * fontScale.getValue()) + 10); }
+
+    private void effectsPanel(float x, float y, float w, float bodyHeight, float alpha) {
+        ObsidianTheme.mask(x, y, w, effectsHeaderHeight() + bodyHeight, scale.getValue(), 0);
+        ObsidianTheme.surface(x, y, w, effectsHeaderHeight() + bodyHeight, 0, alpha, 0);
+        ObsidianTheme.edges(x, y, w, effectsHeaderHeight() + bodyHeight, alpha, 0);
+        GlStateManager.disableDepth(); GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        HUDPreviewUtil.text("Potion", x + 6, y + 5 + FontManager.getCapHeight(12 * fontScale.getValue()),
+                12 * fontScale.getValue(), ObsidianTheme.rgba(ObsidianTheme.ACCENT, 255 * alpha), false);
+    }
+
+    private void renderObsidianEffects() {
+        float sc = scale.getValue(), w = obsidianWidth(), h = obsidianHeight();
+        ScaledResolution sr = new ScaledResolution(mc);
+        float offX = Leader.hudElementManager.x("Potion", 2, 2) + 6;
+        float x = mode.getValue() == 0 ? (sr.getScaledWidth() - w * sc - offX) / sc : offX / sc;
+        float y = (Leader.hudElementManager.y("Potion", 2, 2) + 6) / sc;
+        GlStateManager.pushMatrix(); GlStateManager.scale(sc, sc, 1);
+        try {
+            x = Math.max(0, Math.min(x, sr.getScaledWidth() / sc - w));
+            y = Math.max(0, y);
+            int visible = Math.min(currentEffects.size(), Math.max(0,
+                    (int) ((sr.getScaledHeight() / sc - y - effectsHeaderHeight()) / h)));
+            if (visible == 0) return;
+            effectsPanel(x, y, w, visible * h, 1);
+            int i = 0;
+            for (PotionEffect effect : currentEffects) {
+                if (i >= visible) break;
+                float cy = y + effectsHeaderHeight() + i++ * h;
+                net.minecraft.potion.Potion potion = net.minecraft.potion.Potion.potionTypes[effect.getPotionID()];
+                if (potion == null) continue;
+                float ratio = Math.max(0, Math.min(1, effect.getDuration() / (float) Math.max(1,
+                        potionMaxDurations.getOrDefault(effect.getPotionID(), effect.getDuration()))));
+                obsidianCard(Math.max(0, Math.min(x, sr.getScaledWidth() / sc - w)), Math.max(0, cy), getPotionName(effect),
+                        effect.getIsPotionDurationMax() ? "Permanent" : net.minecraft.potion.Potion.getDurationString(effect), ratio, potion, 1);
+            }
+        } finally { GlStateManager.popMatrix(); GlStateManager.enableDepth(); GlStateManager.color(1, 1, 1, 1); }
+    }
+
+    private void obsidianCard(float x, float y, String name, String duration, float ratio, net.minecraft.potion.Potion potion, float alpha) {
+        float w = obsidianWidth(), h = obsidianHeight(), titleSize = 11 * fontScale.getValue(), metaSize = 9.5F * fontScale.getValue();
+        if (potion.hasStatusIcon()) {
+            GlStateManager.enableTexture2D(); GlStateManager.enableBlend(); GlStateManager.disableDepth();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.color(1, 1, 1, alpha);
+            mc.getTextureManager().bindTexture(new ResourceLocation("textures/gui/container/inventory.png"));
+            int icon = potion.getStatusIconIndex();
+            Gui.drawScaledCustomSizeModalRect((int) (x + 6), (int) (y + 4), icon % 8 * 18,
+                    198 + icon / 8 * 18, 18, 18, 11, 11, 256, 256);
+            GlStateManager.color(1, 1, 1, 1);
+        }
+        String shownDuration = HUDPreviewUtil.fit(duration, w * 0.32F, metaSize);
+        float timeW = FontManager.getStringWidth(shownDuration, metaSize);
+        float cy = y + (h - 6) / 2;
+        GlStateManager.disableDepth(); GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        HUDPreviewUtil.text(HUDPreviewUtil.fit(name, w - timeW - 34, titleSize), x + 21,
+                cy + FontManager.getCapHeight(titleSize) / 2, titleSize,
+                ObsidianTheme.rgba(ObsidianTheme.TEXT, 255 * alpha), false);
+        HUDPreviewUtil.text(shownDuration, x + w - 10 - timeW, cy + FontManager.getCapHeight(metaSize) / 2,
+                metaSize, ObsidianTheme.rgba(ObsidianTheme.MUTED, 255 * alpha), false);
+        HUDPreviewUtil.bar(x + 6, y + h - 5, w - 12, 1.8F, ratio, ObsidianTheme.ACCENT, alpha);
+    }
+
     public float[] previewSize() {
+        if (displayMode.getValue() == 7) return new float[]{obsidianWidth() * scale.getValue(), (effectsHeaderHeight() + obsidianHeight()) * scale.getValue()};
         int mode = this.displayMode.getValue();
         float h = mode == 0 ? 28 : mode == 1 ? 30 : mode == 2 ? 36 : mode == 3 || mode == 4 ? 26 : 32;
         if (mode == 6) h = FontManager.getCapHeight(15 * fontScale.getValue())
@@ -937,6 +1016,17 @@ public class Potion extends Module {
     }
 
     public void renderPreview(float x, float y, float alpha) {
+        if (displayMode.getValue() == 7) {
+            GlStateManager.pushMatrix();
+            GlStateManager.scale(scale.getValue(), scale.getValue(), 1);
+            try {
+                float sx = x / scale.getValue(), sy = y / scale.getValue();
+                effectsPanel(sx, sy, obsidianWidth(), obsidianHeight(), alpha);
+                obsidianCard(sx, sy + effectsHeaderHeight(), "Speed II", "1:24", 0.7F, net.minecraft.potion.Potion.moveSpeed, alpha);
+            }
+            finally { GlStateManager.popMatrix(); GlStateManager.enableDepth(); GlStateManager.color(1, 1, 1, 1); }
+            return;
+        }
         float scale = this.scale.getValue();
         float textScale = this.fontScale.getValue();
         int mode = this.displayMode.getValue();

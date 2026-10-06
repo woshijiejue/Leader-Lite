@@ -71,6 +71,7 @@ public class Scaffold extends Module {
     public final BooleanProperty onlyInVoid = new BooleanProperty("Only Void", false, this.clutch::getValue);
     public final BooleanProperty bPSRender = new BooleanProperty("Render BPS", true);
     public final BooleanProperty blockCounter = new BooleanProperty("Block Counter", false);
+    public final ModeProperty counterStyle = new ModeProperty("Counter Style", 0, new String[]{"Original", "Xylitol"}, blockCounter::getValue);
     public final BooleanProperty airRescue = new BooleanProperty("Air Rescue", true);
     public final BooleanProperty strictRaytrace = new BooleanProperty("Strict Raytrace", false);
     public final BooleanProperty rightClickToSwitchTelly = new BooleanProperty("Right Click To Switch Telly", false);
@@ -1454,8 +1455,10 @@ public class Scaffold extends Module {
         float[] size = counterPreviewSize();
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
         Color accent = hud != null ? hud.getColor(System.currentTimeMillis()) : new Color(120, 170, 255);
+        if (counterStyle.getValue() == 1) accent = leader.ui.theme.ObsidianTheme.accent(System.currentTimeMillis(), 0);
         RenderUtil.drawRoundedRectWithGl(x, y, x + size[0], y + size[1], 6,
                 Leader.hudElementManager.background("ScaffoldCounter", 40, 40, opacity));
+        if (counterStyle.getValue() == 1) leader.ui.theme.ObsidianTheme.surface(x, y, size[0], size[1], 7, opacity, 71);
         RenderUtil.drawRoundedRectWithGl(x + 6, y + 7, x + 22, y + 23, 4,
                 new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), (int) (32 * opacity)).getRGB());
         RenderUtil.drawRoundedRectWithGl(x + 10, y + 11, x + 18, y + 19, 2,
@@ -1471,6 +1474,7 @@ public class Scaffold extends Module {
     }
 
     private float renderBlockCounter(float x, float y, Color accent, ItemStack iconStack) {
+        if (counterStyle.getValue() == 1) accent = leader.ui.theme.ObsidianTheme.accent(System.currentTimeMillis(), 0);
         final float pad = 6.0F;
         final float icon = 16.0F;
         final float radius = 6.0F;
@@ -1497,6 +1501,7 @@ public class Scaffold extends Module {
 
         RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, radius,
                 Leader.hudElementManager.background("ScaffoldCounter", 40.0F, 40.0F, this.getCardAlpha() / 255.0F));
+        if (counterStyle.getValue() == 1) leader.ui.theme.ObsidianTheme.surface(x, y, w, h, 7, 1, 71);
         float iconY = centerY - icon / 2.0F;
         RenderUtil.drawRoundedRectWithGl(x + pad, iconY, x + pad + icon, iconY + icon, 4.0F,
                 new Color(state.getRed(), state.getGreen(), state.getBlue(), 36).getRGB());

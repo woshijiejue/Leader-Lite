@@ -56,7 +56,7 @@ final class HUDDesignerSettings {
     }
 
     private void text(String s, float tx, float ty, Color c, float size) {
-        FontManager.drawString(s, tx, ty, color(c, 255), false, size);
+        FontManager.drawString(s, tx, ty, leader.ui.theme.ObsidianTheme.chrome(color(c, 255)), false, size);
     }
 
     private String fit(String s, float maxW, float size) {
@@ -83,6 +83,7 @@ final class HUDDesignerSettings {
                 3.5F, color(Color.WHITE, 20));
         RenderUtil.drawRoundedRectGradient(x, y, x + w, y + h, 3,
                 color(new Color(18, 19, 26), 205), color(new Color(11, 12, 16), 216));
+        if (leader.ui.theme.ObsidianTheme.active()) leader.ui.theme.ObsidianTheme.editorSurface(x, y, w, h, opacity);
         RenderUtil.drawRoundedRectGradientH(x + 0.5F, y + 25, x + w - 0.5F, y + 26, 0,
                 color(accent, 150), color(accent, 0));
         text(element.name, x + 10, y + 9, new Color(245, 247, 252), 15);
@@ -337,7 +338,7 @@ final class HUDDesignerSettings {
         ctrl.click = action;
         boolean hovered = ctrl.contains(mx, my) && (!ctrl.body || my >= top && my <= bottom);
         if (selected || hovered) RenderUtil.drawRoundedRectWithGl(bx, by, bx + bw, by + bh, 2,
-                color(selected ? accent : Color.WHITE, selected ? 18 : 7));
+                color(selected ? accent : leader.ui.theme.ObsidianTheme.active() ? Color.BLACK : Color.WHITE, selected ? 18 : 7));
         if (selected) RenderUtil.drawRect(bx + 2, by + bh - 1, bx + bw - 2, by + bh - 0.3F, color(accent, 160));
         text(label, bx + (bw - FontManager.getStringWidth(label, 11)) / 2, by + (bh - FontManager.getFontHeight(11)) / 2,
                 selected ? accent : new Color(160, 166, 181), 11);
@@ -353,6 +354,8 @@ final class HUDDesignerSettings {
     private Control slider(float sx, float sy, float sw, float value, Color tint) {
         value = Math.max(0, Math.min(1, value));
         RenderUtil.drawRect(sx, sy - 0.8F, sx + sw, sy + 0.8F, color(Color.WHITE, 24));
+        if (leader.ui.theme.ObsidianTheme.active()) RenderUtil.drawRect(sx, sy - 0.8F, sx + sw, sy + 0.8F,
+                color(new Color(210, 210, 210), 255));
         if (value > 0) RenderUtil.drawRoundedRectGradientH(sx, sy - 0.8F, sx + sw * value, sy + 0.8F, 0,
                 color(tint, 140), color(tint, 235));
         RenderUtil.drawRect(sx + sw * value - 0.8F, sy - 3, sx + sw * value + 0.8F, sy + 3,

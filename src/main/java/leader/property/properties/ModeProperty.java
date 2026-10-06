@@ -40,6 +40,15 @@ public class ModeProperty extends Property<Integer> {
     @Override
     public boolean parseString(String string) {
         String valueStr = string.replace("_", "");
+        // Retain selections saved by the replaced experimental skins, not older mode indices.
+        String legacy = valueStr.toLowerCase(java.util.Locale.ROOT);
+        if (legacy.equals("blood") || legacy.equals("obsidian") || legacy.equals("blood window")
+                || legacy.equals("obsidian window") || legacy.equals("blood list") || legacy.equals("obsidian list")) {
+            String replacement = legacy.endsWith(" list") ? "Xylitol List" : "Xylitol";
+            for (int i = 0; i < modes.length; i++) {
+                if (replacement.equalsIgnoreCase(modes[i])) return setValue(i);
+            }
+        }
         for (int i = 0; i < this.modes.length; i++) {
             if (valueStr.equalsIgnoreCase(this.modes[i].replace("_", ""))) {
                 return this.setValue(i);

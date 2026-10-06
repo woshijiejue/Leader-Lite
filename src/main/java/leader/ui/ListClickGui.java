@@ -15,6 +15,7 @@ import leader.property.properties.ModeProperty;
 import leader.property.properties.TextProperty;
 import leader.ui.callback.GuiInput;
 import leader.util.Icon;
+import leader.ui.theme.ObsidianTheme;
 import leader.util.KeyBindUtil;
 import leader.util.RenderUtil;
 import leader.util.shader.ShaderElement;
@@ -179,7 +180,7 @@ public class ListClickGui extends GuiScreen {
         alpha = 1.0F - (1.0F - open) * (1.0F - open) * (1.0F - open);
 
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
-        accent = hud != null ? hud.getColor(now) : new Color(110, 170, 255);
+        accent = ObsidianTheme.active() ? ObsidianTheme.GUI_ACCENT : hud != null ? hud.getColor(now) : new Color(110, 170, 255);
 
         scale = getScale();
         int mouseX = (int) (rawX / scale);
@@ -195,6 +196,7 @@ public class ListClickGui extends GuiScreen {
         resetClip();
 
         RenderUtil.drawRoundedRectGradient(0.0F, 0.0F, this.width, this.height, 0.0F, col(10, 11, 16, 110), col(4, 5, 8, 170));
+        ObsidianTheme.backdrop(this.width, this.height, alpha);
         text("Leader", 8.0F, 12.0F, col(245, 247, 252, 255), 16.0F);
         text("Lite", 8.0F + width("Leader", 16.0F) + 3.0F, 12.0F, col(accent, 255), 16.0F);
         text("Left click to toggle   Right click for settings   Drag a header to move",
@@ -249,12 +251,13 @@ public class ListClickGui extends GuiScreen {
             GlStateManager.popMatrix();
         });
 
-        for (int i = 4; i >= 1; i--) {
+        for (int i = ObsidianTheme.active() ? 0 : 4; i >= 1; i--) {
             float s = i * 1.5F;
             RenderUtil.drawRoundedRectWithGl(x - s, y - s + 2.0F, x + PANEL_W + s, y + totalH + s + 2.0F, RADIUS + s, col(0, 0, 0, 9));
         }
         RenderUtil.drawRoundedRectWithGl(x - 0.5F, y - 0.5F, x + PANEL_W + 0.5F, y + totalH + 0.5F, RADIUS + 0.5F, col(255, 255, 255, 20));
         RenderUtil.drawRoundedRectGradient(x, y, x + PANEL_W, y + totalH, RADIUS, col(18, 19, 26, 226), col(11, 12, 16, 234));
+        if (ObsidianTheme.active()) ObsidianTheme.editorSurface(x, y, PANEL_W, totalH, alpha);
 
         addHit(x, y, x + PANEL_W, y + totalH, (button, mX, mY) -> {
         });
@@ -499,7 +502,7 @@ public class ListClickGui extends GuiScreen {
         float sx = rx + rw - 12.0F;
         RenderUtil.enableRenderState();
         frame(sx, cy - 3.5F, rx + rw, cy + 3.5F, 0.75F, col(255, 255, 255, 70));
-        RenderUtil.drawRect(sx + 1.0F, cy - 2.5F, rx + rw - 1.0F, cy + 2.5F, col(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, 255));
+        RenderUtil.drawRect(sx + 1.0F, cy - 2.5F, rx + rw - 1.0F, cy + 2.5F, rawCol(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, 255));
         RenderUtil.disableRenderState();
         addHit(rx - 4.0F, ry, rx + rw + 4.0F, ry + 14.0F, (button, mX, mY) -> {
             if (button == 0 || button == 1) {
@@ -673,6 +676,10 @@ public class ListClickGui extends GuiScreen {
     }
 
     private int col(int r, int g, int b, int a) {
+        return ObsidianTheme.chrome(rawCol(r, g, b, a));
+    }
+
+    private int rawCol(int r, int g, int b, int a) {
         int scaled = Math.round(a * alpha);
         if (a > 0) scaled = Math.max(4, scaled);
         return new Color(r, g, b, Math.max(0, Math.min(255, scaled))).getRGB();

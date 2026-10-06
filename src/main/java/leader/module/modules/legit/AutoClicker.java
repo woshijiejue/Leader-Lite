@@ -123,7 +123,9 @@ public class AutoClicker extends Module {
                             KeyBindUtil.pressKeyOnce(mc.gameSettings.keyBindAttack.getKeyCode());
                         }
                     }
-                    if (this.blockHit.getValue()
+                    BlockHit blockHitModule = leader.Leader.moduleManager == null ? null
+                            : (BlockHit) leader.Leader.moduleManager.getModule(BlockHit.class);
+                    if (this.blockHit.getValue() && (blockHitModule == null || !blockHitModule.controlsUseInput())
                             && this.blockHitDelay <= 0L
                             && mc.gameSettings.keyBindUseItem.isKeyDown()
                             && ItemUtil.isHoldingSword()) {

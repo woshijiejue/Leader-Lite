@@ -1,6 +1,9 @@
 package leader.module.modules.render.notification;
 
 import leader.Leader;
+import leader.ui.theme.ObsidianTheme;
+import leader.ui.theme.HUDCardLayout;
+import leader.util.HUDPreviewUtil;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
 import leader.module.Module;
@@ -42,7 +45,7 @@ public class Notification extends Module {
     private NoticeMode previewMode = NoticeMode.Enable;
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"RIGHT", "LEFT"});
-    public final ModeProperty style = new ModeProperty("style", 1, new String[]{"CLASSIC", "MODERN", "8BIT", "AURA", "FROST", "LUCID", "SLATE"});
+    public final ModeProperty style = new ModeProperty("style", 1, new String[]{"CLASSIC", "MODERN", "8BIT", "AURA", "FROST", "LUCID", "SLATE", "XYLITOL"});
     public final IntProperty duration = new IntProperty("duration", 1500, 500, 5000);
     public final IntProperty maxAlerts = new IntProperty("max-alerts", 5, 1, 10);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
@@ -149,6 +152,10 @@ public class Notification extends Module {
     }
 
     private void renderEntries(ScaledResolution sr, long now, long dur, List<NotificationEntry> entries) {
+        if (style.getValue() == 7) {
+            renderObsidian(sr, now, dur, entries);
+            return;
+        }
         if (this.style.getValue() == 1) {
             renderModern(sr, now, dur, entries);
             return;
@@ -1139,6 +1146,71 @@ public class Notification extends Module {
         GlStateManager.popMatrix();
     }
 
+    private float obsidianWidth(String title, String detail) {
+        return Math.max(96, Math.min(220, 38 + Math.max(FontManager.getStringWidth(title, 12 * fontScale.getValue()),
+                FontManager.getStringWidth(detail, 10 * fontScale.getValue()))));
+    }
+
+    private float obsidianHeight() {
+        return obsidianLayout().height;
+    }
+
+    private HUDCardLayout obsidianLayout() {
+        return new HUDCardLayout(FontManager.getCapHeight(12 * fontScale.getValue()),
+                FontManager.getCapHeight(10 * fontScale.getValue()), 16, 6, 3, 0, 1, false);
+    }
+
+    private void renderObsidian(ScaledResolution sr, long now, long dur, List<NotificationEntry> queue) {
+        float sc = scale.getValue(), titleSize = 12 * fontScale.getValue(), detailSize = 10 * fontScale.getValue();
+        HUDCardLayout layout = obsidianLayout();
+        float h = layout.height, step = h + 4;
+        int count = Math.min(queue.size(), maxAlerts.getValue());
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(sc, sc, 1);
+        try {
+            for (int i = 0; i < count; i++) {
+                NotificationEntry entry = queue.get(i);
+                float alpha = Math.max(0, Math.min(1, getAlpha(now, entry.startTime, dur)));
+                String title = entry.text;
+                String detail = obsidianDetail(entry.noticeMode, entry.description);
+                float w = obsidianWidth(title, detail);
+                float slide = (1 - alpha) * 12;
+                float tx = cardX(sr, renderOriginX(6), w, mode.getValue() == 0 ? slide : -slide);
+                float ty = cardY(sr, renderOriginY(8), h, (count - 1 - i) * step);
+                if (Float.isNaN(entry.animX)) { entry.animX = tx; entry.animY = ty; }
+                entry.animX += (tx - entry.animX) * 0.23F;
+                entry.animY += (ty - entry.animY) * 0.23F;
+                float x = entry.animX, y = entry.animY;
+                Color tint = entry.noticeMode == NoticeMode.Enable ? ObsidianTheme.SUCCESS
+                        : entry.noticeMode == NoticeMode.Disable ? ObsidianTheme.MUTED : ObsidianTheme.WARNING;
+                ObsidianTheme.mask(x, y, w, h, sc, 0);
+                ObsidianTheme.surface(x, y, w, h, 0, alpha, entry.text.hashCode());
+                ObsidianTheme.status(x + 15, y + layout.iconCenter, entry.noticeMode == NoticeMode.Enable ? 0
+                        : entry.noticeMode == NoticeMode.Disable ? 1 : 2, tint, alpha);
+                GlStateManager.disableDepth(); GlStateManager.enableBlend();
+                GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                float titleBase = y + layout.firstBaseline;
+                float detailBase = y + layout.secondBaseline;
+                HUDPreviewUtil.text(HUDPreviewUtil.fit(title, w - 38, titleSize), x + 30, titleBase,
+                        titleSize, ObsidianTheme.rgba(ObsidianTheme.ACCENT, 255 * alpha), false);
+                HUDPreviewUtil.text(HUDPreviewUtil.fit(detail, w - 38, detailSize), x + 30,
+                        detailBase, detailSize,
+                        ObsidianTheme.rgba(ObsidianTheme.TEXT, 240 * alpha), false);
+                float remain = Math.max(0, 1 - (now - entry.startTime) / (float) dur);
+                RenderUtil.drawRoundedRectWithGl(x, y + layout.barTop, x + w * remain,
+                        y + h, 0, ObsidianTheme.rgba(ObsidianTheme.ACCENT, 230 * alpha));
+            }
+        } finally {
+            GlStateManager.popMatrix();
+            GlStateManager.enableDepth(); GlStateManager.color(1, 1, 1, 1);
+        }
+    }
+
+    private String obsidianDetail(NoticeMode mode, String description) {
+        return description.isEmpty() ? mode == NoticeMode.Enable ? "Enabled"
+                : mode == NoticeMode.Disable ? "Disabled" : "Client notice" : description;
+    }
+
     private static class NotificationEntry {
         final String text;
         final String description;
@@ -1156,6 +1228,11 @@ public class Notification extends Module {
     }
 
     public float[] previewSize() {
+        if (style.getValue() == 7) {
+            String detail = previewMode == NoticeMode.Enable ? "Enabled"
+                    : previewMode == NoticeMode.Disable ? "Disabled" : "Warning";
+            return new float[]{obsidianWidth("Notification", detail) * scale.getValue(), obsidianHeight() * scale.getValue()};
+        }
         float textHeight = FontManager.getFontHeight() * fontScale.getValue();
         float width, height;
         switch (style.getValue()) {

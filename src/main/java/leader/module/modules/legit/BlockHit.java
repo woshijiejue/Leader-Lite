@@ -11,8 +11,15 @@ import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 import leader.enums.BlinkModules;
 import leader.event.EventTarget;
 import leader.event.types.EventType;
+import leader.event.types.Priority;
 import leader.events.AttackEvent;
 import leader.events.TickEvent;
+import leader.events.UpdateEvent;
+import leader.events.PacketEvent;
+import leader.events.LoadWorldEvent;
+import leader.events.RightClickMouseEvent;
+import leader.events.HitBlockEvent;
+import leader.module.modules.legit.blockhit.AmunixBlockHit;
 import leader.module.Module;
 import leader.property.properties.*;
 import leader.util.ItemUtil;
@@ -25,7 +32,19 @@ public class BlockHit extends Module {
     public BlockHit() {
         super("BlockHit",false, false);
     }
-    private final ModeProperty mode = new ModeProperty("Mode",0,new String[]{"Helper","Auto"});
+    public final ModeProperty mode = new ModeProperty("Mode",0,new String[]{"Helper","Auto","Lag","Predict"});
+    public final BooleanProperty smartUnblock = new BooleanProperty("Smart Unblock", true, () -> mode.getValue() == 2);
+    public final IntProperty lagDuration = new IntProperty("Lag Duration", 200, 50, 1000, () -> mode.getValue() == 2);
+    public final IntProperty minLagDuration = new IntProperty("Minimum Lag Duration", 100, 0, 1000, () -> mode.getValue() == 2);
+    public final PercentProperty lagChance = new PercentProperty("Lag Chance", 100, () -> mode.getValue() == 2);
+    public final IntProperty lagHoldTime = new IntProperty("Lag Hold Ticks", 1, 1, 10, () -> mode.getValue() == 2);
+    public final FloatProperty predictRange = new FloatProperty("Predict Range", 4.0F, 1.0F, 6.0F, () -> mode.getValue() == 3);
+    public final BooleanProperty lobbyCheck = new BooleanProperty("Lobby Check", true, () -> mode.getValue() == 3);
+    public final IntProperty maxHold = new IntProperty("Maximum Block ms", 200, 150, 500, () -> mode.getValue() == 3);
+    public final IntProperty unblockTime = new IntProperty("Unblock ms", 200, 50, 350, () -> mode.getValue() == 3);
+    public final IntProperty unblockDelay = new IntProperty("Unblock Delay ms", 0, 0, 100, () -> mode.getValue() == 3);
+    public final FloatProperty firstMeleeRange = new FloatProperty("First Melee Range", 3.5F, 2.0F, 5.0F, () -> mode.getValue() == 3);
+    private final AmunixBlockHit amunix = new AmunixBlockHit(this);
 
     private final IntProperty stopTime = new IntProperty("Stop Ticks",2,1,5, () -> this.mode.getValue() == 0);
     private final ModeProperty autoMode = new ModeProperty("Auto Mode",0,new String[]{"Spam","Hold"},() -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 0);
@@ -52,8 +71,12 @@ public class BlockHit extends Module {
     private int getBlockTicks = 0;
     private EntityLivingBase target;
     private TimerUtil timer = new TimerUtil();
-    @EventTarget
+    @EventTarget(Priority.LOWEST)
     public void onTick(TickEvent event) {
+        if (mode.getValue() >= 2) {
+            if (event.getType() == EventType.PRE) amunix.tick();
+            return;
+        }
         if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) return;
         if (event.getType() == EventType.PRE) {
             if (this.mode.getValue() == 0) {
@@ -169,7 +192,8 @@ public class BlockHit extends Module {
 
     @EventTarget
     public void onAttack(AttackEvent event){
-        if (this.isEnabled() && ItemUtil.isHoldingSword()){
+        if (mode.getValue() >= 2) return;
+        if (this.isEnabled() && ItemUtil.isHoldingSword() && event.getTarget() instanceof EntityLivingBase){
             attacking = true;
             attackTicks = 0;
             target = (EntityLivingBase) event.getTarget();
@@ -180,6 +204,50 @@ public class BlockHit extends Module {
     }
     @Override
     public String[] getSuffix() {
-        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
+        return new String[]{mode.getValue() == 2 ? "Lag " + lagDuration.getValue() + "ms" : mode.getModeString()};
     }
+
+    @EventTarget(Priority.LOWEST)
+    public void onUpdate(UpdateEvent event) {
+        if (event.getType() == EventType.PRE && mode.getValue() >= 2) amunix.update();
+    }
+
+    @EventTarget(Priority.LOWEST)
+    public void onPacket(PacketEvent event) {
+        if (mode.getValue() >= 2 && event.getType() == EventType.SEND && !event.isCancelled()) amunix.packet(event.getPacket());
+    }
+
+    @EventTarget
+    public void onRightClick(RightClickMouseEvent event) {
+        if (amunix.suppressUse()) event.setCancelled(true);
+    }
+
+    @EventTarget
+    public void onHitBlock(HitBlockEvent event) {
+        if (mode.getValue() == 2 && amunix.ownsBlink()) event.setCancelled(true);
+    }
+
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) { cleanup(); }
+
+    private void cleanup() {
+        amunix.reset();
+        if (startBlocking || attacking || stopTick > 0) reset();
+        startBlocking = false; stopTick = attackTicks = 0; target = null;
+    }
+
+    @Override
+    public void onEnabled() { cleanup(); }
+
+    @Override
+    public void onDisabled() { cleanup(); }
+
+    @Override
+    public void verifyValue(String name) {
+        if ("Mode".equals(name)) cleanup();
+        if ("Lag Duration".equals(name) && minLagDuration.getValue() > lagDuration.getValue()) minLagDuration.setValue(lagDuration.getValue());
+        if ("Minimum Lag Duration".equals(name) && minLagDuration.getValue() > lagDuration.getValue()) lagDuration.setValue(minLagDuration.getValue());
+    }
+
+    public boolean controlsUseInput() { return amunix.controlsInput(); }
 }

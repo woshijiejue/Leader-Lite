@@ -1,6 +1,8 @@
 package leader.module.modules.render;
 
 import leader.Leader;
+import leader.ui.theme.ObsidianTheme;
+import leader.ui.theme.HUDCardLayout;
 import leader.enums.ChatColors;
 import leader.event.EventTarget;
 import leader.event.types.EventType;
@@ -56,7 +58,7 @@ public class TargetHUD extends Module {
     private float lastObservedHealth = Float.NaN;
     private final List<HitParticle> hitParticles = new ArrayList<>();
     private boolean renderingFollow = false;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"DEFAULT", "TRIANGLE", "BACKGROUND", "MODERN", "INK", "AURA", "FROST", "SLATE"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"DEFAULT", "TRIANGLE", "BACKGROUND", "MODERN", "INK", "AURA", "FROST", "SLATE", "XYLITOL"});
     public final ModeProperty color = new ModeProperty("color", 0, new String[]{"DEFAULT", "HUD"});
     public final ModeProperty position = new ModeProperty("position", 0, new String[]{"SCREEN", "FOLLOW"});
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
@@ -283,7 +285,10 @@ public class TargetHUD extends Module {
 
         float cardWidth;
         float cardHeight;
-        if (this.mode.getValue() == 3) {
+        if (mode.getValue() == 8) {
+            float[] size = obsidianSize(targetNameText);
+            cardWidth = size[0]; cardHeight = size[1];
+        } else if (this.mode.getValue() == 3) {
             cardWidth = Math.max(220.0F, targetNameWidth + 118.0F);
             cardHeight = 48.0F;
         } else if (this.mode.getValue() == 4) {
@@ -340,7 +345,9 @@ public class TargetHUD extends Module {
 
         GlStateManager.disableDepth();
         this.renderingFollow = true;
-        if (this.mode.getValue() == 3) {
+        if (mode.getValue() == 8) {
+            obsidianCard(0, 0, cardWidth, cardHeight, targetNameText, heal * 2, healthRatio, headTexture, 1, false);
+        } else if (this.mode.getValue() == 3) {
             renderModern(scaledResolution, targetNameText, healthText, statusText, healthDiffText, targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth, healthRatio, targetColor, healthBarColor, healthDeltaColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
         } else if (this.mode.getValue() == 4) {
             renderInk(scaledResolution, targetNameText, healthText, statusText, healthDiffText, targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth, healthRatio, targetColor, healthBarColor, healthDeltaColor, heal, (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F, abs);
@@ -453,7 +460,15 @@ public class TargetHUD extends Module {
                         String.format("&r%s&r", heal == health ? "0.0" : diffFormat.format(health - heal))
                 );
                 float healthDiffWidth = this.getTextWidth(healthDiffText);
-                if (this.mode.getValue() == 3) {
+                if (mode.getValue() == 8) {
+                    float[] size = obsidianSize(targetNameText);
+                    float sc = scale.getValue();
+                    float x = Leader.hudElementManager.x("TargetHUD", 40, 40) / sc;
+                    float y = Leader.hudElementManager.y("TargetHUD", 40, 40) / sc;
+                    GlStateManager.pushMatrix(); GlStateManager.scale(sc, sc, 1);
+                    try { obsidianCard(x, y, size[0], size[1], targetNameText, heal * 2, healthRatio, headTexture, 1, false); }
+                    finally { GlStateManager.popMatrix(); GlStateManager.enableDepth(); GlStateManager.color(1, 1, 1, 1); }
+                } else if (this.mode.getValue() == 3) {
                     renderModern(scaledResolution, targetNameText, healthText, statusText, healthDiffText,
                             targetNameWidth, healthTextWidth, statusTextWidth, healthDiffWidth,
                             healthRatio, targetColor, healthBarColor, healthDeltaColor,
@@ -1632,7 +1647,74 @@ public class TargetHUD extends Module {
         }
     }
 
+    private float[] obsidianSize() {
+        return obsidianSize("Target");
+    }
+
+    private HUDCardLayout obsidianLayout() {
+        float size = 11 * fontScale.getValue();
+        return new HUDCardLayout(FontManager.getCapHeight(size), FontManager.getCapHeight(size),
+                head.getValue() ? 28 : 0, 6, 4, 5, 2.5F, true);
+    }
+
+    private float[] obsidianSize(String name) {
+        float size = 11 * fontScale.getValue();
+        float left = head.getValue() ? 42 : 8;
+        float labelWidth = Math.max(FontManager.getStringWidth("name:", size), FontManager.getStringWidth("health:", size)) + 4;
+        float valueWidth = Math.max(FontManager.getStringWidth(name, size), FontManager.getStringWidth("24.0 hp", size));
+        return new float[]{Math.max(132, Math.min(220, left + labelWidth + valueWidth + 8)), obsidianLayout().height};
+    }
+
+    private void obsidianCard(float x, float y, float w, float h, String name, float hp, float ratio,
+                           ResourceLocation skin, float alpha, boolean preview) {
+        if (!renderingFollow) ObsidianTheme.mask(x, y, w, h, scale.getValue(), 4);
+        ObsidianTheme.surface(x, y, w, h, 4, alpha, 83);
+        float nameSize = 11 * fontScale.getValue(), metaSize = nameSize;
+        HUDCardLayout layout = obsidianLayout();
+        float left = x + (head.getValue() ? 42 : 8), right = x + w - 8;
+        float headY = y + layout.iconTop;
+        if (head.getValue()) {
+            if (preview) HUDPreviewUtil.head(x + 6, headY, 28, 4, alpha);
+            else if (skin != null) {
+                GlStateManager.disableDepth(); GlStateManager.enableBlend(); GlStateManager.enableTexture2D();
+                GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                mc.getTextureManager().bindTexture(skin);
+                GlStateManager.color(1, 1, 1, alpha);
+                drawRoundedHead(x + 6, headY, 28, 4, 8, 8, alpha);
+                drawRoundedHead(x + 6, headY, 28, 4, 40, 8, alpha);
+                GlStateManager.color(1, 1, 1, 1);
+            } else {
+                ObsidianTheme.emblem(x + 20, headY + 14, 28, alpha);
+                HUDPreviewUtil.text("?", x + 20 - FontManager.getStringWidth("?", nameSize) / 2F,
+                        headY + 14 + FontManager.getCapHeight(nameSize) / 2F,
+                        nameSize, ObsidianTheme.rgba(ObsidianTheme.TEXT, 255 * alpha), false);
+            }
+        }
+        float nameBaseline = y + layout.firstBaseline;
+        float healthBaseline = y + layout.secondBaseline;
+        GlStateManager.disableDepth(); GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        float valueX = left + Math.max(FontManager.getStringWidth("name:", nameSize), FontManager.getStringWidth("health:", metaSize)) + 4;
+        HUDPreviewUtil.text("name:", left, nameBaseline, nameSize, ObsidianTheme.rgba(ObsidianTheme.ACCENT, 255 * alpha), false);
+        // Server-formatted names otherwise override the theme colour and disrupt the label/value hierarchy.
+        String plainName = net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(name);
+        HUDPreviewUtil.text(HUDPreviewUtil.fit(plainName, right - valueX, nameSize), valueX, nameBaseline, nameSize,
+                ObsidianTheme.rgba(ObsidianTheme.TEXT, 255 * alpha), shadow.getValue());
+        String health = String.format(Locale.ROOT, "%.1f hp", hp);
+        HUDPreviewUtil.text("health:", left, healthBaseline, metaSize,
+                ObsidianTheme.rgba(ObsidianTheme.ACCENT, 255 * alpha), false);
+        HUDPreviewUtil.text(health, valueX, healthBaseline, metaSize,
+                ObsidianTheme.rgba(ObsidianTheme.TEXT, 255 * alpha), false);
+        if (right - left > 0) {
+            HUDPreviewUtil.bar(left, y + layout.barTop, right - left, 2.5F, ratio, ObsidianTheme.accent(System.currentTimeMillis(), 0), alpha);
+        }
+    }
+
     public float[] previewSize() {
+        if (mode.getValue() == 8) {
+            float[] size = obsidianSize();
+            return new float[]{size[0] * scale.getValue(), size[1] * scale.getValue()};
+        }
         float width = mode.getValue() == 3 || mode.getValue() == 6 ? 164 : 150;
         float height = Math.max(38, FontManager.getCapHeight(14 * fontScale.getValue())
                 + FontManager.getCapHeight(10 * fontScale.getValue()) + 23);
@@ -1642,6 +1724,14 @@ public class TargetHUD extends Module {
     }
 
     public void renderPreview(float x, float y, float alpha) {
+        if (mode.getValue() == 8) {
+            float sc = scale.getValue();
+            float[] size = obsidianSize();
+            GlStateManager.pushMatrix(); GlStateManager.scale(sc, sc, 1);
+            try { obsidianCard(x / sc, y / sc, size[0], size[1], "Target", 15, 0.75F, null, alpha, true); }
+            finally { GlStateManager.popMatrix(); GlStateManager.enableDepth(); GlStateManager.color(1, 1, 1, 1); }
+            return;
+        }
         float scale = this.scale.getValue();
         float textScale = this.fontScale.getValue();
 

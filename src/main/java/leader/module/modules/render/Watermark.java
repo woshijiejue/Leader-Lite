@@ -1,6 +1,8 @@
 package leader.module.modules.render;
 
 import leader.Leader;
+import leader.ui.theme.ObsidianTheme;
+import leader.util.HUDPreviewUtil;
 import leader.management.PingTracker;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
@@ -30,7 +32,7 @@ public class Watermark extends Module {
     private int displayFps = 0;
     private int frameCount = 0;
 
-    public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN", "LUCID"});
+    public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"CLASSIC", "MODERN", "LUCID", "XYLITOL"});
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
     public final BooleanProperty fontGlow = new BooleanProperty("font-glow", false);
@@ -93,6 +95,19 @@ public class Watermark extends Module {
 
         HUD hud = getHud();
         Color tc = hud != null ? hud.getColor(now) : new Color(0, 190, 255);
+
+        if (mode.getValue() == 3) {
+            float sc = scale.getValue();
+            ScaledResolution sr = new ScaledResolution(mc);
+            String metrics = displayFps + " FPS / " + PingTracker.INSTANCE.display() + " ms";
+            float[] size = obsidianSize(metrics);
+            float x = Leader.hudElementManager.x("Watermark", 4, 4);
+            float y = Leader.hudElementManager.y("Watermark", 4, 4);
+            x = Math.max(0, Math.min(x, sr.getScaledWidth() - size[0] * sc));
+            y = Math.max(0, Math.min(y, sr.getScaledHeight() - size[1] * sc));
+            renderObsidian(x, y, 1, metrics);
+            return;
+        }
 
         if (this.mode.getValue() == 0) {
             renderClassic(curText, nextText, anim, tc);
@@ -368,6 +383,10 @@ public class Watermark extends Module {
 
     public float[] previewSize() {
         float f = fontScale.getValue(), sc = scale.getValue();
+        if (mode.getValue() == 3) {
+            float[] size = obsidianSize("60 FPS / -- ms");
+            return new float[]{size[0] * sc, size[1] * sc};
+        }
         if (mode.getValue() == 0) {
             return new float[]{(FontManager.getStringWidth(CLIENT_NAME) * f + 1) * sc,
                     (FontManager.getFontHeight() * f + 1) * sc};
@@ -384,6 +403,7 @@ public class Watermark extends Module {
     }
 
     public void renderPreview(float x, float y, float alpha) {
+        if (this.mode.getValue() == 3) { renderObsidian(x, y, alpha, "60 FPS / -- ms"); return; }
         int mode = this.mode.getValue();
         float uiScale = this.scale.getValue();
         HUD hud = getHud();
@@ -395,6 +415,38 @@ public class Watermark extends Module {
             renderPreviewLucid(x, y, alpha, tc, uiScale);
         } else {
             renderPreviewModern(x, y, alpha, tc, uiScale);
+        }
+    }
+
+    private float[] obsidianSize(String metrics) {
+        float titleSize = 13 * fontScale.getValue(), metaSize = 11 * fontScale.getValue();
+        return new float[]{26 + FontManager.getStringWidth(CLIENT_NAME, titleSize)
+                + FontManager.getStringWidth(metrics, metaSize),
+                Math.max(22, 12 + FontManager.getCapHeight(titleSize))};
+    }
+
+    private void renderObsidian(float x, float y, float alpha, String metrics) {
+        float sc = scale.getValue(), titleSize = 13 * fontScale.getValue(), metaSize = 11 * fontScale.getValue();
+        float[] size = obsidianSize(metrics);
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(sc, sc, 1);
+        try {
+            float sx = x / sc, sy = y / sc;
+            float cy = sy + size[1] / 2;
+            ObsidianTheme.mask(sx, sy, size[0], size[1], sc, 0);
+            ObsidianTheme.surface(sx, sy, size[0], size[1], 0, alpha, 61);
+            ObsidianTheme.edges(sx, sy, size[0], size[1], alpha, 0);
+            float divider = sx + 7 + FontManager.getStringWidth(CLIENT_NAME, titleSize) + 7;
+            GlStateManager.disableDepth(); GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            HUDPreviewUtil.text(CLIENT_NAME, sx + 7, cy + FontManager.getCapHeight(titleSize) / 2, titleSize,
+                    ObsidianTheme.rgba(ObsidianTheme.accent(System.currentTimeMillis(), 0), 255 * alpha), false);
+            HUDPreviewUtil.text("|", divider - 2, cy + FontManager.getCapHeight(metaSize) / 2, metaSize,
+                    ObsidianTheme.rgba(ObsidianTheme.MUTED, 255 * alpha), false);
+            HUDPreviewUtil.text(metrics, divider + 7, cy + FontManager.getCapHeight(metaSize) / 2, metaSize,
+                    ObsidianTheme.rgba(ObsidianTheme.TEXT, 255 * alpha), false);
+        } finally {
+            GlStateManager.popMatrix(); GlStateManager.enableDepth(); GlStateManager.color(1, 1, 1, 1);
         }
     }
 

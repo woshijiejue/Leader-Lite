@@ -8,5 +8,6 @@ public enum BlinkModules {
     NO_FALL,
     NO_SLOW,
     LAG_RANGE,
-    VELOCITY
+    VELOCITY,
+    BLOCK_HIT
 }

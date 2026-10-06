@@ -145,12 +145,13 @@ final class HUDDesignerElement {
     }
 
     String styleName() {
-        if (module instanceof Island) return "Adaptive";
+        if (module instanceof Island) return ((Island) module).style.getModeString();
         if (module instanceof TargetHUD) return ((TargetHUD) module).mode.getModeString();
         if (module instanceof Notification) return ((Notification) module).style.getModeString();
         if (module instanceof Potion) return ((Potion) module).displayMode.getModeString();
         if (module instanceof Watermark) return ((Watermark) module).mode.getModeString();
-        if (module instanceof HUD) return ((HUD) module).align.getModeString();
+        if (module instanceof HUD) return ((HUD) module).style.getModeString() + " / " + ((HUD) module).align.getModeString();
+        if (module instanceof Scaffold) return ((Scaffold) module).counterStyle.getModeString();
         if (module instanceof GifDisplay) return ((GifDisplay) module).gifMode.getModeString();
         return "Preview";
     }
@@ -160,6 +161,7 @@ final class HUDDesignerElement {
         if (module instanceof Scaffold) {
             Scaffold scaffold = (Scaffold) module;
             result.add(scaffold.blockCounter);
+            result.add(scaffold.counterStyle);
             result.add(scaffold.bPSRender);
         } else if (module instanceof BedTracker) {
             BedTracker tracker = (BedTracker) module;

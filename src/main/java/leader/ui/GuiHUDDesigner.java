@@ -133,11 +133,11 @@ public class GuiHUDDesigner extends GuiScreen {
     }
 
     private int rgba(Color color, float alpha) {
-        return (Math.max(0, Math.min(255, Math.round(alpha))) << 24) | (color.getRGB() & 0xFFFFFF);
+        return leader.ui.theme.ObsidianTheme.chrome((Math.max(0, Math.min(255, Math.round(alpha))) << 24) | (color.getRGB() & 0xFFFFFF));
     }
 
     private void text(String text, float x, float y, Color color, float size) {
-        FontManager.drawString(text, x, y, color.getRGB(), false, size);
+        FontManager.drawString(text, x, y, leader.ui.theme.ObsidianTheme.chrome(color.getRGB()), false, size);
     }
 
     private void border(float[] b, Color color, float alpha) {
@@ -156,9 +156,17 @@ public class GuiHUDDesigner extends GuiScreen {
         lastFrame = now;
         ScaledResolution sr = new ScaledResolution(mc);
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
-        accent = hud != null ? hud.getColor(now) : new Color(110, 170, 255);
+        accent = leader.ui.theme.ObsidianTheme.active() ? leader.ui.theme.ObsidianTheme.GUI_ACCENT
+                : hud != null ? hud.getColor(now) : new Color(110, 170, 255);
         RenderUtil.drawRoundedRectGradient(0, 0, sr.getScaledWidth(), sr.getScaledHeight(), 0,
                 new Color(10, 11, 16, 80).getRGB(), new Color(4, 5, 8, 120).getRGB());
+        leader.ui.theme.ObsidianTheme.backdrop(sr.getScaledWidth(), sr.getScaledHeight(), 0.65F);
+        if (leader.ui.theme.ObsidianTheme.active()) {
+            RenderUtil.drawRoundedRectWithGl(4, 4, Math.min(width - 4, 342), 36, 4,
+                    new Color(250, 249, 248, 230).getRGB());
+            RenderUtil.drawRoundedRectWithGl(4, height - 16, Math.min(width - 4, 185), height - 2, 3,
+                    new Color(250, 249, 248, 220).getRGB());
+        }
         text("HUD Designer", 8, 10, new Color(245, 247, 252), 16);
         text("Drag to move   Click for settings   Drop onto Island to fuse", 8, 25,
                 new Color(128, 137, 155), 10);
@@ -223,7 +231,8 @@ public class GuiHUDDesigner extends GuiScreen {
             float ly = b[1] >= labelHeight + 6 ? b[1] - labelHeight - 4 : b[1] + b[3] + 5;
             ly = Math.min(height - labelHeight - 2, ly);
             RenderUtil.drawRoundedRectWithGl(b[0], ly - 2, b[0] + FontManager.getStringWidth(label, 10) + 10,
-                    ly + FontManager.getFontHeight(10) + 2, 3, new Color(17, 20, 28, 140).getRGB());
+                    ly + FontManager.getFontHeight(10) + 2, 3, rgba(new Color(17, 20, 28),
+                            leader.ui.theme.ObsidianTheme.active() ? 220 : 140));
             text(label, b[0] + 5, ly, active ? accent : new Color(185, 201, 226), 10);
         }
         if (!element.name.equals("Island")) return;
@@ -231,7 +240,7 @@ public class GuiHUDDesigner extends GuiScreen {
         if (merged.isEmpty()) return;
         float y = rowY(element, 0);
         RenderUtil.drawRoundedRectWithGl(b[0], y - 3, b[0] + b[2], b[1] + b[3], 3,
-                new Color(18, 20, 28, 160).getRGB());
+                rgba(new Color(18, 20, 28), leader.ui.theme.ObsidianTheme.active() ? 220 : 160));
         for (int i = 0; i < merged.size(); i++) {
             float ry = rowY(element, i);
             String name = merged.get(i);

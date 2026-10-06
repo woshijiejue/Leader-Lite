@@ -1,6 +1,7 @@
 package leader.module.modules.render;
 
 import leader.Leader;
+import leader.ui.theme.ObsidianTheme;
 import leader.management.PingTracker;
 import leader.event.EventTarget;
 import leader.events.Render2DEvent;
@@ -13,6 +14,7 @@ import leader.module.modules.render.notification.NoticeMode;
 import leader.property.properties.BooleanProperty;
 import leader.property.properties.FloatProperty;
 import leader.property.properties.IntProperty;
+import leader.property.properties.ModeProperty;
 import leader.util.BlockUtil;
 import leader.util.Icon;
 import leader.util.RenderUtil;
@@ -40,6 +42,7 @@ public class Island extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
+    public final ModeProperty style = new ModeProperty("style", 0, new String[]{"Adaptive", "Xylitol"});
     public final FloatProperty fontScale = new FloatProperty("font-scale", 1.0F, 0.7F, 1.5F);
     public final IntProperty holdTime = new IntProperty("hold-time", 1100, 0, 5000);
     public final BooleanProperty blur = new BooleanProperty("blur", true);
@@ -168,12 +171,14 @@ public class Island extends Module {
     }
 
     private Color accent(long now) {
+        if (style.getValue() == 1) return ObsidianTheme.accent(now, 0);
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
         return hud != null ? hud.getColor(now) : new Color(120, 170, 255);
     }
 
     private void text(String s, float x, float baseline, float size, int color) {
         if ((color >>> 24) < 4) return;
+        if (style.getValue() == 1) color = ObsidianTheme.ink(color);
         if (fontGlow.getValue()) FontManager.drawStringWithGlow(s, x, baseline - FontManager.getBaseline(size), color, size, glowStrength.getValue());
         else FontManager.drawString(s, x, baseline - FontManager.getBaseline(size), color, false, size);
     }
@@ -342,6 +347,8 @@ public class Island extends Module {
     }
 
     private Color noticeTint(NoticeMode mode) {
+        if (style.getValue() == 1) return mode == NoticeMode.Enable ? ObsidianTheme.SUCCESS
+                : mode == NoticeMode.Disable ? ObsidianTheme.MUTED : ObsidianTheme.WARNING;
         switch (mode) {
             case Enable: return new Color(137, 213, 175);
             case Disable: return new Color(225, 144, 156);
@@ -418,6 +425,10 @@ public class Island extends Module {
     }
 
     private void drawSurface(float x, float y, float w, float h, float radius, Color accent, float opacity, boolean target) {
+        if (style.getValue() == 1) {
+            ObsidianTheme.surface(x, y, w, h, Math.min(radius, 8), opacity, 41);
+            return;
+        }
         Color bg = Leader.hudElementManager.backgroundColor("Island", 40.0F, 40.0F);
         if (!target) {
             // One restrained graphite surface: readable over the world without a stacked card effect.
@@ -479,6 +490,7 @@ public class Island extends Module {
         float nameBase = y + (h - cap) / 2.0F + cap - 1.0F;
 
         Color hpColor = new Color(Color.HSBtoRGB(0.33F * this.hpAnim, 0.7F, 0.95F));
+        if (style.getValue() == 1) hpColor = ObsidianTheme.accent(System.currentTimeMillis(), 0);
         String hpText = String.format(Locale.ROOT, "%.1f", hp);
         float hpW = FontManager.getStringWidth(hpText, nameSize);
         String name = fit(target.getName(), Math.max(10.0F, right - hpW - 8.0F - left), nameSize);
@@ -640,7 +652,8 @@ public class Island extends Module {
     }
 
     private void drawIdle(float x, float y, float w, float h, float ease, float nameSize, float metaSize, boolean preview) {
-        iconTile(x + 6, y + (h - 18) / 2, Icon.CROWN, new Color(174, 181, 230), ease);
+        if (style.getValue() == 1) iconTile(x + 6, y + (h - 18) / 2, Icon.CROWN, ObsidianTheme.ACCENT, ease);
+        else iconTile(x + 6, y + (h - 18) / 2, Icon.CROWN, new Color(174, 181, 230), ease);
         float brandX = x + 29;
         text("Leader", brandX, y + (h + FontManager.getCapHeight(nameSize)) / 2,
                 nameSize, fade(FOREGROUND, 255, ease));

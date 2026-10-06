@@ -102,6 +102,37 @@ public class BlinkManager {
         return blinking;
     }
 
+    /** Exclusive owner-scoped buffer for timed modes; never takes over another module's queue. */
+    public boolean acquireExclusive(BlinkModules owner) {
+        if (owner == BlinkModules.NONE || slowReleasing || (blinkModule != BlinkModules.NONE && blinkModule != owner)) return false;
+        if (blinkModule == BlinkModules.NONE && !blinkedPackets.isEmpty()) return false;
+        blinkModule = owner;
+        blinking = true;
+        return true;
+    }
+
+    /** Flush in FIFO order, optionally retaining ownership. No global release or SlowRelease policy. */
+    public boolean flushOwned(BlinkModules owner, boolean retain) {
+        if (owner == BlinkModules.NONE || blinkModule != owner) return false;
+        blinking = false;
+        slowReleasing = false;
+        slowReleaseTicks = 0;
+        try {
+            if (mc.getNetHandler() == null) blinkedPackets.clear();
+            else {
+                Packet<?> packet;
+                while ((packet = blinkedPackets.poll()) != null) PacketUtil.sendPacketNoEvent(packet);
+            }
+        } finally {
+            if (blinkModule == owner) {
+                blinkModule = retain ? owner : BlinkModules.NONE;
+                blinking = retain && mc.getNetHandler() != null;
+                if (!blinking && retain) blinkModule = BlinkModules.NONE;
+            }
+        }
+        return true;
+    }
+
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (event.getPacket() instanceof C00Handshake

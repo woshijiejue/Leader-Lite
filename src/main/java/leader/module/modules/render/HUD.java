@@ -1,6 +1,7 @@
 package leader.module.modules.render;
 
 import leader.Leader;
+import leader.ui.theme.ObsidianTheme;
 import leader.enums.BlinkModules;
 import leader.enums.ChatColors;
 import leader.event.EventTarget;
@@ -49,6 +50,7 @@ public class HUD extends Module {
     public final ModeProperty colorMode = new ModeProperty(
             "color", 3, new String[]{"RAINBOW", "CHROMA", "ASTOLFO", "CUSTOM1", "CUSTOM12", "CUSTOM123"}
     );
+    public final ModeProperty style = new ModeProperty("style", 0, new String[]{"Original", "Xylitol"});
     public final FloatProperty colorSpeed = new FloatProperty("color-speed", 1.0F, 0.5F, 1.5F);
     public final PercentProperty colorSaturation = new PercentProperty("color-saturation", 50);
     public final PercentProperty colorBrightness = new PercentProperty("color-brightness", 100);
@@ -276,7 +278,7 @@ public class HUD extends Module {
                 String moduleName = cached ? row.name : this.getModuleName(module);
                 String[] moduleSuffix = cached ? row.suffix : this.getModuleSuffix(module);
                 float totalWidth = (float) ((cached ? row.width : this.calculateStringWidth(moduleName, moduleSuffix)) - (this.shadow.getValue() ? 0 : 1));
-                Color themeColor = this.getColor(l, offset);
+                Color themeColor = style.getValue() == 1 ? ObsidianTheme.accent(l, offset) : this.getColor(l, offset);
                 int color = themeColor.getRGB();
                 float sx = x / this.scale.getValue();
                 float sy = y / this.scale.getValue();
@@ -302,6 +304,8 @@ public class HUD extends Module {
                     bgAlphaColor = Leader.hudElementManager.background("HUD", 2.0F, 2.0F, this.background.getValue().floatValue() / 100.0F);
                 }
                 int glowColor = useThemeBg ? color : themeColor.getRGB();
+                if (style.getValue() == 1) bgAlphaColor = ObsidianTheme.rgba(ObsidianTheme.SURFACE,
+                        this.background.getValue() * 2.55F);
 
                 if (hasBg) {
                     final float blurX1 = bgX1;
@@ -367,6 +371,12 @@ public class HUD extends Module {
                 RenderUtil.disableRenderState();
 
                 GlStateManager.disableDepth();
+                if (style.getValue() == 1) {
+                    if (offset == 0 || offset == this.activeModules.size() - 1) {
+                        ObsidianTheme.edges(bgX1, bgY1, bgX2 - bgX1, bgY2 - bgY1, 0.7F, (int) offset + 7);
+                    }
+                    color = themeColor.getRGB();
+                }
 
                 if (this.glow.getValue()) {
                     drawGlowText(moduleName, textX, textY, glowColor, BetterFPS.glowPasses(4), 0.65F);
@@ -475,12 +485,13 @@ public class HUD extends Module {
             int moduleWidth = this.calculateStringWidth(moduleName, suffixes);
             float height = FontManager.getFontHeight();
 
-            Color color = this.getColor(now, i);
+            Color color = style.getValue() == 1 ? ObsidianTheme.accent(now, i) : this.getColor(now, i);
             int bgAlpha = Math.round((float) this.background.getValue() / 100.0F * 255.0F * alpha);
             int bgColor = this.bgColor.getValue()
                     ? new Color(color.getRed(), color.getGreen(), color.getBlue(), bgAlpha).getRGB()
                     : Leader.hudElementManager.background("HUD", 2.0F, 2.0F,
                             this.background.getValue() / 100.0F * alpha);
+            if (style.getValue() == 1) bgColor = ObsidianTheme.rgba(ObsidianTheme.SURFACE, bgAlpha);
 
             float textX = rightAlign ? sx - moduleWidth : sx;
             float bgX1 = rightAlign ? sx - moduleWidth - 2.0F : sx - 2.0F;
@@ -515,6 +526,10 @@ public class HUD extends Module {
 
             int textColor = new Color(color.getRed(), color.getGreen(), color.getBlue(),
                     (int)(255 * alpha)).getRGB();
+            if (style.getValue() == 1) {
+                if (i == 0 || i == sampleModules.length - 1) ObsidianTheme.edges(bgX1, bgY1, bgX2 - bgX1, bgY2 - bgY1, alpha, i + 7);
+                textColor = ObsidianTheme.rgba(color, 255 * alpha);
+            }
             if (this.shadow.getValue()) {
                 FontManager.drawStringWithShadow(moduleName, textX, bgY1 + 1.0F, textColor);
             } else {

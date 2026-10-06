@@ -18,6 +18,7 @@ import leader.property.properties.PercentProperty;
 import leader.property.properties.TextProperty;
 import leader.ui.callback.GuiInput;
 import leader.util.Icon;
+import leader.ui.theme.ObsidianTheme;
 import leader.util.KeyBindUtil;
 import leader.util.RenderUtil;
 import leader.util.shader.ShaderElement;
@@ -106,6 +107,11 @@ public class ClickGui extends GuiScreen {
     private float clipBottom = 100000.0F;
     private float listX1, listY1, listX2, listY2;
     private float setX1, setY1, setX2, setY2;
+    private final Set<Module> referenceCollapsed = new HashSet<>();
+    private float referenceScale = 1;
+    private ModeProperty referenceDropdown;
+    private float dropdownX, dropdownY, dropdownW;
+    private int dropdownScroll;
 
     private interface ClickAction {
         void click(int button, int mouseX, int mouseY);
@@ -179,7 +185,12 @@ public class ClickGui extends GuiScreen {
         alpha = ease;
 
         HUD hud = (HUD) Leader.moduleManager.modules.get(HUD.class);
-        accent = hud != null ? hud.getColor(now) : new Color(110, 170, 255);
+        accent = ObsidianTheme.active() ? ObsidianTheme.accent(now, 0) : hud != null ? hud.getColor(now) : new Color(110, 170, 255);
+        if (ObsidianTheme.active()) {
+            accent = ObsidianTheme.GUI_ACCENT;
+            drawReferenceScreen(mouseX, mouseY);
+            return;
+        }
 
         if (dragging) {
             windowX = mouseX - dragOffsetX;
@@ -198,6 +209,7 @@ public class ClickGui extends GuiScreen {
         RenderUtil.disableRenderState();
 
         final float mx = x;
+        ObsidianTheme.backdrop(this.width, this.height, alpha);
         final float my = y;
         ShaderElement.addBlurTask(() -> RenderUtil.drawRoundedRectWithGl(mx, my, mx + W, my + H, 12.0F,
                 new Color(18, 20, 28, 255).getRGB()));
@@ -208,6 +220,7 @@ public class ClickGui extends GuiScreen {
         }
         RenderUtil.drawRoundedRectWithGl(x - 0.5F, y - 0.5F, x + W + 0.5F, y + H + 0.5F, 12.5F, col(255, 255, 255, 22));
         RenderUtil.drawRoundedRectGradient(x, y, x + W, y + H, 12.0F, col(18, 19, 26, 214), col(11, 12, 16, 222));
+        if (ObsidianTheme.active()) ObsidianTheme.surface(x, y, W, H, 12, alpha, 19);
         scissor(x, y, SIDEBAR, H);
         RenderUtil.drawRoundedRectWithGl(x, y, x + SIDEBAR + 24.0F, y + H, 12.0F, col(255, 255, 255, 5));
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
@@ -235,9 +248,240 @@ public class ClickGui extends GuiScreen {
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
+    /** Xylitol's sidebar / two-column settings layout, rather than a recoloured three-pane GUI. */
+    private void drawReferenceScreen(int rawX, int rawY) {
+        referenceScale = Math.max(0.1F, Math.min(1, Math.min((width - 10F) / W, (height - 10F) / H)));
+        int mx = (int) (rawX / referenceScale), my = (int) (rawY / referenceScale);
+        if (dragging) { windowX = mx - dragOffsetX; windowY = my - dragOffsetY; }
+        windowX = Math.max(5, Math.min(windowX, (int) (width / referenceScale - W - 5)));
+        windowY = Math.max(5, Math.min(windowY, (int) (height / referenceScale - H - 5)));
+        updateDrags(mx);
+        hits.clear(); resetClip();
+        ObsidianTheme.backdrop(width, height, alpha);
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(referenceScale, referenceScale, 1);
+        try {
+            float x = windowX, y = windowY, sidebar = 130;
+            ObsidianTheme.mask(x, y, W, H, referenceScale, 6);
+            ObsidianTheme.editorSurface(x, y, W, H, alpha);
+            RenderUtil.drawRoundedRectWithGl(x + sidebar, y + 1, x + W - 1, y + H - 1, 5,
+                    ObsidianTheme.rgba(new Color(240, 239, 238), 245 * alpha));
+            RenderUtil.drawRect(x + sidebar, y + 5, x + sidebar + 0.5F, y + H - 5,
+                    ObsidianTheme.rgba(new Color(217, 217, 217), 255 * alpha));
+            addHit(x, y, x + sidebar, y + 40, (button, px, py) -> {
+                if (button == 0) { dragging = true; dragOffsetX = px - windowX; dragOffsetY = py - windowY; }
+            });
+            referenceText("LEADER", x + 15, y + 23, ObsidianTheme.GUI_TEXT, 22);
+            referenceText("CLIENT SETTINGS", x + 15, y + 48, ObsidianTheme.GUI_MUTED, 9);
+            for (int i = 0; i < CATEGORY_NAMES.length; i++) {
+                final int category = i;
+                float cy = y + 66 + i * 29;
+                boolean selected = selectedCategory == i && search.isEmpty();
+                float hover = anim("refcat" + i, inside(mx, my, x + 9, cy, x + sidebar - 9, cy + 24) ? 1 : 0, 14);
+                if (selected || hover > 0.01F) RenderUtil.drawRoundedRectWithGl(x + 9, cy, x + sidebar - 9, cy + 24, 4,
+                        ObsidianTheme.rgba(selected ? new Color(222, 234, 241) : new Color(225, 224, 223), (selected ? 255 : 120 * hover) * alpha));
+                categoryIcon(CATEGORY_NAMES[i]).drawCentered(x + 23, cy + 12, 12,
+                        selected ? accent.getRGB() : new Color(142, 142, 142).getRGB(), alpha);
+                referenceText(CATEGORY_NAMES[i], x + 37, cy + 12, selected ? accent : ObsidianTheme.GUI_TEXT, 13);
+                addHit(x + 9, cy, x + sidebar - 9, cy + 24, (button, px, py) -> {
+                    if (button == 0) { selectedCategory = category; search = ""; moduleScroll = moduleScrollTarget = 0; referenceDropdown = null; }
+                });
+            }
+            RenderUtil.drawRect(x + 10, y + H - 39, x + sidebar - 10, y + H - 38.5F,
+                    ObsidianTheme.rgba(new Color(217, 217, 217), 255 * alpha));
+            String user = mc.thePlayer == null ? "Leader Lite" : mc.thePlayer.getName();
+            referenceText(GuiText.trim(user, 100, 12), x + 15, y + H - 24, ObsidianTheme.GUI_TEXT, 12);
+            referenceText("Local profile", x + 15, y + H - 12, ObsidianTheme.GUI_MUTED, 10);
+
+            float sx = x + sidebar + 14, sy = y + 12, searchW = 266;
+            RenderUtil.drawRoundedRectWithGl(sx, sy, sx + searchW, sy + 23, 4,
+                    ObsidianTheme.rgba(new Color(215, 215, 215), 255 * alpha));
+            RenderUtil.drawRoundedRectWithGl(sx + 0.6F, sy + 0.6F, sx + searchW - 0.6F, sy + 22.4F, 3.5F,
+                    ObsidianTheme.rgba(new Color(250, 250, 250), 255 * alpha));
+            referenceText(search.isEmpty() && !searchFocused ? "Search modules...  Ctrl F" : search
+                    + (searchFocused && System.currentTimeMillis() / 500 % 2 == 0 ? "|" : ""), sx + 9, sy + 11.5F,
+                    search.isEmpty() && !searchFocused ? ObsidianTheme.GUI_MUTED : ObsidianTheme.GUI_TEXT, 12);
+            addHit(sx, sy, sx + searchW, sy + 23, (button, px, py) -> {
+                searchFocused = true; referenceDropdown = null;
+                if (button == 1) { search = ""; moduleScroll = moduleScrollTarget = 0; }
+            });
+            float bx = x + W - 125;
+            RenderUtil.drawRoundedRectWithGl(bx, sy, x + W - 14, sy + 23, 4,
+                    ObsidianTheme.rgba(new Color(225, 224, 223), 255 * alpha));
+            referenceText("HUD Designer", bx + 12, sy + 11.5F, ObsidianTheme.GUI_TEXT, 12);
+            addHit(bx, sy, x + W - 14, sy + 23, (button, px, py) -> {
+                if (button == 0) mc.displayGuiScreen(new GuiHUDDesigner(this));
+            });
+            RenderUtil.drawRect(x + sidebar, y + 45, x + W, y + 45.5F,
+                    ObsidianTheme.rgba(new Color(217, 217, 217), 255 * alpha));
+            float top = y + 55, bottom = y + H - 13, cardW = (W - sidebar - 40) / 2F;
+            listX1 = x + sidebar; listY1 = top; listX2 = x + W; listY2 = bottom;
+            setX1 = setX2 = setY1 = setY2 = 0;
+            float[] columns = {top - moduleScroll, top - moduleScroll};
+            if (referenceDropdown != null && !referenceDropdown.isVisible()) referenceDropdown = null;
+            referenceScissor(x + sidebar + 8, top, W - sidebar - 16, bottom - top);
+            setClip(top, bottom);
+            List<Module> modules = visibleModules();
+            for (Module module : modules) {
+                int column = columns[0] <= columns[1] ? 0 : 1;
+                float cx = x + sidebar + 14 + column * (cardW + 12), cy = columns[column];
+                float cardH = referenceCardHeight(module);
+                if (cy + cardH >= top && cy <= bottom) drawReferenceCard(module, cx, cy, cardW, cardH, mx, my);
+                columns[column] += cardH + 12;
+            }
+            resetClip(); GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            float content = Math.max(columns[0], columns[1]) + moduleScroll - top;
+            float max = Math.max(0, content - (bottom - top));
+            moduleScrollTarget = Math.max(0, Math.min(moduleScrollTarget, max));
+            moduleScroll += (moduleScrollTarget - moduleScroll) * (1 - (float) Math.exp(-dt * 18));
+            if (modules.isEmpty()) referenceText("No matching modules", sx + 8, top + 30, ObsidianTheme.GUI_MUTED, 13);
+            if (max > 0) {
+                float thumb = Math.max(20, (bottom - top) * (bottom - top) / Math.max(1, content));
+                float ty = top + (bottom - top - thumb) * Math.max(0, Math.min(1, moduleScroll / max));
+                RenderUtil.drawRoundedRectWithGl(x + W - 5, ty, x + W - 3, ty + thumb, 1,
+                        ObsidianTheme.rgba(new Color(175, 175, 175), 255 * alpha));
+            }
+            drawReferenceDropdown(mx, my);
+        } finally { GlStateManager.popMatrix(); GlStateManager.color(1, 1, 1, 1); }
+    }
+
+    private float referenceCardHeight(Module module) {
+        if (referenceCollapsed.contains(module)) return 48;
+        float h = 48 + 24;
+        List<Property<?>> props = Leader.propertyManager.properties.get(module.getClass());
+        if (props != null) for (Property<?> p : props) {
+            if (!p.isVisible()) continue;
+            h += p instanceof ColorProperty ? 22 + (expandedColors.contains(p) ? 42 : 0) : p instanceof ModeProperty ? 26 : 24;
+        }
+        return h + 5;
+    }
+
+    private void drawReferenceCard(Module module, float x, float y, float w, float h, int mx, int my) {
+        RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, 4,
+                ObsidianTheme.rgba(new Color(218, 217, 216), 235 * alpha));
+        RenderUtil.drawRoundedRectWithGl(x + 0.6F, y + 0.6F, x + w - 0.6F, y + h - 0.6F, 3.5F,
+                ObsidianTheme.rgba(new Color(248, 247, 246), 255 * alpha));
+        referenceText(GuiText.trim(module.getName().toUpperCase(Locale.ROOT), (int) (w - 32), 10), x + 9, y + 11,
+                ObsidianTheme.GUI_MUTED, 10);
+        referenceText(referenceCollapsed.contains(module) ? "+" : "-", x + w - 17, y + 11, ObsidianTheme.GUI_MUTED, 13);
+        addHit(x, y, x + w, y + 21, (button, px, py) -> {
+            if (button == 0 || button == 1) { if (!referenceCollapsed.remove(module)) referenceCollapsed.add(module); referenceDropdown = null; }
+        });
+        referenceText("Enabled", x + 9, y + 32, ObsidianTheme.GUI_TEXT, 12);
+        drawReferenceSwitch(x + w - 33, y + 32, module.isEnabled() ? 1 : 0);
+        addHit(x + 4, y + 21, x + w - 4, y + 44, (button, px, py) -> { if (button == 0) module.toggle(); });
+        if (referenceCollapsed.contains(module)) return;
+        RenderUtil.drawRect(x + 8, y + 45, x + w - 8, y + 45.5F,
+                ObsidianTheme.rgba(new Color(217, 217, 217), 255 * alpha));
+        float cy = y + 48;
+        List<Property<?>> props = Leader.propertyManager.properties.get(module.getClass());
+        if (props != null) for (Property<?> p : props) {
+            if (!p.isVisible()) continue;
+            cy += drawReferenceProperty(p, x + 9, cy, w - 18, mx, my);
+        }
+        referenceText("Keybind", x + 9, cy + 12, ObsidianTheme.GUI_MUTED, 12);
+        String binding = bindingModule == module ? "Press a key..." : KeyBindUtil.getKeyName(module.getKey());
+        referenceText(GuiText.trim(binding == null ? "NONE" : binding, (int) (w * 0.5F), 11), x + w / 2, cy + 12, ObsidianTheme.GUI_TEXT, 11);
+        addHit(x + 4, cy, x + w - 4, cy + 24, (button, px, py) -> {
+            if (button == 0) bindingModule = module;
+            else if (button == 1) module.setKey(module instanceof GuiModule ? Keyboard.KEY_RSHIFT : KeyBindUtil.NONE);
+        });
+    }
+
+    private float drawReferenceProperty(Property<?> p, float x, float y, float w, int mx, int my) {
+        if (p instanceof ColorProperty) return drawColor((ColorProperty) p, x, y, w, mx, my);
+        String label = GuiText.trim(label(p), (int) (w * 0.49F), 12);
+        referenceText(label, x, y + 12, ObsidianTheme.GUI_TEXT, 12);
+        if (p instanceof BooleanProperty) {
+            BooleanProperty bool = (BooleanProperty) p;
+            drawReferenceSwitch(x + w - 24, y + 12, anim("refbool" + System.identityHashCode(p), bool.getValue() ? 1 : 0, 18));
+            addHit(x - 3, y, x + w + 3, y + 24, (button, px, py) -> { if (button == 0) bool.setValue(!bool.getValue()); });
+        } else if (p instanceof ModeProperty) {
+            ModeProperty mode = (ModeProperty) p;
+            float bx = x + w * 0.51F, bw = w * 0.49F;
+            RenderUtil.drawRoundedRectWithGl(bx, y + 4, x + w, y + 22, 3, ObsidianTheme.rgba(new Color(217, 217, 217), 255 * alpha));
+            RenderUtil.drawRoundedRectWithGl(bx + 0.6F, y + 4.6F, x + w - 0.6F, y + 21.4F, 2.5F,
+                    ObsidianTheme.rgba(new Color(242, 242, 242), 255 * alpha));
+            referenceText(GuiText.trim(mode.getModeString(), (int) (bw - 17), 11), bx + 5, y + 13, ObsidianTheme.GUI_TEXT, 11);
+            referenceText("v", x + w - 10, y + 13, ObsidianTheme.GUI_MUTED, 9);
+            addHit(bx, y + 3, x + w, y + 23, (button, px, py) -> {
+                if (button == 1) mode.previousMode();
+                else if (button == 0) {
+                    referenceDropdown = referenceDropdown == mode ? null : mode;
+                    dropdownX = bx; dropdownY = y + 24; dropdownW = bw; dropdownScroll = 0;
+                }
+            });
+            return 26;
+        } else if (p instanceof FloatProperty || p instanceof IntProperty || p instanceof PercentProperty) {
+            float tx = x + w * 0.52F, tw = w * 0.32F, cy = y + 13;
+            float value = sliderRatio(p);
+            RenderUtil.drawRoundedRectWithGl(tx, cy - 1, tx + tw, cy + 1, 1, ObsidianTheme.rgba(new Color(220, 220, 220), 255 * alpha));
+            if (value > 0) RenderUtil.drawRoundedRectWithGl(tx, cy - 1, tx + tw * value, cy + 1, 1, ObsidianTheme.rgba(accent, 255 * alpha));
+            RenderUtil.drawRoundedRectWithGl(tx + tw * value - 3, cy - 3, tx + tw * value + 3, cy + 3, 3, ObsidianTheme.rgba(accent, 255 * alpha));
+            referenceText(GuiText.trim(sliderText(p), (int) (w * 0.14F), 10), x + w * 0.86F, y + 12, ObsidianTheme.GUI_MUTED, 10);
+            addHit(tx - 4, y, tx + tw + 4, y + 24, (button, px, py) -> {
+                if (button == 0) { draggingSlider = p; sliderTrackX = tx; sliderTrackW = tw; setSliderRatio(p, clamp01((px - tx) / tw)); }
+                else if (button == 1) GuiInput.prompt(label(p), rawValue(p), s -> setSliderText(p, s), this);
+            });
+        } else if (p instanceof TextProperty) {
+            TextProperty text = (TextProperty) p;
+            referenceText(GuiText.trim(text.getValue() == null ? "" : text.getValue(), (int) (w * 0.46F), 11), x + w * 0.53F,
+                    y + 12, ObsidianTheme.GUI_MUTED, 11);
+            addHit(x + w * 0.5F, y, x + w, y + 24, (button, px, py) -> {
+                if (button == 0) GuiInput.prompt(label(p), text.getValue(), text::setValue, this);
+            });
+        }
+        return 24;
+    }
+
+    private void drawReferenceSwitch(float x, float cy, float on) {
+        RenderUtil.drawRoundedRectWithGl(x, cy - 5.5F, x + 24, cy + 5.5F, 5.5F,
+                ObsidianTheme.rgba(on > 0.5F ? accent : new Color(217, 217, 217), 255 * alpha));
+        float cx = x + 5.5F + on * 13;
+        RenderUtil.drawRoundedRectWithGl(cx - 4, cy - 4, cx + 4, cy + 4, 4, ObsidianTheme.rgba(Color.WHITE, 255 * alpha));
+    }
+
+    private void referenceText(String s, float x, float cy, Color c, float size) {
+        text(s, x, cy, ObsidianTheme.rgba(c, 255 * alpha), size);
+    }
+
+    private void referenceScissor(float x, float y, float w, float h) {
+        ScaledResolution sr = new ScaledResolution(mc);
+        float factor = sr.getScaleFactor() * referenceScale;
+        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+        GL11.glScissor((int) Math.floor(x * factor), (int) Math.floor((sr.getScaledHeight() - (y + h) * referenceScale) * sr.getScaleFactor()),
+                (int) Math.ceil(w * factor), (int) Math.ceil(h * factor));
+    }
+
+    private void drawReferenceDropdown(int mx, int my) {
+        if (referenceDropdown == null) return;
+        ModeProperty mode = referenceDropdown;
+        int rows = Math.min(9, mode.getModes().length);
+        dropdownScroll = Math.max(0, Math.min(dropdownScroll, mode.getModes().length - rows));
+        float w = Math.max(100, dropdownW);
+        for (String s : mode.getModes()) w = Math.max(w, Math.min(220, width(s, 11) + 16));
+        dropdownX = Math.max(5, Math.min(dropdownX, width / referenceScale - w - 5));
+        dropdownY = Math.max(5, Math.min(dropdownY, height / referenceScale - rows * 19 - 9));
+        final float bx = dropdownX, by = dropdownY;
+        RenderUtil.drawRoundedRectWithGl(bx, by, bx + w, by + rows * 19 + 4, 4,
+                ObsidianTheme.rgba(new Color(253, 253, 253), 255 * alpha));
+        addHit(bx, by, bx + w, by + rows * 19 + 4, (button, px, py) -> { });
+        for (int i = 0; i < rows; i++) {
+            final int index = dropdownScroll + i;
+            float ry = by + 2 + i * 19;
+            boolean selected = mode.getValue() == index;
+            if (selected || inside(mx, my, bx, ry, bx + w, ry + 19)) RenderUtil.drawRoundedRectWithGl(bx + 2, ry, bx + w - 2, ry + 19, 2,
+                    ObsidianTheme.rgba(new Color(226, 239, 246), 255 * alpha));
+            referenceText(mode.getModes()[index], bx + 7, ry + 9.5F, selected ? accent : ObsidianTheme.GUI_TEXT, 11);
+            addHit(bx, ry, bx + w, ry + 19, (button, px, py) -> { if (button == 0) { mode.setValue(index); referenceDropdown = null; } });
+        }
+        dropdownW = w;
+    }
+
     private void drawSidebar(float x, float y, int mouseX, int mouseY) {
         float centerY = y + 23.0F;
-        Icon.CROWN.drawCentered(x + 24.0F, centerY, 14.0F, accent.getRGB(), alpha);
+        if (ObsidianTheme.active()) ObsidianTheme.emblem(x + 24, centerY, 19, alpha);
+        else Icon.CROWN.drawCentered(x + 24.0F, centerY, 14.0F, accent.getRGB(), alpha);
         text("Leader", x + 36.0F, centerY, col(245, 247, 252, 255), 18.0F);
         text("Lite", x + 36.0F + width("Leader", 18.0F) + 3.0F, centerY, col(accent, 255), 18.0F);
 
@@ -702,7 +946,7 @@ public class ClickGui extends GuiScreen {
         int rgb = property.getValue();
         RenderUtil.drawRoundedRectWithGl(rx + rw - 19.0F, cy - 6.0F, rx + rw + 1.0F, cy + 6.0F, 4.0F, col(255, 255, 255, 40));
         RenderUtil.drawRoundedRectWithGl(rx + rw - 18.0F, cy - 5.0F, rx + rw, cy + 5.0F, 3.5F,
-                col(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, 255));
+                rawCol(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, 255));
         addHit(rx - 4.0F, ry, rx + rw + 4.0F, ry + 22.0F, (button, mX, mY) -> {
             if (button == 0 || button == 1) {
                 if (!expandedColors.remove(property)) expandedColors.add(property);
@@ -872,6 +1116,10 @@ public class ClickGui extends GuiScreen {
     }
 
     private int col(int r, int g, int b, int a) {
+        return ObsidianTheme.chrome(rawCol(r, g, b, a));
+    }
+
+    private int rawCol(int r, int g, int b, int a) {
         int scaled = Math.round(a * alpha);
         if (a > 0) scaled = Math.max(4, scaled);
         return new Color(r, g, b, Math.max(0, Math.min(255, scaled))).getRGB();
@@ -927,6 +1175,15 @@ public class ClickGui extends GuiScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException {
+        if (ObsidianTheme.active()) {
+            mouseX = (int) (mouseX / referenceScale);
+            mouseY = (int) (mouseY / referenceScale);
+            if (referenceDropdown != null && !inside(mouseX, mouseY, dropdownX, dropdownY, dropdownX + dropdownW,
+                    dropdownY + Math.min(9, referenceDropdown.getModes().length) * 19 + 4)) {
+                referenceDropdown = null;
+                return;
+            }
+        }
         if (bindingModule != null) {
             if (button != 0) bindingModule.setKey(button - 100);
             bindingModule = null;
@@ -956,6 +1213,14 @@ public class ClickGui extends GuiScreen {
         if (wheel == 0) return;
         int mouseX = Mouse.getEventX() * this.width / this.mc.displayWidth;
         int mouseY = this.height - Mouse.getEventY() * this.height / this.mc.displayHeight - 1;
+        if (ObsidianTheme.active()) {
+            mouseX = (int) (mouseX / referenceScale);
+            mouseY = (int) (mouseY / referenceScale);
+            if (referenceDropdown != null) {
+                dropdownScroll += wheel > 0 ? -1 : 1;
+                return;
+            }
+        }
         float amount = wheel > 0 ? -32.0F : 32.0F;
         if (inside(mouseX, mouseY, listX1, listY1, listX2, listY2)) {
             moduleScrollTarget += amount;
@@ -978,6 +1243,7 @@ public class ClickGui extends GuiScreen {
             return;
         }
         if (keyCode == Keyboard.KEY_ESCAPE) {
+            if (referenceDropdown != null) { referenceDropdown = null; return; }
             if (searchFocused || !search.isEmpty()) {
                 search = "";
                 searchFocused = false;
@@ -1020,6 +1286,7 @@ public class ClickGui extends GuiScreen {
         draggingColor = null;
         bindingModule = null;
         savePositions();
+        referenceDropdown = null;
     }
 
     @Override
