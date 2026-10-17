@@ -2,11 +2,6 @@ package leader.events;
 
 import leader.event.events.Event;
 
-/**
- * Fired when the player's attack applies the vanilla hit slow-down
- * (motionX/Z *= 0.6 and setSprinting(false)). Listeners may change the
- * slow-down factor and whether the player keeps sprinting.
- */
 public class HitSlowDownEvent implements Event {
     private double slowDown;
     private boolean sprint;

@@ -130,7 +130,7 @@ public class InvManager extends Module {
     }
 
     private boolean isWaterBucket(ItemStack stack) {
-        // 水桶和空桶都保护：MLG 落地舀水后手里是空桶，不能被当垃圾丢掉
+
         return stack != null && (stack.getItem() == net.minecraft.init.Items.water_bucket || stack.getItem() == net.minecraft.init.Items.bucket);
     }
 
@@ -717,7 +717,7 @@ public class InvManager extends Module {
                                         clickSlot(mc.thePlayer.inventoryContainer.windowId, convertSlotIndex(slot), prefSword, 2);
                                     }
                                 }
-                                // Disabler C09: sort second sword in Instant mode
+
                                 if (secondSwordSlot != -1 && secondSwordSlot != prefSword
                                         && prefSecondSwordSlot >= 0 && prefSecondSwordSlot <= 8
                                         && prefSecondSwordSlot != prefSword) {

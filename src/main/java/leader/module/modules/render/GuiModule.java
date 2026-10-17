@@ -11,7 +11,7 @@ import org.lwjgl.input.Keyboard;
 public class GuiModule extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     public final ModeProperty style = new ModeProperty("Style", 0, new String[]{"Window", "List", "Xylitol", "Xylitol List"});
-    // Shared decoration controls; they never select or overwrite a module's visual mode.
+
     public final BooleanProperty visualMotion = new BooleanProperty("Visual Motion", true);
     private ClickGui clickGui;
     private ListClickGui listClickGui;

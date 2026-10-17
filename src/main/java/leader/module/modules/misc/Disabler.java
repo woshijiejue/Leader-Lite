@@ -71,8 +71,7 @@ public class Disabler extends Module {
     }
 
     private boolean checkCompass() {
-        // Packet events can arrive while the client is still on a menu or
-        // connecting, before Minecraft has created the player/inventory.
+
         if (mc.thePlayer == null || mc.thePlayer.inventory == null) {
             return false;
         }

@@ -142,7 +142,6 @@ public class Island extends Module {
         return IDLE;
     }
 
-
     private static int alpha(Color c, float a) {
         int v = Math.max(0, Math.min(255, (int) a));
         return (v << 24) | (c.getRGB() & 0x00FFFFFF);
@@ -262,7 +261,7 @@ public class Island extends Module {
             this.animW = targetW;
             this.animH = targetH;
         }
-        // Substeps keep the spring stable even at low FPS or high animation speed.
+
         float remaining = dt * animationSpeed.getValue();
         while (remaining > 0.0F) {
             float step = Math.min(remaining, 1.0F / 120.0F);
@@ -405,7 +404,7 @@ public class Island extends Module {
     private void lifetimeRing(float cx, float cy, float progress, Color tint, float opacity) {
         progress = Math.max(0, Math.min(1, progress));
         if (BetterFPS.optimizedHUD()) {
-            // Previously 32 glBegin/glEnd calls plus repeated GL state changes for a five-pixel ring.
+
             RenderUtil.drawArcRing(cx, cy, 4.5F, 1, -90, 360, fade(tint, 24, opacity));
             if (progress > 0) RenderUtil.drawArcRing(cx, cy, 4.5F, 1, -90, progress * 360, fade(tint, 145, opacity));
             return;
@@ -431,7 +430,7 @@ public class Island extends Module {
         }
         Color bg = Leader.hudElementManager.backgroundColor("Island", 40.0F, 40.0F);
         if (!target) {
-            // One restrained graphite surface: readable over the world without a stacked card effect.
+
             RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, radius,
                     alpha(new Color(bg.getRed() / 2, bg.getGreen() / 2, bg.getBlue() / 2), bg.getAlpha() * opacity * 0.5F));
             return;
@@ -628,7 +627,7 @@ public class Island extends Module {
     public void setPreviewNoticeMode(NoticeMode mode) { previewNoticeMode = mode; }
 
     private void drawRoundedSkin(float x, float y, float size, float radius, float skinU, float skinV) {
-        // Textured rounded mesh clips both skin layers without modifying the global stencil buffer.
+
         boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
         GlStateManager.disableCull();
         Tessellator tessellator = Tessellator.getInstance();
@@ -662,8 +661,7 @@ public class Island extends Module {
         float brandW = FontManager.getStringWidth("Leader", nameSize);
         float sep = brandX + brandW + 7;
         float infoX = sep + 9;
-        // Width is animated and may temporarily lag behind a longer FPS/ping value.
-        // Fade the complete metrics in as space becomes available, never truncate its units.
+
         float available = w - (29 + brandW + 16) - 9;
         float metricsEase = ease * Math.max(0, Math.min(1,
                 (available - FontManager.getStringWidth(right, metaSize) + 2) / 2));
@@ -703,7 +701,7 @@ public class Island extends Module {
         else if (state == DANGER) drawDanger(x, y, w, h, opacity, System.currentTimeMillis(), nameSize, metaSize, true);
         else if (state == ALERT) drawAlert(x, y, w, h, opacity, nameSize, metaSize, true);
         else if (state == TARGET) {
-            // Keep the accepted target layout without mutating live combat animation state.
+
             RenderUtil.drawRoundedRectWithGl(x + 10, y + (h - 28) / 2, x + 38, y + (h + 28) / 2,
                     5, fade(accent, 28, opacity));
             text("T", x + 19, y + (h + FontManager.getCapHeight(nameSize)) / 2, nameSize, fade(accent, 255, opacity));

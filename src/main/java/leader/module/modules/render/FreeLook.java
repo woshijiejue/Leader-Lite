@@ -45,7 +45,6 @@ public class FreeLook extends Module {
         this.stop();
     }
 
-    /** Called instead of ModuleManager's generic toggle; repeated key events are ignored. */
     public boolean onBindPressed() {
         Minecraft mc = Minecraft.getMinecraft();
         if (getKey() == KeyBindUtil.NONE || !available(mc) || !activation.press()) return false;
@@ -109,7 +108,7 @@ public class FreeLook extends Module {
                 prevCameraYaw = cameraYaw;
                 prevCameraPitch = cameraPitch;
             }
-            // F5 cannot take FreeLook back to first-person while it owns the camera.
+
             mc.gameSettings.thirdPersonView = 1;
             using = true;
         } else if (perspectiveToggled || using) {
@@ -126,7 +125,7 @@ public class FreeLook extends Module {
         if (!using) return false;
         cameraYaw += yawDelta * 0.15F;
         cameraPitch = Math.max(-90, Math.min(90, cameraPitch - pitchDelta * 0.15F));
-        // Mouse deltas are already frame/sensitivity adjusted by vanilla.
+
         prevCameraYaw = cameraYaw;
         prevCameraPitch = cameraPitch;
         return true;

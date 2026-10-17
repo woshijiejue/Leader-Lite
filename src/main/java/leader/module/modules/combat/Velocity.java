@@ -4,8 +4,10 @@ import com.google.common.base.CaseFormat;
 import leader.event.EventManager;
 import leader.event.EventTarget;
 import leader.event.types.EventType;
+import leader.event.types.Priority;
 import leader.events.*;
 import leader.mixin.IAccessorEntity;
+import leader.mixin.IAccessorMinecraft;
 import leader.module.modules.combat.KillAura;
 import leader.module.Module;
 import leader.module.modules.movement.LongJump;
@@ -13,32 +15,39 @@ import leader.module.modules.movement.Stuck;
 import leader.module.modules.player.Scaffold;
 import leader.property.properties.BooleanProperty;
 import leader.property.properties.IntProperty;
+import leader.property.properties.FloatProperty;
 import leader.property.properties.ModeProperty;
 import leader.property.properties.PercentProperty;
 import leader.util.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C0APacketAnimation;
-import net.minecraft.network.play.client.C0BPacketEntityAction;
+import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
 import net.minecraft.network.play.server.S27PacketExplosion;
+import net.minecraft.network.play.server.S08PacketPlayerPosLook;
+import net.minecraft.network.play.INetHandlerPlayClient;
 import net.minecraft.potion.Potion;
 import leader.Leader;
 import leader.enums.DelayModules;
 import leader.module.modules.player.KeepSprint;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.util.Objects;
 
 public class Velocity extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    public final ModeProperty mode = new ModeProperty("Mode", 0, new String[]{"Vanilla","Prediction","GrimReduce"});
+    private static final long SKIP_HURT_CONFIRMATION_NANOS = 250_000_000L;
+    public final ModeProperty mode = new ModeProperty("Mode", 0, new String[]{"Vanilla","Prediction","GrimReduce","SkipTick"});
+    public final IntProperty skipTick = new IntProperty("SkipTick",3,1,5,() -> mode.getValue() == 3);
+    public final BooleanProperty skipRangeCheck = new BooleanProperty("Range Check", true, () -> mode.getValue() == 3);
+    public final FloatProperty skipRange = new FloatProperty("Range", 3.0F, 0.0F, 6.0F,
+            () -> mode.getValue() == 3 && skipRangeCheck.getValue());
     public final BooleanProperty reduce = new BooleanProperty("Reduce", true, () -> mode.getValue() == 1);
     public final ModeProperty reduceMode = new ModeProperty("ReduceMode", 0, new String[]{"Attack", "ReleaseWhenCanAttack", "ReleaseBeforeCanAttack", "ReleaseWhenSprinting"}, () -> mode.getValue() == 1 && reduce.getValue());
     public final IntProperty grimReduceTicks = new IntProperty("Grim Reduce Ticks", 4, 1, 10, () -> mode.getValue() == 2);
@@ -53,7 +62,7 @@ public class Velocity extends Module {
     private final IntProperty stopBlockHurtTime = new IntProperty("StopBlockHurtTime",2,0,10, () -> this.mode.getValue() == 1 && this.reduce.getValue() && reduceMode.getValue() == 0 && testMode.getValue());
     public final BooleanProperty airPush = new BooleanProperty("AirPush", false, () -> this.mode.getValue() == 1 && this.reduce.getValue());
 
-    public final BooleanProperty jump = new BooleanProperty("Jump", true, () -> mode.getValue() == 1 || mode.getValue() == 2);
+    public final BooleanProperty jump = new BooleanProperty("Jump", true, () -> mode.getValue() >= 1);
     public final BooleanProperty delay = new BooleanProperty("Delay", false, () -> mode.getValue() == 1 || mode.getValue() == 2);
     public final IntProperty delayTicks = new IntProperty("Delay Ticks", 1, 1, 10, () -> (mode.getValue() == 1 || mode.getValue() == 2) && delay.getValue() && !this.airBuffer.getValue());
     public final BooleanProperty forceDelayRisingToFalling = new BooleanProperty("Force Delay Rising To Falling",false,() -> (mode.getValue() == 1 || mode.getValue() == 2) && delay.getValue() && !this.airBuffer.getValue());
@@ -80,6 +89,31 @@ public class Velocity extends Module {
     public static boolean hasReceivedVelocity;
     private int ticksSinceVelocity = -1;
     private int airPushLeft = 0;
+    private volatile boolean skipSequence;
+    private volatile boolean skipPendingFreeze;
+    private volatile boolean skipFreezeActive;
+    private volatile boolean skipReleasingDelay;
+    private volatile boolean skipAttackWindow;
+    private volatile boolean skipWaitingForMovement;
+    private volatile boolean skipDelayOnly;
+    private long skipDelayDeadlineTick;
+    private long skipReleaseMovementSequence;
+    private volatile int skipBoostTicks;
+    private int skipBoostTotal;
+    private int skipFreezeTicksRemaining;
+    private EntityPlayerSP skipPlayer;
+    private WorldClient skipWorld;
+    private long skipFreezeStarted;
+    private boolean skipOwnsDelay;
+    private volatile boolean skipSuppressPackets;
+    private final TimerSpeedLease skipTimer = new TimerSpeedLease();
+    private volatile long combatTick;
+    private long killAuraSuppressedTick = Long.MIN_VALUE;
+    private long skipAttackClaimTick = Long.MIN_VALUE;
+    private boolean skipHurtConfirmed;
+    private long skipHurtStatusNanos;
+    private EntityPlayerSP skipHurtPlayer;
+    private WorldClient skipHurtWorld;
 
     private double knockbackX = 0;
     private float[] targetRotation = null;
@@ -126,8 +160,162 @@ public class Velocity extends Module {
         delayFlag = false;
     }
 
+    private Stuck stuckModule() { return (Stuck) Leader.moduleManager.getModule(Stuck.class); }
+
+    private synchronized void clearSkipHurtConfirmation() {
+        skipHurtConfirmed = false;
+        skipHurtStatusNanos = 0;
+        skipHurtPlayer = null;
+        skipHurtWorld = null;
+    }
+
+    private synchronized void recordSkipHurtConfirmation() {
+        clearSkipHurtConfirmation();
+        if (mc.thePlayer == null || mc.theWorld == null || isStuckActive()
+                || skipSequence || skipPendingFreeze || skipFreezeActive || skipReleasingDelay
+                || skipWaitingForMovement || skipAttackWindow || skipDelayOnly) return;
+        skipHurtPlayer = mc.thePlayer;
+        skipHurtWorld = mc.theWorld;
+        skipHurtStatusNanos = System.nanoTime();
+        skipHurtConfirmed = true;
+    }
+
+    private synchronized boolean consumeSkipHurtConfirmation() {
+        long age = System.nanoTime() - skipHurtStatusNanos;
+        boolean confirmed = skipHurtConfirmed && skipHurtPlayer == mc.thePlayer && skipHurtWorld == mc.theWorld
+                && age >= 0 && age <= SKIP_HURT_CONFIRMATION_NANOS;
+        clearSkipHurtConfirmation();
+        return confirmed;
+    }
+
+    private synchronized void resetSkipState(boolean releaseDelay) {
+        clearSkipHurtConfirmation();
+        Stuck stuck = Leader.moduleManager == null ? null : stuckModule();
+
+        if (skipFreezeActive && stuck != null && stuck.isExternalSkipFreezeActive()
+                && !stuck.isTimedSkipFreezeActive()) stuck.endExternalSkipFreeze();
+        skipFreezeActive = false;
+        if (skipOwnsDelay && Leader.delayManager != null && Leader.delayManager.getDelayModule() == DelayModules.VELOCITY_SKIP_TICK) {
+            skipReleasingDelay = true;
+            try {
+                if (releaseDelay && mc.thePlayer == skipPlayer && mc.theWorld == skipWorld
+                        && mc.getNetHandler() != null && !mc.thePlayer.isDead) {
+                    Leader.delayManager.releaseDelay(DelayModules.VELOCITY_SKIP_TICK);
+                } else {
+                    Leader.delayManager.discardDelay(DelayModules.VELOCITY_SKIP_TICK);
+                }
+            } finally { skipReleasingDelay = false; }
+        }
+        skipTimer.release();
+        skipSequence = skipPendingFreeze = skipFreezeActive = skipReleasingDelay = skipAttackWindow = false;
+        skipWaitingForMovement = false;
+        skipDelayOnly = false;
+        skipDelayDeadlineTick = 0;
+        skipBoostTicks = 0;
+        skipBoostTotal = 0;
+        skipFreezeTicksRemaining = 0;
+        skipOwnsDelay = false;
+        skipSuppressPackets = false;
+        skipPlayer = null; skipWorld = null;
+        skipFreezeStarted = 0;
+        jumpFlag = false;
+        cancellingKillAuraAttack = false;
+    }
+
+    private synchronized boolean beginSkipSequence(Packet<?> packet, boolean hurtConfirmed) {
+        if (skipSequence || skipAttackWindow || skipWaitingForMovement || skipDelayOnly
+                || mc.thePlayer == null || mc.theWorld == null || isStuckActive()
+                || Leader.delayManager == null || Leader.delayManager.getDelayModule() != DelayModules.NONE
+                || !Leader.delayManager.delayedPacket.isEmpty() || WorldTickUtil.getSkipTicks() > 0
+                || mc.thePlayer.isDead || mc.thePlayer.hurtTime <= 0 && !hurtConfirmed || mc.thePlayer.isRiding()
+                || mc.currentScreen != null || !mc.inGameHasFocus) return false;
+
+        if (!Leader.delayManager.beginDelay(DelayModules.VELOCITY_SKIP_TICK, (Packet<INetHandlerPlayClient>) packet)) return false;
+        skipOwnsDelay = true;
+        skipSuppressPackets = false;
+        skipPlayer = mc.thePlayer; skipWorld = mc.theWorld;
+        skipBoostTotal = skipTick.getValue();
+        skipDelayDeadlineTick = combatTick + skipBoostTotal;
+        skipFreezeStarted = System.nanoTime();
+        skipSequence = true;
+        skipFreezeActive = false;
+        skipReleasingDelay = false;
+        skipAttackWindow = false;
+        skipPendingFreeze = true;
+        return true;
+    }
+
+    private boolean isSkipTargetInRange() {
+        if (!skipRangeCheck.getValue()) return true;
+        if (mc.thePlayer == null || mc.theWorld == null || mc.getNetHandler() == null) return false;
+        float range = skipRange.getValue();
+        if (!Float.isFinite(range) || range < 0) return false;
+        KillAura aura = Leader.moduleManager == null ? null : (KillAura) Leader.moduleManager.getModule(KillAura.class);
+        for (Entity entity : mc.theWorld.loadedEntityList) {
+            if (!(entity instanceof EntityLivingBase) || entity == mc.thePlayer || entity.isDead) continue;
+            EntityLivingBase target = (EntityLivingBase) entity;
+            if (target instanceof EntityPlayer && ((EntityPlayer) target).isSpectator()) continue;
+            if (target.deathTime > 0) continue;
+            double distance = RotationUtil.distanceToEntity(target);
+            if (!Double.isFinite(distance) || distance > range) continue;
+            if (aura != null && aura.isEnabled()) {
+                if (aura.isVelocityRangeTarget(target)) return true;
+            } else if (target instanceof EntityPlayer) {
+                EntityPlayer player = (EntityPlayer) target;
+                if (!TeamUtil.isFriend(player) && !TeamUtil.isSameTeam(player) && !TeamUtil.isBot(player)) return true;
+            }
+        }
+        return false;
+    }
+
+    private void useSkipDelayOnly() {
+        boolean pendingJump = jumpFlag;
+        Stuck stuck = stuckModule();
+        if (skipFreezeActive && stuck != null && stuck.isExternalSkipFreezeActive()
+                && !stuck.isTimedSkipFreezeActive()) stuck.endExternalSkipFreeze();
+        skipTimer.release();
+        skipFreezeActive = skipPendingFreeze = skipAttackWindow = skipWaitingForMovement = false;
+        skipSuppressPackets = skipSequence = false;
+        skipBoostTicks = 0;
+        cancellingKillAuraAttack = false;
+        if (!skipOwnsDelay || Leader.delayManager.getDelayModule() != DelayModules.VELOCITY_SKIP_TICK) {
+            resetSkipState(false);
+            jumpFlag = pendingJump;
+            return;
+        }
+        skipDelayOnly = true;
+    }
+
+    private void finishSkipDelayOnly() {
+        boolean shouldJump = mc.thePlayer != null && mc.theWorld != null
+                && mc.thePlayer == skipPlayer && mc.theWorld == skipWorld && mc.getNetHandler() != null
+                && !mc.thePlayer.isDead && jump.getValue() && mc.thePlayer.onGround && !mc.thePlayer.isBurning();
+        resetSkipState(true);
+        jumpFlag = shouldJump;
+    }
+
+    private void beginSkipBoost() {
+        if (skipBoostTicks > 0 || mc.thePlayer == null) return;
+        if (!skipTimer.acquire(skipBoostTotal, skipBoostTotal)) {
+            resetSkipState(false);
+            return;
+        }
+
+        skipWaitingForMovement = false;
+        skipBoostTicks = skipBoostTotal;
+        skipAttackWindow = true;
+    }
+
     @EventTarget
     public void onKnockback(KnockbackEvent event) {
+        if (mode.getValue() == 3) {
+            clearSkipHurtConfirmation();
+            if (skipReleasingDelay && event.getY() > 0.0) {
+                jumpFlag = jump.getValue() && !mc.thePlayer.isBurning();
+            }
+
+            return;
+        }
         if (isStuckActive()) {
             resetForStuck();
             return;
@@ -195,18 +383,125 @@ public class Velocity extends Module {
 
     }
 
-    @EventTarget
+    @EventTarget(Priority.LOWEST)
     public void onLivingUpdate(LivingUpdateEvent event) {
+        if (mode.getValue() == 3 && skipSequence) return;
         if (isStuckActive()) return;
         if (this.isEnabled() && this.jumpFlag) {
-            if (mc.thePlayer.onGround && MoveUtil.isForwardPressed() && !mc.thePlayer.isPotionActive(Potion.jump) && !this.isInLiquidOrWeb() && mc.thePlayer.isSprinting()) {
+            if (mc.thePlayer.onGround && MoveUtil.isForwardPressed() && !mc.thePlayer.isPotionActive(Potion.jump)
+                    && !this.isInLiquidOrWeb() && mc.thePlayer.isSprinting()) {
                 mc.thePlayer.movementInput.jump = true;
             }
             this.jumpFlag = false;
         }
     }
-    @EventTarget
-    public void onTick(TickEvent event){
+
+    @EventTarget(Priority.LOWEST)
+    public void onSkipTickAttack(UpdateEvent event) {
+        if (event.getType() != EventType.PRE || !canPerformSkipTickAttack()) return;
+        KillAura killAura = (KillAura) Leader.moduleManager.getModule(KillAura.class);
+        if (killAura != null) killAura.performVelocityAttack(event.getNewYaw(), event.getNewPitch());
+    }
+
+    @EventTarget(Priority.HIGHEST)
+    public void onCombatTick(TickEvent event) {
+        if (event.getType() != EventType.PRE) return;
+        combatTick++;
+        cancellingKillAuraAttack = false;
+    }
+
+    @EventTarget(Priority.LOWEST)
+    public synchronized void onTick(TickEvent event){
+        if (mode.getValue() == 3) {
+            if (!isEnabled() || mc.thePlayer == null || mc.theWorld == null || mc.thePlayer.isDead
+                    || mc.currentScreen != null || !mc.inGameHasFocus
+                    || (skipSequence || skipAttackWindow || skipWaitingForMovement || skipDelayOnly)
+                    && (mc.thePlayer != skipPlayer || mc.theWorld != skipWorld)) {
+                if (skipSequence || skipAttackWindow || skipWaitingForMovement || skipDelayOnly) resetSkipState(true);
+                return;
+            }
+            if (event.getType() == EventType.PRE) {
+                cancellingKillAuraAttack = skipSequence || skipAttackWindow || skipWaitingForMovement;
+                if ((skipSequence || skipWaitingForMovement) && System.nanoTime() - skipFreezeStarted > 2000000000L) {
+                    resetSkipState(true);
+                    return;
+                }
+                if (skipPendingFreeze && mc.thePlayer.hurtTime <= 0) {
+                    resetSkipState(true);
+                    return;
+                }
+                if (!skipDelayOnly && (skipSequence || skipAttackWindow || skipWaitingForMovement)
+                        && !isSkipTargetInRange()) useSkipDelayOnly();
+                if (skipDelayOnly) return;
+                if (skipPendingFreeze) {
+                    KillAura killAura = (KillAura) Leader.moduleManager.getModule(KillAura.class);
+                    if (killAura != null && killAura.isEnabled()) killAura.prepareVelocityAttackWindow();
+                    Stuck stuck = stuckModule();
+                    if (stuck == null || !stuck.beginExternalSkipFreeze(skipBoostTotal)) {
+
+                        resetSkipState(true);
+                    } else {
+                        skipPendingFreeze = false;
+                        skipFreezeActive = true;
+                        skipSuppressPackets = true;
+                        skipFreezeTicksRemaining = skipBoostTotal;
+                    }
+                }
+                if (skipAttackWindow && (isStuckActive() || !skipTimer.isActive())) resetSkipState(true);
+            } else if (event.getType() == EventType.POST) {
+                if (skipDelayOnly) {
+                    if (combatTick >= skipDelayDeadlineTick) finishSkipDelayOnly();
+                    return;
+                }
+                if (skipFreezeActive) {
+                    Stuck stuck = stuckModule();
+                    if (stuck == null) {
+                        resetSkipState(true);
+                        return;
+                    }
+                    if (!stuck.isExternalSkipFreezeActive()) {
+                        resetSkipState(true);
+                        return;
+                    }
+
+                    skipFreezeTicksRemaining = stuck.getFreezeTicksRemaining();
+                    if (skipFreezeTicksRemaining > 0) return;
+                    stuck.endExternalSkipFreeze();
+
+                    {
+                        skipFreezeActive = false;
+                        skipReleasingDelay = true;
+                        try {
+                            if (Leader.delayManager.getDelayModule() != DelayModules.VELOCITY_SKIP_TICK) {
+                                resetSkipState(false);
+                                return;
+                            }
+                            Leader.delayManager.releaseDelay(DelayModules.VELOCITY_SKIP_TICK);
+                        } finally { skipReleasingDelay = false; skipOwnsDelay = false; }
+                        skipSequence = false;
+                        skipSuppressPackets = false;
+                        if (mc.thePlayer != skipPlayer || mc.theWorld != skipWorld || mc.thePlayer.isDead) {
+                            resetSkipState(false); return;
+                        }
+                        jumpFlag = jump.getValue() && mc.thePlayer.onGround && !mc.thePlayer.isBurning();
+                        skipWaitingForMovement = true;
+                        skipReleaseMovementSequence = Leader.playerStateManager.getMovementSequence();
+                        KillAura killAura = (KillAura) Leader.moduleManager.getModule(KillAura.class);
+                        if (killAura != null && killAura.isEnabled()) killAura.prepareVelocityAttackWindow();
+                        return;
+                    }
+                }
+                if (skipWaitingForMovement) {
+                    if (Leader.playerStateManager.getMovementSequence() > skipReleaseMovementSequence) beginSkipBoost();
+                    return;
+                }
+                if (skipAttackWindow && --skipBoostTicks <= 0) {
+                    resetSkipState(false);
+                }
+                if (!skipSequence && !skipAttackWindow && !skipWaitingForMovement) cancellingKillAuraAttack = false;
+            }
+            return;
+        }
         if (this.isEnabled() && !isStuckActive()){
             if (testMode.getValue() && this.mode.getValue() == 1 && this.reduce.getValue() && reduceMode.getValue() == 0){
                 if (ticksSinceVelocity >= stopBlockHurtTime.getValue()){
@@ -224,13 +519,19 @@ public class Velocity extends Module {
     }
     @EventTarget
     public void onUpdate(UpdateEvent event) {
+        if (mode.getValue() == 3) {
+            if (!isEnabled()) return;
+            if (event.getType() == EventType.PRE) {
+                cancellingKillAuraAttack = skipSequence || skipAttackWindow || skipWaitingForMovement;
+            }
+            return;
+        }
         if (!isEnabled()) return;
         if (isStuckActive()) {
             resetForStuck();
             return;
         }
         if (event.getType() == EventType.PRE) {
-            cancellingKillAuraAttack = false;
             int maxTick = this.rotateTick.getValue();
             if (this.rotateTickCounter > 0 && this.rotateTickCounter <= maxTick) {
                 if (this.rotateTickCounter == 1) {
@@ -267,6 +568,7 @@ public class Velocity extends Module {
                     if (velocityAttacked) {
                         KillAura killAura = (KillAura) Leader.moduleManager.getModule(KillAura.class);
                         if (killAura.getTarget() != null && killAura.isEnabled() && mc.thePlayer.isSprinting()) {
+                            if (cancelKillAuraAttack.getValue()) suppressKillAuraForTick();
                             ChatUtil.sendFormatted("Attack");
                             EventManager.call(new AttackEvent(killAura.getTarget()));
                             mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
@@ -304,7 +606,7 @@ public class Velocity extends Module {
                                     if (killAura.getTarget() != null) {
                                         if (!reduceWhenCanAttack.getValue()
                                                 || killAura.velocityCanReduce(0, killAura.blockTick)) {
-                                            if (cancelKillAuraAttack.getValue()) cancellingKillAuraAttack = true;
+                                            if (cancelKillAuraAttack.getValue()) suppressKillAuraForTick();
                                             EventManager.call(new AttackEvent(killAura.getTarget()));
                                             mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
                                             if (killAura.getTarget() != mc.thePlayer) {
@@ -315,7 +617,7 @@ public class Velocity extends Module {
                                             applyHitSlowDown(true);
                                         }
                                     } else {
-                                        if (cancelKillAuraAttack.getValue()) cancellingKillAuraAttack = true;
+                                        if (cancelKillAuraAttack.getValue()) suppressKillAuraForTick();
                                         EventManager.call(new AttackEvent(targetA.entityHit));
                                         mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
                                         if (targetA.entityHit != mc.thePlayer) {
@@ -373,7 +675,7 @@ public class Velocity extends Module {
         }
         if (mode.getValue() == 2) {
             if (event.getType() == EventType.PRE && grimActive) {
-                cancellingKillAuraAttack = true;
+                suppressKillAuraForTick();
                 KillAura killAura = (KillAura) Leader.moduleManager.getModule(KillAura.class);
                 EntityLivingBase target = killAura != null ? killAura.getTarget() : null;
                 if (target != null && target != mc.thePlayer && mc.thePlayer.isSprinting() && killAura.isEnabled()) {
@@ -385,7 +687,6 @@ public class Velocity extends Module {
                 grimTick++;
                 if (grimTick >= grimReduceTicks.getValue()) {
                     grimActive = false;
-                    cancellingKillAuraAttack = false;
                 }
             }
         }
@@ -431,6 +732,33 @@ public class Velocity extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
+        if (mode.getValue() == 3) {
+            if (!isEnabled() || event.getType() != EventType.RECEIVE) return;
+            if (event.getPacket() instanceof S08PacketPlayerPosLook) {
+                clearSkipHurtConfirmation();
+                return;
+            }
+            if (event.getPacket() instanceof S19PacketEntityStatus) {
+                S19PacketEntityStatus status = (S19PacketEntityStatus) event.getPacket();
+                if (mc.thePlayer != null && mc.theWorld != null && status.getOpCode() == 2
+                        && status.getEntity(mc.theWorld) == mc.thePlayer) {
+                    if (event.isCancelled()) clearSkipHurtConfirmation();
+                    else recordSkipHurtConfirmation();
+                }
+                return;
+            }
+            if (!(event.getPacket() instanceof S12PacketEntityVelocity) || mc.thePlayer == null) return;
+            S12PacketEntityVelocity packet = (S12PacketEntityVelocity) event.getPacket();
+            if (packet.getEntityID() != mc.thePlayer.getEntityId()) return;
+            boolean hurtConfirmed = consumeSkipHurtConfirmation();
+            if (!event.isCancelled() && !skipReleasingDelay && !isStuckActive()
+                    && (!fakeCheck.getValue() || hurtConfirmed)
+                    && (packet.getMotionX() != 0 || packet.getMotionY() != 0 || packet.getMotionZ() != 0)
+                    && beginSkipSequence(packet, hurtConfirmed)) {
+                event.setCancelled(true);
+            }
+            return;
+        }
         if (isStuckActive()) return;
         if (isEnabled() && event.getType() == EventType.RECEIVE && !event.isCancelled()) {
             if (event.getPacket() instanceof S12PacketEntityVelocity) {
@@ -491,7 +819,92 @@ public class Velocity extends Module {
     }
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
+        resetSkipState(false);
         onDisabled();
+    }
+
+    @Override
+    public void verifyValue(String name) {
+        if ("Mode".equals(name)) clearSkipHurtConfirmation();
+        if ("Mode".equals(name) && mode.getValue() != 3
+                && (skipSequence || skipAttackWindow || skipWaitingForMovement || skipDelayOnly)) resetSkipState(true);
+    }
+
+    public static boolean isSkipTickAttackWindow() {
+        if (Leader.moduleManager == null) return false;
+        Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
+        return velocity != null && velocity.isEnabled() && velocity.mode.getValue() == 3
+                && !velocity.skipDelayOnly
+                && (velocity.skipSequence || velocity.skipWaitingForMovement || velocity.skipAttackWindow);
+    }
+
+    public static boolean isSkipTickCombatActive() {
+        return isSkipTickAttackWindow();
+    }
+
+    private void suppressKillAuraForTick() {
+        killAuraSuppressedTick = combatTick;
+        cancellingKillAuraAttack = true;
+    }
+
+    public static boolean shouldCancelKillAuraAttack() {
+        if (Leader.moduleManager == null) return false;
+        Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
+        return velocity != null && velocity.isEnabled()
+                && (cancellingKillAuraAttack || velocity.killAuraSuppressedTick == velocity.combatTick
+                || velocity.mode.getValue() == 2 && velocity.grimActive
+                || isSkipTickCombatActive());
+    }
+
+    public static boolean canPerformSkipTickAttack() {
+        if (Leader.moduleManager == null || mc.thePlayer == null || mc.theWorld == null
+                || !mc.isCallingFromMinecraftThread() || mc.currentScreen != null || !mc.inGameHasFocus) return false;
+        Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
+        return velocity != null && velocity.isEnabled() && velocity.mode.getValue() == 3
+                && velocity.skipAttackWindow && !velocity.skipSequence && !velocity.skipSuppressPackets
+                && mc.thePlayer == velocity.skipPlayer && mc.theWorld == velocity.skipWorld
+                && !mc.thePlayer.isDead && mc.thePlayer.hurtTime > 0 && !velocity.isStuckActive()
+                && Leader.playerStateManager != null && !Leader.playerStateManager.digging
+                && !Leader.playerStateManager.placing && !Leader.playerStateManager.hasInputAction()
+                && velocity.isSkipTargetInRange();
+    }
+
+    public static boolean tryClaimSkipTickAttack() {
+        if (!canPerformSkipTickAttack()) return false;
+        Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
+        if (velocity.skipAttackClaimTick == velocity.combatTick) return false;
+        velocity.skipAttackClaimTick = velocity.combatTick;
+        velocity.suppressKillAuraForTick();
+        return true;
+    }
+
+    public static boolean isSkipTickSequenceActive() {
+        if (Leader.moduleManager == null) return false;
+        Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
+        return velocity != null && velocity.isEnabled() && velocity.mode.getValue() == 3
+                && (velocity.skipSuppressPackets || velocity.skipSequence || velocity.skipPendingFreeze || velocity.skipFreezeActive
+                || velocity.skipReleasingDelay || velocity.skipWaitingForMovement || velocity.skipAttackWindow || velocity.skipDelayOnly);
+    }
+
+    public static boolean shouldSuppressSkipTickPacket(Packet<?> packet) {
+        return packet != null && isSkipTickPacketFreezeActive() && SkipTickPacketPolicy.isGameplayPacket(packet);
+    }
+
+    public static boolean isSkipTickPacketFreezeActive() {
+        if (Leader.moduleManager == null) return false;
+        Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
+        return velocity != null && velocity.isEnabled() && velocity.mode.getValue() == 3
+                && velocity.skipSuppressPackets;
+    }
+
+    public static void abortSkipTickForCorrection() {
+        if (!isSkipTickSequenceActive()) return;
+        if (!mc.isCallingFromMinecraftThread()) {
+            mc.addScheduledTask(Velocity::abortSkipTickForCorrection);
+            return;
+        }
+        Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
+        if (velocity != null) velocity.resetSkipState(false);
     }
 
     public void dbg(String msg) {
@@ -511,6 +924,10 @@ public class Velocity extends Module {
 
     @Override
     public void onEnabled() {
+        clearSkipHurtConfirmation();
+        combatTick = 0;
+        killAuraSuppressedTick = skipAttackClaimTick = Long.MIN_VALUE;
+        cancellingKillAuraAttack = false;
         hasReceivedVelocity = false;
         airPushLeft = 0;
         grimActive = false;
@@ -523,6 +940,7 @@ public class Velocity extends Module {
 
     @Override
     public void onDisabled() {
+        resetSkipState(true);
         pendingExplosion = false;
         stoppedBlock = false;
         allowNext = true;
@@ -533,6 +951,7 @@ public class Velocity extends Module {
         grimTick = 0;
         Leader.delayManager.setDelayState(false, DelayModules.VELOCITY);
     }
+
     @Override
     public String[] getSuffix() {
         if (mode.getValue() == 0) {

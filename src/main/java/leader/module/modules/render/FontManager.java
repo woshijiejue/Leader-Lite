@@ -45,7 +45,6 @@ public class FontManager extends Module {
         FontRender.drawString(text, x, y, color, shadow, size, customFont.getValue());
     }
 
-    /** Optional soft text halo, independent of fullscreen bloom and off by default in HUD modules. */
     public static void drawStringWithGlow(String text, float x, float y, int color, float size, float strength) {
         if (text == null || text.isEmpty() || (color >>> 24) < 4) return;
         syncFontMode();
@@ -54,7 +53,7 @@ public class FontManager extends Module {
         int layers = BetterFPS.optimizedHUD() ? 1 : 2;
         for (int layer = layers; layer >= 1; layer--) {
             int alpha = Math.round(a * (layer == 1 ? 0.18F : 0.08F));
-            if (alpha < 4) continue; // Vanilla treats tiny alpha values as opaque.
+            if (alpha < 4) continue;
             int glow = (color & 0xFFFFFF) | alpha << 24;
             float offset = layer * 0.7F;
             FontRender.drawString(halo, x - offset, y, glow, false, size, customFont.getValue());

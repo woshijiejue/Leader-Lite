@@ -8,6 +8,8 @@ import leader.events.*;
 import leader.module.modules.player.NoHitDelay;
 import leader.module.modules.render.BetterFPS;
 import leader.util.KeyBindUtil;
+import leader.util.ISkipTickWorld;
+import leader.util.TimerSpeedLease;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiScreen;
@@ -46,7 +48,6 @@ public abstract class MixinMinecraft {
         new Initializer();
     }
 
-
     @Inject(
             method = {"startGame"},
             at = {@At("RETURN")}
@@ -60,6 +61,7 @@ public abstract class MixinMinecraft {
             at = {@At("HEAD")}
     )
     private void runTick(CallbackInfo callbackInfo) {
+        TimerSpeedLease.beginTick();
         if (this.theWorld != null && this.thePlayer != null) {
             EventManager.call(new TickEvent(EventType.PRE));
         }
@@ -86,6 +88,7 @@ public abstract class MixinMinecraft {
         if (this.theWorld != null && this.thePlayer != null) {
             EventManager.call(new TickEvent(EventType.POST));
         }
+        TimerSpeedLease.endTick();
     }
 
     @Inject(
@@ -93,6 +96,9 @@ public abstract class MixinMinecraft {
             at = {@At("HEAD")}
     )
     private void loadWorld(WorldClient worldClient, String string, CallbackInfo callbackInfo) {
+        TimerSpeedLease.cancelActive();
+        if (this.theWorld != null) ((ISkipTickWorld) this.theWorld).leader$setSkipTicks(0);
+        if (worldClient != null) ((ISkipTickWorld) worldClient).leader$setSkipTicks(0);
         EventManager.call(new LoadWorldEvent());
     }
 

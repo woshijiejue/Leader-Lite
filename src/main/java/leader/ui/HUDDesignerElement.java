@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** One source of truth for editor previews, bounds and HUD-only settings. */
 final class HUDDesignerElement {
     final String name;
     final Module module;
@@ -171,7 +170,7 @@ final class HUDDesignerElement {
             if (properties != null) {
                 for (Property<?> property : properties) {
                     String n = property.getName();
-                    // The array list also owns unrelated chat/sound features; keep this panel HUD-specific.
+
                     if (module instanceof HUD && Arrays.asList("chat-outline", "blink-timer", "toggle-sounds", "toggle-alerts").contains(n)) continue;
                     if (property instanceof BooleanProperty || property instanceof ModeProperty || property instanceof FloatProperty
                             || property instanceof IntProperty || property instanceof PercentProperty || property instanceof ColorProperty) {

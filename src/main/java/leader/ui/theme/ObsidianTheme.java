@@ -14,7 +14,6 @@ import org.lwjgl.opengl.GL14;
 
 import java.awt.Color;
 
-/** Xylitol-inspired rendering primitives. Light editor chrome and compact translucent game HUD. */
 public final class ObsidianTheme {
     public static final Color TEXT = new Color(246, 246, 246);
     public static final Color MUTED = new Color(194, 194, 194);
@@ -51,7 +50,6 @@ public final class ObsidianTheme {
         return (Math.max(0, Math.min(255, Math.round(alpha))) << 24) | (color.getRGB() & 0xFFFFFF);
     }
 
-    /** Neutral chrome only; colour-picker swatches and gameplay colours bypass this. */
     public static int chrome(int color) {
         if (!active()) return color;
         int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
@@ -64,7 +62,7 @@ public final class ObsidianTheme {
 
     public static int ink(int color) {
         int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
-        // Preserve warning/status colours in Island; only recolour neutral typography.
+
         if (Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b)) > 55) return color;
         Color mapped = (r + g + b) / 3 > 195 ? TEXT : MUTED;
         return (color & 0xFF000000) | (mapped.getRGB() & 0xFFFFFF);
@@ -81,7 +79,6 @@ public final class ObsidianTheme {
         RenderUtil.drawRoundedRectWithGl(x, y, x + w, y + h, 6, rgba(new Color(250, 249, 248), 240 * opacity));
     }
 
-    /** Deferred masks use screen-space scaling, not the caller's later-restored matrix. */
     public static void mask(float x, float y, float w, float h, float scale, float radius) {
         if (w <= 0 || h <= 0) return;
         ShaderElement.addBlurTask(() -> {
@@ -92,20 +89,17 @@ public final class ObsidianTheme {
         });
     }
 
-    /** Thin top accent from the reference HUD; no corner cuts or decorative frame. */
     public static void edges(float x, float y, float w, float h, float opacity, int seed) {
         if (opacity <= 0.01F || w < 16 || h < 8) return;
         RenderUtil.drawRoundedRectGradientH(x, y, x + w, y + 1, 0,
                 rgba(accent(System.currentTimeMillis(), 0), 230 * opacity), rgba(accent(System.currentTimeMillis(), 6), 230 * opacity));
     }
 
-    /** Architectural backdrop is editor-only; no overlay is added during gameplay. */
     public static void backdrop(float w, float h, float opacity) {
         if (!active() || opacity <= 0.01F) return;
         RenderUtil.drawRoundedRectWithGl(0, 0, w, h, 0, rgba(Color.BLACK, 45 * opacity));
     }
 
-    /** Simple initial/avatar fallback; no custom geometric logo. */
     public static void emblem(float cx, float cy, float size, float opacity) {
         if (opacity <= 0.01F) return;
         RenderUtil.drawRoundedRectWithGl(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2, 3,
@@ -130,7 +124,6 @@ public final class ObsidianTheme {
         } finally { batch.close(); }
     }
 
-    /** One batched draw per ornament; restore state through Minecraft's state cache. */
     private static final class Batch {
         private final boolean texture = GL11.glIsEnabled(GL11.GL_TEXTURE_2D), blend = GL11.glIsEnabled(GL11.GL_BLEND);
         private final boolean depth = GL11.glIsEnabled(GL11.GL_DEPTH_TEST), cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);

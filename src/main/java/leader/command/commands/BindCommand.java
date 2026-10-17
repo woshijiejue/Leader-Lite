@@ -98,7 +98,7 @@ public class BindCommand extends Command {
     }
 
     private int getMouseButtonIndex(String buttonName) {
-        // Handle numbered format (MOUSE0, MOUSE1, etc.)
+
         if (buttonName.startsWith("MOUSE")) {
             try {
                 String numStr = buttonName.substring(5);

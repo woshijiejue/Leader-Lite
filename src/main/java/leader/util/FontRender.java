@@ -170,7 +170,7 @@ public final class FontRender {
         if (renderer == null) {
             renderer = new CustomFontRenderer(getFontPath(fontMode), normalizeSize(size), true);
             renderers.put(key, renderer);
-            // Dragging font-size sliders used to retain one texture atlas per tiny size change.
+
             if (renderers.size() > 32) {
                 Integer oldest = renderers.keySet().iterator().next();
                 CustomFontRenderer removed = renderers.remove(oldest);

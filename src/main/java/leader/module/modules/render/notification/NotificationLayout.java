@@ -1,6 +1,5 @@
 package leader.module.modules.render.notification;
 
-/** Screen-space anchors shared by every notification style, independent of Minecraft rendering. */
 final class NotificationLayout {
     private NotificationLayout() { }
 

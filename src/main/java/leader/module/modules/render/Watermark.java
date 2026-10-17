@@ -344,7 +344,6 @@ public class Watermark extends Module {
         else FontManager.drawString(text, x, y, color, false, size);
     }
 
-
     private void renderClassic(String curText, String nextText, float anim, Color themeColor) {
         float uiScale = this.scale.getValue();
         float textScale = this.fontScale.getValue();

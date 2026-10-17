@@ -74,7 +74,7 @@ public class KawaseBlur {
         boolean refresh = resized || refreshRate == 0 || lastRefresh == 0 || now - lastRefresh >= 1000000000L / refreshRate
                 || lastWorld != mc.theWorld || lastScreen != mc.currentScreen || lastOffset != offset;
         if (refresh) {
-            // Cache only the blurred scene, not its alpha mask. Current HUD shapes are composited every frame.
+
             renderFBO(framebufferList.get(1), mc.getFramebuffer().framebufferTexture, kawaseDown, offset);
             for (int i = 1; i < iterations; i++) {
                 renderFBO(framebufferList.get(i + 1), framebufferList.get(i).framebufferTexture, kawaseDown, offset);
@@ -147,7 +147,7 @@ public class KawaseBlur {
         ScaledResolution sr = new ScaledResolution(mc);
         float width = (float) sr.getScaledWidth_double();
         float height = (float) sr.getScaledHeight_double();
-        // 确保纹理已启用
+
         GlStateManager.enableTexture2D();
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2f(0, 1);

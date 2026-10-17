@@ -58,12 +58,12 @@ public class GuiHUDDesigner extends GuiScreen {
                 elements.add(new HUDDesignerElement(module.getName(), module));
             }
         }
-        // The display setting is required; the movement module itself may stay disabled.
+
         Scaffold scaffold = (Scaffold) Leader.moduleManager.modules.get(Scaffold.class);
         if (scaffold != null && scaffold.blockCounter.getValue()) {
             elements.add(new HUDDesignerElement("ScaffoldCounter", scaffold));
         }
-        // Existing fusion links remain accessible even while Island is disabled.
+
         Island island = (Island) Leader.moduleManager.modules.get(Island.class);
         if (island != null && find("Island") == null && !Leader.hudElementManager.mergedModules("Island").isEmpty()) {
             elements.add(new HUDDesignerElement("Island", island));
@@ -265,7 +265,7 @@ public class GuiHUDDesigner extends GuiScreen {
             GlStateManager.translate(fx, fy, 0);
             GlStateManager.scale(sc, sc, 1);
             GlStateManager.translate(-cx, -cy, 0);
-            // Vanilla's font renderer treats near-zero alpha as opaque; stop text before that threshold.
+
             if (1 - t > 0.05F) f.element.preview(f.x, f.y, 1 - t, 0);
             border(new float[]{f.x + f.bounds[0], f.y + f.bounds[1], f.bounds[2], f.bounds[3]},
                     accent, 200 * (1 - t));
@@ -336,7 +336,7 @@ public class GuiHUDDesigner extends GuiScreen {
             }
         }
         beginDrag(element, mx, my);
-        // Keep draw order and hit order consistent while overlapping elements are edited.
+
         elements.remove(element);
         elements.add(element);
     }
@@ -374,7 +374,7 @@ public class GuiHUDDesigner extends GuiScreen {
         if (button != 0) return;
         if (settings != null) settings.release();
         if (dragging == null) return;
-        // A fast drag can start and finish between GUI ticks.
+
         updateDrag(mx, my);
         HUDDesignerElement element = dragging;
         if (pulledModule != null) {

@@ -1260,14 +1260,14 @@ public class Notification extends Module {
 
     private float cardX(ScaledResolution sr, float originX, float width, float slide) {
         if (previewing) return originX / scale.getValue();
-        // RIGHT uses the preview's right edge as the anchor, including variable-width styles.
+
         return NotificationLayout.x(sr.getScaledWidth(), originX, previewSize()[0], width,
                 scale.getValue(), mode.getValue() == 0, slide);
     }
 
     private float cardY(ScaledResolution sr, float originY, float height, float stackOffset) {
         if (previewing) return (originY - stackOffset * scale.getValue()) / scale.getValue();
-        // The newest card's bottom edge stays fixed; older cards stack upwards in scaled units.
+
         return NotificationLayout.y(sr.getScaledHeight(), originY, previewSize()[1], height,
                 scale.getValue(), stackOffset);
     }
@@ -1303,7 +1303,7 @@ public class Notification extends Module {
         previewing = true;
         previewX = x; previewY = y; previewAlpha = alpha;
         try {
-            // The same style renderer as the live HUD, but with an isolated sample queue.
+
             renderEntries(new ScaledResolution(mc), now, dur, sample);
         } finally {
             previewing = false;

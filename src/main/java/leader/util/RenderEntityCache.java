@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Render-only snapshot cache. Combat/placement queries must not use this cache. */
 final class RenderEntityCache {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static World world;

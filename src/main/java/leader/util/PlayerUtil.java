@@ -143,6 +143,10 @@ public class PlayerUtil {
     }
 
     public static void attackEntity(Entity target) {
+        attackEntity(target, false);
+    }
+
+    public static void attackEntity(Entity target, boolean vanillaSlowdown) {
         if (ForgeHooks.onPlayerAttackTarget(mc.thePlayer, target)) {
             if (target.canAttackWithItem() && !target.hitByEntity(mc.thePlayer)) {
                 float baseDamage = (float) mc.thePlayer.getEntityAttribute(SharedMonsterAttributes.attackDamage).getAttributeValue();
@@ -181,7 +185,8 @@ public class PlayerUtil {
                                     0.1,
                                     MathHelper.cos(mc.thePlayer.rotationYaw * (float) Math.PI / 180.0F) * (float) knockbackLevel * 0.5F
                             );
-                            HitSlowDownEvent event = (HitSlowDownEvent) EventManager.call(new HitSlowDownEvent());
+                            HitSlowDownEvent event = new HitSlowDownEvent();
+                            if (!vanillaSlowdown) EventManager.call(event);
                             mc.thePlayer.motionX *= event.getSlowDown();
                             mc.thePlayer.motionZ *= event.getSlowDown();
                             if (!event.getSprint()) {

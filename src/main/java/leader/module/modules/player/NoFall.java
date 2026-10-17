@@ -296,10 +296,7 @@ public class NoFall extends Module {
     }
 
     private boolean nextTickWillLanding() {
-        // Check a few extra blocks below so the MLG starts EARLY enough: the
-        // rotation takes ~1 tick to reach the server and the place packet is sent
-        // 1 tick after the rotation, so if we only act when the ground is right
-        // beneath the player the water never gets placed before landing.
+
         return !isAirBlocksBelow(getYMotion() + 2);
     }
 

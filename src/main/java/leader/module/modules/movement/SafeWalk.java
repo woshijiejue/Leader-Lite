@@ -83,7 +83,7 @@ public class SafeWalk extends Module {
         if (shouldSneak) {
             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindSneak.getKeyCode(), true);
         } else if (this.forcedSneak) {
-            // Restore the physical key state instead of leaving sneak stuck.
+
             KeyBindUtil.updateKeyState(mc.gameSettings.keyBindSneak.getKeyCode());
         }
         this.forcedSneak = shouldSneak;

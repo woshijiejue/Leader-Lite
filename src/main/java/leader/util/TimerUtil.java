@@ -1,10 +1,5 @@
 package leader.util;
 
-/**
- * @Description: Kiss my ass
- * @Author: Eremin12
- * @Date: 2026/9/9 09:49
- */
 public class TimerUtil {
     private long lastMS = System.currentTimeMillis();
 

@@ -1,6 +1,5 @@
 package leader.ui.theme;
 
-/** Visible text baselines and avatar alignment shared by the Xylitol HUD cards. */
 public final class HUDCardLayout {
     public final float height;
     public final float firstBaseline;

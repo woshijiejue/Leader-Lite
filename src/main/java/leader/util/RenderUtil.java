@@ -58,8 +58,6 @@ public class RenderUtil {
         RenderUtil.enchantmentMap = new EnchantmentMap();
     }
 
-
-
     private static final float[] AA_BOUNDARY = new float[4];
     private static final float[][] ROUND_COS = new float[49][];
     private static final float[][] ROUND_SIN = new float[49][];
@@ -80,7 +78,7 @@ public class RenderUtil {
     public static void drawRoundedRect(float x, float y, float x2, float y2, float radius, int color) {
         if ((color >>> 24) == 0 || x2 <= x || y2 <= y) return;
         if (BetterFPS.optimizedHUD()) {
-            // Two batched draws instead of a rectangle plus four separate corner fans.
+
             drawRoundedRectStyled(x, y, x2, y2, radius, 0, color, color);
             return;
         }

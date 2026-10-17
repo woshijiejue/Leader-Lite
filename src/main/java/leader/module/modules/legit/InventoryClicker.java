@@ -86,7 +86,6 @@ public class InventoryClicker extends Module {
                 .trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
     }
 
-    /** Bedwars menus are server-created chests, not ordinary storage containers. */
     private int bedwarsShopType(GuiChest screen) {
         if (!inBedwars() || !(screen.inventorySlots instanceof ContainerChest)) return 0;
         IInventory inventory = ((ContainerChest) screen.inventorySlots).getLowerChestInventory();
@@ -101,7 +100,7 @@ public class InventoryClicker extends Module {
                 || title.equals("potions") || title.equals("utility") || title.equals("rotating items")
                 || title.equals("favorites") || title.contains("快捷购买") || title.contains("快捷購買")
                 || title.contains("物品商店")) return 1;
-        // Fallback for translated/category titles: require actual shop lore, not just "shop" in a name.
+
         boolean purchase = false, navigation = false, upgrade = false;
         for (int i = 0; i < inventory.getSizeInventory(); i++) {
             ItemStack stack = inventory.getStackInSlot(i);

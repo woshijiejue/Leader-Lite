@@ -31,7 +31,7 @@ public abstract class MixinBlockModelRenderer {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/util/EnumFacing;values()[Lnet/minecraft/util/EnumFacing;"),
             require = 0)
     private EnumFacing[] betterFPSRenderFaces() {
-        // These loops only read the directions. Avoid cloning the enum array for each block model.
+
         return BetterFPS.using ? leader$renderFaces : EnumFacing.values();
     }
 
@@ -45,7 +45,7 @@ public abstract class MixinBlockModelRenderer {
     @Redirect(method = "renderModel(Lnet/minecraft/world/IBlockAccess;Lnet/minecraft/client/resources/model/IBakedModel;Lnet/minecraft/block/state/IBlockState;Lnet/minecraft/util/BlockPos;Lnet/minecraft/client/renderer/WorldRenderer;Z)Z",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;isAmbientOcclusionEnabled()Z"), require = 0)
     private boolean betterFPSAmbientOcclusion() {
-        // Keep vanilla/OptiFine's model selection, custom colors and exception handling intact.
+
         return !BetterFPS.useFastBlockLighting() && net.minecraft.client.Minecraft.isAmbientOcclusionEnabled();
     }
 

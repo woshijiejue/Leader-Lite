@@ -39,8 +39,7 @@ public abstract class MixinGuiIngameForge {
                 ShaderElement.getTasks().clear();
             }
         }
-        // The designer supplies isolated previews itself. Do not let live HUD modules
-        // paint over the editor while it is open.
+
         if (!(Minecraft.getMinecraft().currentScreen instanceof GuiHUDDesigner)) {
             EventManager.call(new Render2DEvent(float1));
         }

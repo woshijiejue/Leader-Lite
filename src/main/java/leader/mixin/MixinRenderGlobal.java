@@ -20,8 +20,7 @@ public abstract class MixinRenderGlobal {
     private boolean betterFPSDeferChunkBuild(ChunkRenderDispatcher dispatcher, RenderChunk chunk) {
         if (BetterFPS.using && BetterFPS.aggressive() && BetterFPS.asyncChunkBuild.getValue()) {
             Minecraft mc = Minecraft.getMinecraft();
-            // First meshes and the section being interacted with remain synchronous.
-            // Queue rejection must fall back: vanilla clears needsUpdate after this call.
+
             boolean nearby = mc.thePlayer == null || chunk.boundingBox.expand(8, 8, 8).isVecInside(mc.thePlayer.getPositionEyes(1));
             if (!nearby && chunk.getCompiledChunk() != CompiledChunk.DUMMY && dispatcher.updateChunkLater(chunk)) return true;
         }

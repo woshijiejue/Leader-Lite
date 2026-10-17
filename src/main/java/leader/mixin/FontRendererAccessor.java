@@ -30,11 +30,9 @@ public interface FontRendererAccessor {
     @Accessor
     float getRed();
 
-    // Someone messed up the mappings
     @Accessor("green")
     float getBlue();
 
-    // Someone messed up the mappings
     @Accessor("blue")
     float getGreen();
 
@@ -83,6 +81,4 @@ public interface FontRendererAccessor {
     @Invoker
     int invokeRenderString(String text, float x, float y, int color, boolean dropShadow);
 }
-
-
 

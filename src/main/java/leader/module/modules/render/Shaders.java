@@ -37,7 +37,7 @@ public class Shaders extends Module {
     }
 
     public void renderShaders() {
-        // A fullscreen shader chain is unnecessary when no HUD supplied a mask.
+
         if (ShaderElement.getTasks().isEmpty()) return;
         boolean extras = !BetterFPS.skipExtraPostFX();
         if (!(blur.getValue() || extras && (shadow.getValue() || bloom.getValue()))) {
@@ -45,7 +45,7 @@ public class Shaders extends Module {
             return;
         }
         maskStencil = ShaderElement.createFrameBuffer(maskStencil);
-        // All three effects consume the same mask. Build it once, not once per effect.
+
         runMaskTasks(maskStencil);
         if (this.blur.getValue()) {
             KawaseBlur.renderBlur(maskStencil.framebufferTexture, BetterFPS.limitShaderPasses(this.blurRadius.getValue()), this.blurOffset.getValue());

@@ -7,11 +7,18 @@ import leader.event.EventManager;
 import leader.event.types.EventType;
 import leader.events.PacketEvent;
 import leader.management.PingTracker;
+import leader.module.modules.combat.Velocity;
+import leader.module.modules.movement.Stuck;
+import leader.util.SkipTickPacketPolicy;
+import leader.util.PacketUtil;
+import leader.module.modules.combat.KillAura;
+import leader.module.modules.combat.BackTrack;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.INetHandlerPlayClient;
 import net.minecraft.network.play.client.C16PacketClientStatus;
 import net.minecraft.network.play.server.S37PacketStatistics;
+import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.spongepowered.asm.mixin.Mixin;
@@ -30,9 +37,16 @@ public abstract class MixinNetworkManager {
             cancellable = true
     )
     private void channelRead0(ChannelHandlerContext channelHandlerContext, Packet<?> packet, CallbackInfo callbackInfo) {
-        // Timestamp at network arrival, before artificial packet delay or main-thread processing.
+
         if (packet instanceof S37PacketStatistics) PingTracker.INSTANCE.received((NetworkManager) (Object) this, packet);
+        BackTrack.handleNetworkControl(packet, (NetworkManager) (Object) this);
         if (!packet.getClass().getName().startsWith("net.minecraft.network.play.client")) {
+            if (packet instanceof S08PacketPlayerPosLook && (Velocity.isSkipTickSequenceActive()
+                    || Stuck.isExternalPacketFreezeActive() || Stuck.hasRequestedSkipFreeze()
+                    || KillAura.isSkipTickAutoBlockActive())) {
+                SkipTickPacketPolicy.trackCorrection(packet);
+                return;
+            }
             if (Leader.delayManager != null && Leader.delayManager.shouldDelay((Packet<INetHandlerPlayClient>) packet)) {
                 callbackInfo.cancel();
             } else {
@@ -58,9 +72,19 @@ public abstract class MixinNetworkManager {
     )
     private void sendPacket(Packet<?> packet, CallbackInfo callbackInfo) {
         if (!packet.getClass().getName().startsWith("net.minecraft.network.play.server")) {
+            if (SkipTickPacketPolicy.isCorrectionAcknowledgement(packet)) {
+                if (Leader.playerStateManager != null) Leader.playerStateManager.handlePacket(packet);
+                return;
+            }
+            if (Stuck.shouldSuppressExternalSkipPacket(packet) || Velocity.shouldSuppressSkipTickPacket(packet)) {
+                PacketUtil.markSendCancelled(packet);
+                callbackInfo.cancel();
+                return;
+            }
             PacketEvent event = new PacketEvent(EventType.SEND, packet);
             EventManager.call(event);
             if (event.isCancelled()) {
+                PacketUtil.markSendCancelled(packet);
                 callbackInfo.cancel();
             } else if (Leader.playerStateManager != null && Leader.blinkManager != null && Leader.lagManager != null) {
                 if (!Leader.lagManager.isFlushing()) {
@@ -91,6 +115,15 @@ public abstract class MixinNetworkManager {
             CallbackInfo callbackInfo
     ) {
         if (!packet.getClass().getName().startsWith("net.minecraft.network.play.server")) {
+            if (SkipTickPacketPolicy.isCorrectionAcknowledgement(packet)) {
+                if (Leader.playerStateManager != null) Leader.playerStateManager.handlePacket(packet);
+                return;
+            }
+            if (Stuck.shouldSuppressExternalSkipPacket(packet) || Velocity.shouldSuppressSkipTickPacket(packet)) {
+                PacketUtil.markSendCancelled(packet);
+                callbackInfo.cancel();
+                return;
+            }
             if (Leader.playerStateManager != null && Leader.blinkManager != null && Leader.lagManager != null) {
                 if (!Leader.lagManager.isFlushing()) {
                     Leader.playerStateManager.handlePacket(packet);

@@ -22,7 +22,6 @@ public class TimedPacket {
         this.time.reset();
     }
 
-
     public Packet<?> getPacket() {
         return packet;
     }

@@ -12,7 +12,6 @@ import org.lwjgl.opengl.GL11;
 
 import java.awt.Color;
 
-/** Small drawing helpers for isolated editor samples; never updates live module state. */
 public final class HUDPreviewUtil {
     private HUDPreviewUtil() { }
 

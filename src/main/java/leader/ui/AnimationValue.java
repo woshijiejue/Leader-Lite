@@ -1,6 +1,5 @@
 package leader.ui;
 
-/** Small frame-rate independent easing value used by the ClickGUI. */
 public final class AnimationValue {
     private final long duration;
     private float start;
@@ -24,7 +23,7 @@ public final class AnimationValue {
     public float get() {
         float progress = Math.min(1.0F,
                 (System.currentTimeMillis() - startedAt) / (float) duration);
-        // TrollHack-style OUT_CUBIC easing: responsive at the start, soft at the end.
+
         float eased = 1.0F - (float) Math.pow(1.0F - progress, 3.0D);
         return start + (target - start) * eased;
     }

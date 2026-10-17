@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Scrollable inspector. Input and drawing share the same clipped control rectangles. */
 final class HUDDesignerSettings {
     private final GuiHUDDesigner designer;
     private final HUDDesignerElement element;
@@ -274,7 +273,7 @@ final class HUDDesignerSettings {
         else property.previousMode();
         float[] after = element.bounds(designer.islandState());
         float[] origin = element.origin();
-        // Alignment/style changes must not teleport an editable HUD off screen.
+
         element.setOrigin(origin[0] + before[0] - after[0], origin[1] + before[1] - after[1]);
         designer.keepOnScreen(element);
     }

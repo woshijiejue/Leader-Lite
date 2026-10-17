@@ -224,14 +224,12 @@ public class Animations extends Module {
 
                 GlStateManager.pushMatrix();
 
-                // Base first-person position.
                 GlStateManager.translate(
                         0.68F * side,
                         -0.58F - equipProgress * 0.20F,
                         -0.82F
                 );
 
-// Turn both claws slightly toward the center of the screen.
                 GlStateManager.rotate(
                         -25.0F * side,
                         0.0F,
@@ -253,7 +251,6 @@ public class Animations extends Module {
                         1.0F
                 );
 
-                // Breathing and idle movement.
                 GlStateManager.translate(
                         idleSin * 0.006F * side,
                         idleCos * 0.008F,
@@ -274,7 +271,6 @@ public class Animations extends Module {
                         0.0F
                 );
 
-                // Very small vanilla swing feedback. It must not control the attack.
                 GlStateManager.translate(
                         -0.012F * vanillaSwingRoot * side,
                         0.006F * vanillaSwingRoot,
@@ -288,7 +284,6 @@ public class Animations extends Module {
                         0.0F
                 );
 
-                // Wind-up.
                 GlStateManager.translate(
                         -0.08F * side * pose.windup,
                         0.065F * pose.windup,
@@ -316,7 +311,6 @@ public class Animations extends Module {
                         1.0F
                 );
 
-                // Forward slash.
                 GlStateManager.translate(
                         0.18F * side * pose.strike,
                         -0.13F * pose.strike,
@@ -344,7 +338,6 @@ public class Animations extends Module {
                         1.0F
                 );
 
-                // Small impact kick.
                 GlStateManager.translate(
                         0.025F * side * pose.impact,
                         -0.018F * pose.impact,
@@ -358,7 +351,6 @@ public class Animations extends Module {
                         0.0F
                 );
 
-                // The inactive claw reacts slightly instead of attacking with it.
                 float reaction = otherPose.impact + otherPose.strike * 0.25F;
 
                 GlStateManager.translate(
@@ -400,8 +392,6 @@ public class Animations extends Module {
                         idleSin * 0.018F
                 );
 
-                // ModelRenderer normally samples the currently bound item texture.
-                // Texture is disabled so the custom model keeps stable solid colors.
                 GlStateManager.disableTexture2D();
 
                 GlStateManager.color(
@@ -531,11 +521,6 @@ public class Animations extends Module {
                 private final ModelRenderer[] toeEnd =
                         new ModelRenderer[TOE_COUNT];
 
-                /*
-                 * The claw tips use an empty duplicate hierarchy. This allows them to
-                 * inherit exactly the same transformations while being rendered with
-                 * a different color, without rendering the body twice.
-                 */
                 private final ModelRenderer clawArm;
                 private final ModelRenderer clawWrist;
                 private final ModelRenderer clawPalm;

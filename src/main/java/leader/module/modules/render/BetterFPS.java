@@ -95,7 +95,7 @@ public class BetterFPS extends Module {
             return false;
         }
         double distanceSq = entity.getDistanceSqToEntity(camera);
-        // These switches hide the category entirely. They affect drawing only, never entity ticks or interaction.
+
         if (hideItems.getValue() && entity instanceof EntityItem) return true;
         if (hideXP.getValue() && entity instanceof EntityXPOrb) return true;
         if (hideArmorStands.getValue() && entity instanceof EntityArmorStand) return true;
@@ -104,7 +104,7 @@ public class BetterFPS extends Module {
             int range = cosmeticDistance.getValue();
             if (distanceSq > range * range) return true;
         }
-        // Never hide arrows/fireballs/pearls: the optional distance filter is for living models only.
+
         if (!entityOptimize.getValue() || !(entity instanceof net.minecraft.entity.EntityLivingBase)
                 || (keepPlayers.getValue() && entity instanceof EntityPlayer)) return false;
         int range = aggressive() ? Math.min(entityDistance.getValue(), 32) : entityDistance.getValue();
@@ -117,7 +117,7 @@ public class BetterFPS extends Module {
         if (!using || !particleOptimize.getValue() || mc.theWorld == null || mc.getRenderViewEntity() == null) return false;
         int range = aggressive() ? Math.min(particleDistance.getValue(), 16) : particleDistance.getValue();
         if (particle.getDistanceSqToEntity(mc.getRenderViewEntity()) > range * range) return true;
-        // Admission budget, not simulation skipping: accepted particles keep vanilla lifetimes and motion.
+
         long window = System.nanoTime() / 50000000L;
         if (particleWindow != window) {
             particleWindow = window;
@@ -189,14 +189,13 @@ public class BetterFPS extends Module {
     }
 
     public static boolean shouldCancelBlock(IBlockState state) {
-        // Worker threads see a consistent published category mask; no distance-based holes in cached chunk meshes.
+
         int mask = using ? decorationMask : 0;
         if (mask == 0) return false;
         Block block = state.getBlock();
         if (block instanceof BlockTallGrass || block instanceof BlockDeadBush) return (mask & 1) != 0;
         if (block instanceof BlockDoublePlant) {
-            // Upper-half metadata doesn't identify grass vs flowers; cull all double plants only
-            // when both categories are selected, keeping two-block plants visually consistent.
+
             return (mask & 3) == 3;
         }
         if (block instanceof BlockFlower) return (mask & 2) != 0;
@@ -213,12 +212,11 @@ public class BetterFPS extends Module {
 
     public static boolean shouldCancelLayer(EntityLivingBase entity, LayerRenderer<?> layer) {
         if (!distantModel(entity)) return false;
-        // Never skip the base model, damage tint or unknown mod layers.
+
         if (layer instanceof LayerCape || layer instanceof LayerArrow) return true;
         return (skipDistantArmor.getValue() && layer instanceof LayerArmorBase)
                 || (skipDistantHeldItems.getValue() && layer instanceof LayerHeldItem);
     }
-
 
     @Override
     public void verifyValue(String name) {
@@ -234,8 +232,7 @@ public class BetterFPS extends Module {
         decorationMask = requestedDecorationMask();
         if (decorationMask != appliedDecorationMask) reloadLighting = true;
         if (reloadLighting && mc.theWorld != null && mc.renderGlobal != null) {
-            // Rebuild existing meshes once when toggled so old AO geometry doesn't remain cached.
-            // Do not clear queues or resubmit the entire world on every frame.
+
             reloadLighting = false;
             appliedBlockLighting = lighting;
             appliedDecorationMask = decorationMask;

@@ -19,7 +19,7 @@ public class ShaderElement {
         if (leader.Leader.moduleManager == null) return;
         leader.module.modules.render.Shaders shaders = (leader.module.modules.render.Shaders)
                 leader.Leader.moduleManager.modules.get(leader.module.modules.render.Shaders.class);
-        // Avoid retaining hundreds of masks that will just be thrown away next frame.
+
         if (shaders == null || !shaders.isEnabled() || !(shaders.blur.getValue() || shaders.shadow.getValue() || shaders.bloom.getValue())) return;
         tasks.add(context);
     }

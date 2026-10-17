@@ -27,11 +27,7 @@ import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.EnumChatFormatting;
 import org.lwjgl.opengl.Display;
 
-/**
- * Adapted from Amunix-Legacy LagBlockhit / PredictBlockhit.
- * Uses Leader-Lite's input, targeting and owner-scoped Blink APIs. No releaseAll,
- * render-frame timers, private packet queue, or diagnostic-only ServerBlockMonitor.
- */
+/** Adapted from Amunix-Legacy LagBlockhit / PredictBlockhit. */
 public final class AmunixBlockHit {
     private enum PredictState { IDLE, BLOCKING, GAP }
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -79,7 +75,7 @@ public final class AmunixBlockHit {
         Scaffold scaffold = (Scaffold) Leader.moduleManager.getModule(Scaffold.class);
         KillAura aura = (KillAura) Leader.moduleManager.getModule(KillAura.class);
         Stuck stuck = (Stuck) Leader.moduleManager.getModule(Stuck.class);
-        // Let modules that manage attacks/movement/blocking own their input instead of fighting them.
+
         return !(scaffold != null && scaffold.isEnabled()) && !(aura != null && aura.isEnabled())
                 && !(stuck != null && stuck.isStuckActive());
     }
@@ -98,7 +94,7 @@ public final class AmunixBlockHit {
         if (!available()) { reset(); return; }
         if (owner.mode.getValue() == 2 && ownsBlink() && flushRequested
                 && (!pendingRelease || blockPacketSeen)) {
-            // Runs after tick-generated vanilla use/attack packets have entered Blink's FIFO queue.
+
             flush(true);
             flushRequested = pendingRelease = attackQueued = blockPacketSeen = false;
         }
@@ -118,7 +114,7 @@ public final class AmunixBlockHit {
 
     private void lagTick() {
         if (lagOwned && !ownsBlink()) {
-            // Ownership may be taken by Velocity; never flush its buffer or blindly reacquire it.
+
             reset();
             return;
         }
@@ -223,7 +219,7 @@ public final class AmunixBlockHit {
             predictState = PredictState.BLOCKING;
             block();
         } else if (blocking) {
-            // AutoClicker/vanilla attack processing may have reset the logical use key.
+
             KeyBinding.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
         }
     }

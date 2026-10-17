@@ -102,7 +102,6 @@ public class BlinkManager {
         return blinking;
     }
 
-    /** Exclusive owner-scoped buffer for timed modes; never takes over another module's queue. */
     public boolean acquireExclusive(BlinkModules owner) {
         if (owner == BlinkModules.NONE || slowReleasing || (blinkModule != BlinkModules.NONE && blinkModule != owner)) return false;
         if (blinkModule == BlinkModules.NONE && !blinkedPackets.isEmpty()) return false;
@@ -111,7 +110,6 @@ public class BlinkManager {
         return true;
     }
 
-    /** Flush in FIFO order, optionally retaining ownership. No global release or SlowRelease policy. */
     public boolean flushOwned(BlinkModules owner, boolean retain) {
         if (owner == BlinkModules.NONE || blinkModule != owner) return false;
         blinking = false;
@@ -130,6 +128,16 @@ public class BlinkManager {
                 if (!blinking && retain) blinkModule = BlinkModules.NONE;
             }
         }
+        return true;
+    }
+
+    public boolean discardOwned(BlinkModules owner) {
+        if (owner == BlinkModules.NONE || blinkModule != owner) return false;
+        blinking = false;
+        slowReleasing = false;
+        slowReleaseTicks = 0;
+        blinkedPackets.clear();
+        blinkModule = BlinkModules.NONE;
         return true;
     }
 

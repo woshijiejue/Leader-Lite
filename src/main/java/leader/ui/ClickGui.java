@@ -248,7 +248,6 @@ public class ClickGui extends GuiScreen {
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
-    /** Xylitol's sidebar / two-column settings layout, rather than a recoloured three-pane GUI. */
     private void drawReferenceScreen(int rawX, int rawY) {
         referenceScale = Math.max(0.1F, Math.min(1, Math.min((width - 10F) / W, (height - 10F) / H)));
         int mx = (int) (rawX / referenceScale), my = (int) (rawY / referenceScale);

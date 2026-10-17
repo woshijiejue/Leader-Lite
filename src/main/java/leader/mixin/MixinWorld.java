@@ -3,6 +3,9 @@ package leader.mixin;
 import leader.Leader;
 import leader.module.modules.misc.AntiObbyTrap;
 import leader.module.modules.movement.Jesus;
+import leader.util.ISkipTickPlayer;
+import leader.util.ISkipTickWorld;
+import net.minecraft.client.Minecraft;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.Entity;
@@ -12,12 +15,50 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 @SideOnly(Side.CLIENT)
 @Mixin(value = {World.class}, priority = 9999)
-public abstract class MixinWorld {
+public abstract class MixinWorld implements ISkipTickWorld {
+    @Unique
+    private int leader$skipTicks;
+
+    @Override
+    public int leader$getSkipTicks() {
+        return leader$skipTicks;
+    }
+
+    @Override
+    public void leader$setSkipTicks(int ticks) {
+        leader$skipTicks = Math.max(0, ticks);
+    }
+
+    @Unique
+    private boolean leader$skipPlayerUpdate(Entity entity) {
+        Minecraft mc = Minecraft.getMinecraft();
+
+        // Never skip the integrated server's simulation.
+        if (leader$skipTicks <= 0 || (Object) this != mc.theWorld || entity != mc.thePlayer) return false;
+        --leader$skipTicks;
+        ((ISkipTickPlayer) entity).leader$onSkipUpdate();
+        return true;
+    }
+
+    @Redirect(method = "updateEntityWithOptionalForce", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/entity/Entity;onUpdate()V"))
+    private void leader$updateOrSkip(Entity entity) {
+
+        if (!leader$skipPlayerUpdate(entity)) entity.onUpdate();
+    }
+
+    @Redirect(method = "updateEntityWithOptionalForce", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/entity/Entity;updateRidden()V"))
+    private void leader$updateRiddenOrSkip(Entity entity) {
+        if (!leader$skipPlayerUpdate(entity)) entity.updateRidden();
+    }
+
     @Redirect(
             method = {"handleMaterialAcceleration"},
             at = @At(

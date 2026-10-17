@@ -13,10 +13,6 @@ import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C16PacketClientStatus;
 import net.minecraft.network.play.server.S37PacketStatistics;
 
-/** Shared HUD latency estimate. A statistics request measures a real application round trip,
- * not the time between receiving and replying to a keep-alive (which is NOT ping).
- * Tab latency of 0/1 is treated as unavailable; unavailable values are displayed as --.
- */
 public final class PingTracker {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final long INTERVAL = 15000000000L;
@@ -49,7 +45,7 @@ public final class PingTracker {
             sentAt = 0;
         }
         if (now < nextProbe || request != null) return;
-        // Go through the normal packet pipeline; do not bypass Blink/Delay or change keep-alives.
+
         nextProbe = now + INTERVAL;
         requestedAt = now;
         Packet<?> probe = new C16PacketClientStatus(C16PacketClientStatus.EnumState.REQUEST_STATS);
@@ -70,7 +66,7 @@ public final class PingTracker {
                 || ((C16PacketClientStatus) packet).getStatus() != C16PacketClientStatus.EnumState.REQUEST_STATS) return;
         if (packet == request) sentAt = System.nanoTime();
         else {
-            // Vanilla statistics-screen requests have no response IDs; don't misattribute their replies.
+
             request = null;
             sentAt = 0;
         }
@@ -83,7 +79,7 @@ public final class PingTracker {
         request = null;
         sentAt = 0;
         if (elapsed <= 0 || elapsed > TIMEOUT) return;
-        // Includes server processing time; do not invent a value when there is no measured response.
+
         measured = Math.max(1, (int) Math.round(elapsed / 1000000.0));
         sampleAt = now;
     }

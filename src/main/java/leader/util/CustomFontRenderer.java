@@ -207,7 +207,7 @@ public class CustomFontRenderer {
             drawCachedLayout(text, x, y, red, green, blue, alpha, darken, colors);
             return;
         }
-        // Texture uploads must happen BEFORE glBegin; warm only the glyphs actually used.
+
         for (int i = 0; i < text.length();) {
             int cp = text.codePointAt(i);
             i += Character.charCount(cp);
@@ -320,7 +320,7 @@ public class CustomFontRenderer {
 
     private void drawCachedLayout(String text, float x, float y, float red, float green, float blue, float alpha,
                                   boolean darken, int[] colors) {
-        // Build all UVs/textures before glBegin, then reuse across shadows, glow layers and frames.
+
         TextLayout layout = layout(text);
         GlStateManager.color(red, green, blue, alpha);
         int activeTexture = -1, activeColor = -1;

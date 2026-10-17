@@ -1,6 +1,5 @@
 package leader.module.modules.render;
 
-/** Input edges and focus recovery, independent of Minecraft for regression testing. */
 final class FreeLookActivation {
     private boolean pressed;
     private boolean blocked;

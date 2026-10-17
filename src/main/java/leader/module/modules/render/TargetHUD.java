@@ -1696,7 +1696,7 @@ public class TargetHUD extends Module {
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         float valueX = left + Math.max(FontManager.getStringWidth("name:", nameSize), FontManager.getStringWidth("health:", metaSize)) + 4;
         HUDPreviewUtil.text("name:", left, nameBaseline, nameSize, ObsidianTheme.rgba(ObsidianTheme.ACCENT, 255 * alpha), false);
-        // Server-formatted names otherwise override the theme colour and disrupt the label/value hierarchy.
+
         String plainName = net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(name);
         HUDPreviewUtil.text(HUDPreviewUtil.fit(plainName, right - valueX, nameSize), valueX, nameBaseline, nameSize,
                 ObsidianTheme.rgba(ObsidianTheme.TEXT, 255 * alpha), shadow.getValue());

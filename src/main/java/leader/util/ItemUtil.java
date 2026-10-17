@@ -319,9 +319,6 @@ public class ItemUtil {
         return itemStack.getItem() instanceof ItemFireball;
     }
 
-    /**
-     * Checks if the given item is a projectile
-     */
     public static boolean isProjectile(ItemStack itemStack) {
         if (itemStack == null) {
             return false;
@@ -331,9 +328,6 @@ public class ItemUtil {
                 item instanceof ItemSnowball;
     }
 
-    /**
-     * Finds inventory slots with the specified item type
-     */
     public static int findInventorySlot(ItemType itemType) {
         int slot = -1;
         int maxStackSize = 0;
@@ -350,7 +344,7 @@ public class ItemUtil {
                 }
             }
         }
-        return slot == -1 ? -1 : slot + (slot < 9 ? 36 : 0); // Convert to actual inventory slot
+        return slot == -1 ? -1 : slot + (slot < 9 ? 36 : 0);
     }
 
     public enum ItemType {

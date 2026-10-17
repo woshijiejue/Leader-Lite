@@ -30,8 +30,6 @@ public class BookClickGuiScreen extends GuiScreen {
     private static final int PANEL_GAP = 6;
     private static final int WINDOW_PADDING = 8;
 
-    // A small, consistent radius scale keeps the interface feeling soft without
-    // making the compact Minecraft layout look inflated.
     private static final float WINDOW_RADIUS = 11.0F;
     private static final float PANEL_RADIUS = 8.0F;
     private static final float ITEM_RADIUS = 6.0F;
@@ -183,7 +181,6 @@ public class BookClickGuiScreen extends GuiScreen {
         GlStateManager.disableDepth();
     }
 
-    /** Draws a rounded cap at the top while keeping the title bar flush with the window body. */
     private void drawRoundedTopRectSafe(float x1, float y1, float x2, float y2, float radius, int color) {
         drawRoundedRectSafe(x1, y1, x2, y2, radius, color);
         RenderUtil.enableRenderState();
@@ -343,8 +340,6 @@ public class BookClickGuiScreen extends GuiScreen {
         }
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
 
-        // Fade the edges of an overflowing settings list instead of ending
-        // rows on a visibly rigid clipping line.
         if (totalHeight > contentAreaHeight) {
             double maxScrollD = Math.max(0, totalHeight - contentAreaHeight);
             if (settingScrollSmooth > 0.5) {

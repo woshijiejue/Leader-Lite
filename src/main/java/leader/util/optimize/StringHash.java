@@ -6,4 +6,3 @@ public class StringHash extends AbstractHash {
         }
     }
 
-
