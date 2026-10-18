@@ -10,7 +10,6 @@ import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.client.utils.URLEncodedUtils;
@@ -222,6 +221,10 @@ public final class MicrosoftAuth {
     }
 
     public static CompletableFuture<Map<String, String>> refreshMSAccessTokens(String msToken, Executor executor) {
+        return refreshMSAccessTokens(msToken, CLIENT_ID, SCOPE, executor);
+    }
+
+    public static CompletableFuture<Map<String, String>> refreshMSAccessTokens(String msToken, String clientId, String scope, Executor executor) {
         return CompletableFuture.supplyAsync(() -> {
             try (CloseableHttpClient client = createTrustedHttpClient()) {
                 // Build a new HTTP request
@@ -230,12 +233,12 @@ public final class MicrosoftAuth {
                 request.setHeader("Content-Type", "application/x-www-form-urlencoded");
                 request.setEntity(new UrlEncodedFormEntity(
                         Arrays.asList(
-                                new BasicNameValuePair("client_id", CLIENT_ID),
+                                new BasicNameValuePair("client_id", clientId),
                                 new BasicNameValuePair("grant_type", "refresh_token"),
                                 new BasicNameValuePair("refresh_token", msToken),
                                 // We must provide the exact redirect URI that was used to obtain the auth code
-                                CLIENT_ID.equals("00000000402b5328") ? new BasicNameValuePair(
-                                        "scope", SCOPE
+                                clientId.equals("00000000402b5328") ? new BasicNameValuePair(
+                                        "scope", scope
                                 ) : new BasicNameValuePair(
                                         "redirect_uri", String.format("http://localhost:%d/callback", PORT)
                                 )
@@ -277,6 +280,10 @@ public final class MicrosoftAuth {
     }
 
     public static CompletableFuture<String> acquireXboxAccessToken(String accessToken, Executor executor) {
+        return acquireXboxAccessToken(accessToken, CLIENT_ID, executor);
+    }
+
+    public static CompletableFuture<String> acquireXboxAccessToken(String accessToken, String clientId, Executor executor) {
         return CompletableFuture.supplyAsync(() -> {
             try (CloseableHttpClient client = createTrustedHttpClient()) {
                 // Build a new HTTP request
@@ -285,7 +292,7 @@ public final class MicrosoftAuth {
                 JsonObject properties = new JsonObject();
                 properties.addProperty("AuthMethod", "RPS");
                 properties.addProperty("SiteName", "user.auth.xboxlive.com");
-                properties.addProperty("RpsTicket", CLIENT_ID.equals("00000000402b5328") ? accessToken : String.format("d=%s", accessToken));
+                properties.addProperty("RpsTicket", clientId.equals("00000000402b5328") ? accessToken : String.format("d=%s", accessToken));
                 entity.add("Properties", properties);
                 entity.addProperty("RelyingParty", "http://auth.xboxlive.com");
                 entity.addProperty("TokenType", "JWT");
@@ -408,36 +415,10 @@ public final class MicrosoftAuth {
 
     public static CompletableFuture<Session> login(String mcToken, Executor executor) {
         return CompletableFuture.supplyAsync(() -> {
-            try (CloseableHttpClient client = createTrustedHttpClient()) {
-                // Build a new HTTP request
-                HttpGet request = new HttpGet(URI.create("https://api.minecraftservices.com/minecraft/profile"));
-                request.setConfig(REQUEST_CONFIG);
-                request.setHeader("Authorization", "Bearer " + mcToken);
-
-                // Send the request on the HTTP client
-                HttpResponse res = client.execute(request);
-
-                // Attempt to parse the response body as JSON and extract the profile
-                JsonObject json = new JsonParser().parse(EntityUtils.toString(res.getEntity())).getAsJsonObject();
-                return Optional.ofNullable(json.get("id"))
-                        .map(JsonElement::getAsString)
-                        .filter(uuid -> !StringUtils.isBlank(uuid))
-                        // If present, build a new session and return
-                        .map(uuid -> new Session(
-                                json.get("name").getAsString(),
-                                uuid,
-                                mcToken,
-                                Session.Type.MOJANG.toString()
-                        ))
-                        // Otherwise, throw an exception with the error description (if present)
-                        .orElseThrow(() -> new Exception(json.has("error") ?
-                                String.format("%s: %s", json.get("error").getAsString(), json.get("errorMessage").getAsString()) :
-                                "There was no profile or error description present."
-                        ));
-            } catch (InterruptedException e) {
-                throw new CancellationException("Minecraft profile fetching was cancelled!");
-            } catch (Exception e) {
-                throw new CompletionException("Unable to fetch Minecraft profile!", e);
+            try {
+                return TokenAuth.login(mcToken);
+            } catch (Exception exception) {
+                throw new CompletionException(exception);
             }
         }, executor);
     }

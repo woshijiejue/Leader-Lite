@@ -17,9 +17,12 @@ import net.minecraft.client.multiplayer.PlayerControllerMP;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.player.InventoryPlayer;
+import net.minecraft.util.Session;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -29,6 +32,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @SideOnly(Side.CLIENT)
 @Mixin(value = {Minecraft.class}, priority = 9999)
 public abstract class MixinMinecraft {
+    @Shadow
+    @Final
+    @Mutable
+    private Session session;
+
     @Shadow
     private int leftClickCounter;
     @Shadow

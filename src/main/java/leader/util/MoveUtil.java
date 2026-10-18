@@ -136,17 +136,25 @@ public class MoveUtil {
     }
 
     public static double[] predictMovement() {
-        float strafeInput = (float) MoveUtil.getLeftValue() * 0.98f;
-        float forwardInput = (float) MoveUtil.getForwardValue() * 0.98f;
+        return predictMovement(MoveUtil.mc.thePlayer.rotationYaw, MoveUtil.getForwardValue(), MoveUtil.getLeftValue());
+    }
+
+    public static double[] predictMovement(float yaw, float forward, float strafe) {
+        return predictMovement(yaw, forward, strafe, MoveUtil.getAllowedHorizontalDistance());
+    }
+
+    public static double[] predictMovement(float yaw, float forward, float strafe, float acceleration) {
+        float strafeInput = strafe * 0.98f;
+        float forwardInput = forward * 0.98f;
         float inputMagnitude = strafeInput * strafeInput + forwardInput * forwardInput;
         if (inputMagnitude >= 1.0E-4f) {
             inputMagnitude = MathHelper.sqrt_float(inputMagnitude);
             if (inputMagnitude < 1.0f) {
                 inputMagnitude = 1.0f;
             }
-            inputMagnitude = MoveUtil.getAllowedHorizontalDistance() / inputMagnitude;
-            float sinYaw = MathHelper.sin(MoveUtil.mc.thePlayer.rotationYaw * (float) Math.PI / 180.0f);
-            float cosYaw = MathHelper.cos(MoveUtil.mc.thePlayer.rotationYaw * (float) Math.PI / 180.0f);
+            inputMagnitude = acceleration / inputMagnitude;
+            float sinYaw = MathHelper.sin(yaw * (float) Math.PI / 180.0f);
+            float cosYaw = MathHelper.cos(yaw * (float) Math.PI / 180.0f);
             strafeInput *= inputMagnitude;
             forwardInput *= inputMagnitude;
             return new double[]{strafeInput * cosYaw - forwardInput * sinYaw, forwardInput * cosYaw + strafeInput * sinYaw};
@@ -154,50 +162,56 @@ public class MoveUtil {
         return new double[]{0.0, 0.0};
     }
 
-    public static void fixStrafe(float targetYaw) {
-        float angle = MathHelper.wrapAngleTo180_float(MoveUtil.adjustYaw(MoveUtil.mc.thePlayer.rotationYaw, MoveUtil.getForwardValue(), MoveUtil.getLeftValue()) - targetYaw + 22.5f);
+    public static float[] getFixedInputs(float movementYaw, float targetYaw) {
+        float angle = MathHelper.wrapAngleTo180_float(movementYaw - targetYaw + 22.5f);
+        float forward = 0.0F;
+        float strafe = 0.0F;
         switch ((int) (angle + 180.0f) / 45 % 8) {
             case 0: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = -1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 0.0f;
+                forward = -1.0f;
                 break;
             }
             case 1: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = -1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 1.0f;
+                forward = -1.0f;
+                strafe = 1.0f;
                 break;
             }
             case 2: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 0.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 1.0f;
+                strafe = 1.0f;
                 break;
             }
             case 3: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 1.0f;
+                forward = 1.0f;
+                strafe = 1.0f;
                 break;
             }
             case 4: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 0.0f;
+                forward = 1.0f;
                 break;
             }
             case 5: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = -1.0f;
+                forward = 1.0f;
+                strafe = -1.0f;
                 break;
             }
             case 6: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 0.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = -1.0f;
+                strafe = -1.0f;
                 break;
             }
             case 7: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = -1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = -1.0f;
+                forward = -1.0f;
+                strafe = -1.0f;
                 break;
             }
         }
+        return new float[]{forward, strafe};
+    }
+
+    public static void fixStrafe(float targetYaw) {
+        float[] inputs = getFixedInputs(MoveUtil.adjustYaw(MoveUtil.mc.thePlayer.rotationYaw,
+                MoveUtil.getForwardValue(), MoveUtil.getLeftValue()), targetYaw);
+        MoveUtil.mc.thePlayer.movementInput.moveForward = inputs[0];
+        MoveUtil.mc.thePlayer.movementInput.moveStrafe = inputs[1];
         if (MoveUtil.mc.thePlayer.movementInput.sneak) {
             MoveUtil.mc.thePlayer.movementInput.moveForward *= 0.3f;
             MoveUtil.mc.thePlayer.movementInput.moveStrafe *= 0.3f;

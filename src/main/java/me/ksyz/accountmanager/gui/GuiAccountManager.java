@@ -4,6 +4,7 @@ import me.ksyz.accountmanager.AccountManager;
 import me.ksyz.accountmanager.auth.Account;
 import me.ksyz.accountmanager.auth.MicrosoftAuth;
 import me.ksyz.accountmanager.auth.SessionManager;
+import me.ksyz.accountmanager.auth.TokenAuth;
 import me.ksyz.accountmanager.utils.Notification;
 import me.ksyz.accountmanager.utils.SystemUtils;
 import me.ksyz.accountmanager.utils.TextFormatting;
@@ -15,7 +16,6 @@ import org.lwjgl.input.Keyboard;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Collections;
-import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -87,8 +87,8 @@ public class GuiAccountManager extends GuiScreen {
 
         if (task != null && !task.isDone()) {
             task.cancel(true);
-            executor.shutdownNow();
         }
+        if (executor != null) executor.shutdownNow();
     }
 
     @Override
@@ -195,84 +195,64 @@ public class GuiAccountManager extends GuiScreen {
             switch (button.id) {
                 case 0: { // Login
                     if (task == null || task.isDone()) {
-                        if (executor == null) {
-                            executor = Executors.newSingleThreadExecutor();
+                        if (executor == null || executor.isShutdown()) {
+                            executor = Executors.newSingleThreadExecutor(runnable -> {
+                                Thread thread = new Thread(runnable, "Leader-AccountLogin");
+                                thread.setDaemon(true);
+                                return thread;
+                            });
                         }
                         Account account = AccountManager.accounts.get(selectedAccount);
                         String username = StringUtils.isBlank(account.getUsername()) ? "???" : account.getUsername();
-                        AtomicReference<String> refreshToken = new AtomicReference<>("");
-                        AtomicReference<String> accessToken = new AtomicReference<>("");
+                        AtomicReference<String> refreshToken = new AtomicReference<>(account.getRefreshToken());
                         notification = new Notification(TextFormatting.translate(String.format(
                                 "&7Fetching your Minecraft profile... (%s)&r", username
                         )), -1L);
-                        MicrosoftAuth.CLIENT_ID = account.getClientId();
-                        MicrosoftAuth.SCOPE = account.getScope();
                         task = MicrosoftAuth.login(account.getAccessToken(), executor)
                                 .handle((session, error) -> {
-                                    if (session != null) {
+                                    if (session != null) return CompletableFuture.completedFuture(session);
+                                    Throwable failure = TokenAuth.rootCause(error);
+                                    if (StringUtils.isBlank(account.getRefreshToken())
+                                            || !(failure instanceof TokenAuth.ProfileException
+                                            && ((TokenAuth.ProfileException) failure).getStatus() == 401)
+                                            && !StringUtils.isBlank(account.getAccessToken())) {
+                                        CompletableFuture<net.minecraft.util.Session> failed = new CompletableFuture<>();
+                                        failed.completeExceptionally(failure);
+                                        return failed;
+                                    }
+                                    return MicrosoftAuth.refreshMSAccessTokens(account.getRefreshToken(), account.getClientId(), account.getScope(), executor)
+                                            .thenCompose(msAccessTokens -> {
+                                                refreshToken.set(msAccessTokens.get("refresh_token"));
+                                                return MicrosoftAuth.acquireXboxAccessToken(msAccessTokens.get("access_token"), account.getClientId(), executor);
+                                            })
+                                            .thenCompose(xboxAccessToken -> MicrosoftAuth.acquireXboxXstsToken(xboxAccessToken, executor))
+                                            .thenCompose(xboxXstsData -> MicrosoftAuth.acquireMCAccessToken(
+                                                    xboxXstsData.get("Token"), xboxXstsData.get("uhs"), executor))
+                                            .thenCompose(mcToken -> {
+                                                return MicrosoftAuth.login(mcToken, executor);
+                                            });
+                                })
+                                .thenCompose(future -> future)
+                                .thenAccept(session -> mc.addScheduledTask(() -> {
+                                    if (mc.currentScreen != this) return;
+                                    try {
+                                        SessionManager.set(session);
+                                        account.setRefreshToken(refreshToken.get());
+                                        account.setAccessToken(session.getToken());
                                         account.setUsername(session.getUsername());
                                         AccountManager.save();
-                                        SessionManager.set(session);
                                         notification = new Notification(TextFormatting.translate(String.format(
                                                 "&aSuccessful login! (%s)&r", account.getUsername()
                                         )), 5000L);
-                                        return true;
+                                    } catch (RuntimeException exception) {
+                                        notification = new Notification(TextFormatting.translate("&c" + TokenAuth.errorMessage(exception) + "&r"), 5000L);
                                     }
-                                    return false;
-                                })
-                                .thenComposeAsync(completed -> {
-                                    if (completed) {
-                                        throw new NoSuchElementException();
-                                    }
-                                    notification = new Notification(TextFormatting.translate(String.format(
-                                            "&7Refreshing Microsoft access tokens... (%s)&r", username
-                                    )), -1L);
-                                    return MicrosoftAuth.refreshMSAccessTokens(account.getRefreshToken(), executor);
-                                })
-                                .thenComposeAsync(msAccessTokens -> {
-                                    notification = new Notification(TextFormatting.translate(String.format(
-                                            "&7Acquiring Xbox access token... (%s)&r", username
-                                    )), -1L);
-                                    refreshToken.set(msAccessTokens.get("refresh_token"));
-                                    return MicrosoftAuth.acquireXboxAccessToken(msAccessTokens.get("access_token"), executor);
-                                })
-                                .thenComposeAsync(xboxAccessToken -> {
-                                    notification = new Notification(TextFormatting.translate(String.format(
-                                            "&7Acquiring Xbox XSTS token... (%s)&r", username
-                                    )), -1L);
-                                    return MicrosoftAuth.acquireXboxXstsToken(xboxAccessToken, executor);
-                                })
-                                .thenComposeAsync(xboxXstsData -> {
-                                    notification = new Notification(TextFormatting.translate(String.format(
-                                            "&7Acquiring Minecraft access token... (%s)&r", username
-                                    )), -1L);
-                                    return MicrosoftAuth.acquireMCAccessToken(
-                                            xboxXstsData.get("Token"), xboxXstsData.get("uhs"), executor
-                                    );
-                                })
-                                .thenComposeAsync(mcToken -> {
-                                    notification = new Notification(TextFormatting.translate(String.format(
-                                            "&7Fetching your Minecraft profile... (%s)&r", username
-                                    )), -1L);
-                                    accessToken.set(mcToken);
-                                    return MicrosoftAuth.login(mcToken, executor);
-                                })
-                                .thenAccept(session -> {
-                                    account.setRefreshToken(refreshToken.get());
-                                    account.setAccessToken(accessToken.get());
-                                    account.setUsername(session.getUsername());
-                                    AccountManager.save();
-                                    SessionManager.set(session);
-                                    notification = new Notification(TextFormatting.translate(String.format(
-                                            "&aSuccessful login! (%s)&r", account.getUsername()
-                                    )), 5000L);
-                                })
+                                }))
                                 .exceptionally(error -> {
-                                    if (!(error.getCause() instanceof NoSuchElementException)) {
-                                        notification = new Notification(TextFormatting.translate(String.format(
-                                                "&c%s (%s)&r", error.getMessage(), username
-                                        )), 5000L);
-                                    }
+                                    mc.addScheduledTask(() -> {
+                                        if (mc.currentScreen == this) notification = new Notification(
+                                                TextFormatting.translate("&c" + TokenAuth.errorMessage(error) + "&r"), 5000L);
+                                    });
                                     return null;
                                 });
                     }

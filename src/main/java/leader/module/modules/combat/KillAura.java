@@ -55,8 +55,9 @@ import java.util.ArrayList;
 
 public class KillAura extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    private static final int SKIP_BLOCK_TICKS = 2;
+    private static final int SKIP_CYCLE_TICKS = 4;
     private static final int SKIP_BURST_TICKS = 2;
+    private static final int SKIP_BLOCK_TICKS = SKIP_CYCLE_TICKS - SKIP_BURST_TICKS - 1;
     private static final float SKIP_BURST_SPEED = 2.0F;
     public final ModeProperty mode;
     public final ModeProperty sort;
@@ -2071,8 +2072,7 @@ public class KillAura extends Module {
                         break;
                     }
                     if (this.target == null
-                            || !this.isBoxInAttackRange(this.target.getBox())
-                            || this.attackDelayMS > 0L) break;
+                            || !this.isBoxInAttackRange(this.target.getBox())) break;
                     if (this.isPlayerBlocking()) this.stopBlock();
                     skipAutoBlockReleaseMovement = Leader.playerStateManager.getMovementSequence();
                     skipAutoBlockBoostPending = true;
@@ -2108,8 +2108,7 @@ public class KillAura extends Module {
                 || isAutoBlockSuspended()
                 || !isPlayerBlocking()
                 || target == null
-                || !isBoxInAttackRange(target.getBox())
-                || attackDelayMS > (SKIP_BLOCK_TICKS + 1L) * 50L) return;
+                || !isBoxInAttackRange(target.getBox())) return;
         Leader.blinkManager.flushOwned(BlinkModules.AUTO_BLOCK, false);
         if (Stuck.freezePlayerForTicks(SKIP_BLOCK_TICKS)) {
             Stuck stuck = (Stuck) Leader.moduleManager.getModule(Stuck.class);

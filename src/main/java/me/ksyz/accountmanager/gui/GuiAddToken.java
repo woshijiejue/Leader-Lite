@@ -4,14 +4,14 @@ import me.ksyz.accountmanager.AccountManager;
 import me.ksyz.accountmanager.auth.Account;
 import me.ksyz.accountmanager.auth.MicrosoftAuth;
 import me.ksyz.accountmanager.auth.SessionManager;
+import me.ksyz.accountmanager.auth.TokenAuth;
 import me.ksyz.accountmanager.utils.Notification;
 import me.ksyz.accountmanager.utils.TextFormatting;
 import net.minecraft.client.gui.*;
 import net.minecraft.util.Session;
-import org.apache.commons.lang3.RandomStringUtils;
 import org.lwjgl.input.Keyboard;
 
-import java.util.NoSuchElementException;
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,21 +27,19 @@ public class GuiAddToken extends GuiScreen {
     private static final String CLIENT_ID = "00000000402b5328";
     private static final String SCOPE = "service::user.auth.xboxlive.com::MBI_SSL";
     private final GuiScreen previousScreen;
-    private final String state;
 
     private GuiButton openButton = null;
     private boolean openButtonEnabled = true;
-    private GuiButton cancelButton = null;
     private String status = null;
     private String cause = null;
     private ExecutorService executor = null;
     private CompletableFuture<Void> task = null;
     private boolean success = false;
+    private boolean authenticating;
     private GuiTextField tokenField;
 
     public GuiAddToken(GuiScreen previousScreen) {
         this.previousScreen = previousScreen;
-        this.state = RandomStringUtils.randomAlphanumeric(8);
     }
 
     @Override
@@ -49,23 +47,25 @@ public class GuiAddToken extends GuiScreen {
         buttonList.clear();
         Keyboard.enableRepeatEvents(true);
         ScaledResolution sr = new ScaledResolution(mc);
+        String previousInput = tokenField == null ? "" : tokenField.getText();
         tokenField = new GuiTextField(1, mc.fontRendererObj,sr.getScaledWidth() / 2 - 100, sr.getScaledHeight() / 2, 200, 20);
         tokenField.setMaxStringLength(32767);
+        tokenField.setText(previousInput);
         tokenField.setFocused(true);
 
-        buttonList.add(new GuiButton(998, sr.getScaledWidth() / 2 - 100, sr.getScaledHeight() / 2 + 30, 200, 20, "Add"));
+        buttonList.add(openButton = new GuiButton(998, sr.getScaledWidth() / 2 - 100, sr.getScaledHeight() / 2 + 30, 200, 20, "Add"));
     }
 
     @Override
     public void onGuiClosed() {
-        if (task != null && !task.isDone()) {
-            task.cancel(true);
-            executor.shutdownNow();
-        }
+        Keyboard.enableRepeatEvents(false);
+        if (task != null && !task.isDone()) task.cancel(true);
+        if (executor != null) executor.shutdownNow();
     }
 
     @Override
     public void updateScreen() {
+        tokenField.updateCursorCounter();
         if (success) {
             mc.displayGuiScreen(new GuiAccountManager(
                     previousScreen,
@@ -82,9 +82,15 @@ public class GuiAddToken extends GuiScreen {
     }
 
     @Override
+    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
+        super.mouseClicked(mouseX, mouseY, mouseButton);
+        tokenField.mouseClicked(mouseX, mouseY, mouseButton);
+    }
+
+    @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         if (openButton != null) {
-            openButton.enabled = openButtonEnabled;
+            openButton.enabled = openButtonEnabled && !authenticating;
         }
         drawDefaultBackground();
         super.drawScreen(mouseX, mouseY, partialTicks);
@@ -120,9 +126,7 @@ public class GuiAddToken extends GuiScreen {
     protected void keyTyped(char typedChar, int keyCode) {
         tokenField.textboxKeyTyped(typedChar, keyCode);
         if (keyCode == Keyboard.KEY_ESCAPE) {
-            if(task == null || task.isDone() || task.isCancelled() || task.isCompletedExceptionally()){
-                mc.displayGuiScreen(previousScreen);
-            }
+            mc.displayGuiScreen(previousScreen);
         }
     }
 
@@ -134,63 +138,68 @@ public class GuiAddToken extends GuiScreen {
 
         if (button.enabled) {
             if (button.id == 998) {
-                if (task == null) {
-                    if (executor == null) {
-                        executor = Executors.newSingleThreadExecutor();
+                if (!authenticating) {
+                    final String input;
+                    try {
+                        input = TokenAuth.normalize(tokenField.getText());
+                    } catch (IllegalArgumentException exception) {
+                        status = "&c" + TokenAuth.errorMessage(exception) + "&r";
+                        return;
                     }
+                    if (executor == null || executor.isShutdown()) {
+                        executor = Executors.newSingleThreadExecutor(runnable -> {
+                            Thread thread = new Thread(runnable, "Leader-TokenLogin");
+                            thread.setDaemon(true);
+                            return thread;
+                        });
+                    }
+                    authenticating = true;
                     AtomicReference<String> refreshToken = new AtomicReference<>("");
                     AtomicReference<String> accessToken = new AtomicReference<>("");
-                    String input = tokenField.getText().trim();
+                    accessToken.set(input);
                     status = "&7Checking token...&r";
                     cause = null;
-                    MicrosoftAuth.CLIENT_ID = CLIENT_ID;
-                    MicrosoftAuth.SCOPE = SCOPE;
                     task = MicrosoftAuth.login(input, executor)
                             .handle((session, error) -> {
-                                if (session != null) {
-                                    addAccount(session, "", input);
-                                    return true;
+                                if (session != null) return CompletableFuture.completedFuture(session);
+                                if (!TokenAuth.canRefresh(input, error)) {
+                                    CompletableFuture<Session> failed = new CompletableFuture<>();
+                                    failed.completeExceptionally(TokenAuth.rootCause(error));
+                                    return failed;
                                 }
-                                return false;
+                                return MicrosoftAuth.refreshMSAccessTokens(input, CLIENT_ID, SCOPE, executor)
+                                        .thenCompose(msAccessTokens -> {
+                                            refreshToken.set(msAccessTokens.get("refresh_token"));
+                                            return MicrosoftAuth.acquireXboxAccessToken(msAccessTokens.get("access_token"), CLIENT_ID, executor);
+                                        })
+                                        .thenCompose(xboxAccessToken -> MicrosoftAuth.acquireXboxXstsToken(xboxAccessToken, executor))
+                                        .thenCompose(xboxXstsData -> MicrosoftAuth.acquireMCAccessToken(
+                                                xboxXstsData.get("Token"), xboxXstsData.get("uhs"), executor))
+                                        .thenCompose(mcToken -> {
+                                            accessToken.set(mcToken);
+                                            return MicrosoftAuth.login(mcToken, executor);
+                                        });
                             })
-                            .thenComposeAsync(completed -> {
-                                if (completed) {
-                                    throw new NoSuchElementException();
+                            .thenCompose(future -> future)
+                            .thenAccept(session -> mc.addScheduledTask(() -> {
+                                if (mc.currentScreen == this) {
+                                    try {
+                                        addAccount(session, refreshToken.get(), accessToken.get());
+                                    } catch (RuntimeException exception) {
+                                        status = "&c" + TokenAuth.errorMessage(exception) + "&r";
+                                    } finally {
+                                        authenticating = false;
+                                    }
                                 }
-                                status = "&7Refreshing Microsoft access tokens...&r";
-                                return MicrosoftAuth.refreshMSAccessTokens(input, executor);
-                            })
-                            .thenComposeAsync(msAccessTokens -> {
-                                status = "&fAcquiring Xbox access token&r";
-                                refreshToken.set(msAccessTokens.get("refresh_token"));
-                                return MicrosoftAuth.acquireXboxAccessToken(msAccessTokens.get("access_token"), executor);
-                            })
-                            .thenComposeAsync(xboxAccessToken -> {
-                                status = "&fAcquiring Xbox XSTS token&r";
-                                return MicrosoftAuth.acquireXboxXstsToken(xboxAccessToken, executor);
-                            })
-                            .thenComposeAsync(xboxXstsData -> {
-                                status = "&fAcquiring Minecraft access token&r";
-                                return MicrosoftAuth.acquireMCAccessToken(
-                                        xboxXstsData.get("Token"), xboxXstsData.get("uhs"), executor
-                                );
-                            })
-                            .thenComposeAsync(mcToken -> {
-                                status = "&fFetching your Minecraft profile&r";
-                                accessToken.set(mcToken);
-                                return MicrosoftAuth.login(mcToken, executor);
-                            })
-                            .thenAccept(session -> addAccount(session, refreshToken.get(), accessToken.get()))
+                            }))
                             .exceptionally(error -> {
-                                Throwable root = error.getCause() != null ? error.getCause() : error;
-                                if (root instanceof NoSuchElementException) {
-                                    task = null;
-                                    return null;
-                                }
-                                openButtonEnabled = false;
-                                status = String.format("&c%s&r", error.getMessage());
-                                cause = root.getMessage() != null ? String.format("&c%s&r", root.getMessage()) : null;
-                                task = null;
+                                mc.addScheduledTask(() -> {
+                                    if (mc.currentScreen == this) {
+                                        authenticating = false;
+                                        status = "&c" + TokenAuth.errorMessage(error) + "&r";
+                                        cause = null;
+                                    }
+                                });
                                 return null;
                             });
                 }
@@ -199,6 +208,7 @@ public class GuiAddToken extends GuiScreen {
     }
 
     private void addAccount(Session session, String refresh, String access) {
+        SessionManager.set(session);
         status = null;
         Account acc = new Account(refresh, access, session.getUsername(), CLIENT_ID, SCOPE);
         for (Account account : AccountManager.accounts) {
@@ -209,7 +219,6 @@ public class GuiAddToken extends GuiScreen {
         }
         AccountManager.accounts.add(acc);
         AccountManager.save();
-        SessionManager.set(session);
         success = true;
     }
 }

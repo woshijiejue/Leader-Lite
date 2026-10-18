@@ -1,20 +1,19 @@
 package me.ksyz.accountmanager.gui;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import me.ksyz.accountmanager.auth.MicrosoftAuth;
 import me.ksyz.accountmanager.auth.SessionManager;
+import me.ksyz.accountmanager.auth.TokenAuth;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.util.Session;
-import org.apache.commons.io.IOUtils;
 import org.lwjgl.input.Keyboard;
 
 import java.awt.*;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /*
  * This file is derived from https://github.com/ksyzov/AccountManager.
@@ -28,6 +27,10 @@ public class GuiSessionLogin extends GuiScreen {
     private String status = "Session Login";
     private GuiTextField sessionField;
     private ScaledResolution sr;
+    private GuiButton loginButton;
+    private ExecutorService executor;
+    private CompletableFuture<Void> task;
+    private boolean authenticating;
 
     public GuiSessionLogin(GuiScreen previousScreen) {
         this.previousScreen = previousScreen;
@@ -36,13 +39,16 @@ public class GuiSessionLogin extends GuiScreen {
     @Override
     public void initGui() {
         Keyboard.enableRepeatEvents(true);
+        buttonList.clear();
         sr = new ScaledResolution(mc);
 
+        String previousInput = sessionField == null ? "" : sessionField.getText();
         sessionField = new GuiTextField(1, mc.fontRendererObj,sr.getScaledWidth() / 2 - 100, sr.getScaledHeight() / 2, 200, 20);
         sessionField.setMaxStringLength(32767);
+        sessionField.setText(previousInput);
         sessionField.setFocused(true);
 
-        buttonList.add(new GuiButton(998, sr.getScaledWidth() / 2 - 100, sr.getScaledHeight() / 2 + 30, 200, 20, "Login"));
+        buttonList.add(loginButton = new GuiButton(998, sr.getScaledWidth() / 2 - 100, sr.getScaledHeight() / 2 + 30, 200, 20, "Login"));
 
         super.initGui();
     }
@@ -50,12 +56,15 @@ public class GuiSessionLogin extends GuiScreen {
     @Override
     public void onGuiClosed() {
         Keyboard.enableRepeatEvents(false);
+        if (task != null && !task.isDone()) task.cancel(true);
+        if (executor != null) executor.shutdownNow();
 
         super.onGuiClosed();
     }
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        if (loginButton != null) loginButton.enabled = !authenticating;
         drawDefaultBackground();
 
         mc.fontRendererObj.drawString(status, sr.getScaledWidth() / 2 - mc.fontRendererObj.getStringWidth(status) / 2, sr.getScaledHeight() / 2 - 30, Color.WHITE.getRGB());
@@ -66,44 +75,44 @@ public class GuiSessionLogin extends GuiScreen {
 
     @Override
     protected void actionPerformed(GuiButton button) throws IOException {
-        //login button
-        if (button.id == 998) {
+        if (button != null && button.enabled && button.id == 998 && !authenticating) {
+            final String input;
             try {
-                String username, uuid, token, session = sessionField.getText();
-
-                if (session.contains(":")) { //if fully formatted string (ign:uuid:token)
-                    //split string to data
-                    username = session.split(":")[0];
-                    uuid = session.split(":")[1];
-                    token = session.split(":")[2];
-                } else { //if only token
-                    //make request
-                    HttpURLConnection c = (HttpURLConnection) new URL("https://api.minecraftservices.com/minecraft/profile/").openConnection();
-                    c.setRequestProperty("Content-type", "application/json");
-                    c.setRequestProperty("Authorization", "Bearer " + sessionField.getText());
-                    c.setDoOutput(true);
-
-                    //get json
-                    JsonObject json = new JsonParser().parse(IOUtils.toString(c.getInputStream())).getAsJsonObject();
-
-                    //get data
-                    username = json.get("name").getAsString();
-                    uuid = json.get("id").getAsString();
-                    token = session;
-                }
-
-                SessionManager.set(new Session(username, uuid, token, "mojang"));
-                mc.displayGuiScreen(previousScreen);
-            } catch (IOException IOException){
-                if(IOException.getMessage().contains("401")){
-                    status = "§cError: Invalid session.";
-                }  else {
-                    IOException.printStackTrace();
-                }
-            } catch(Exception e) {
-                status = "§cError: Couldn't set session (check mc logs)";
-                e.printStackTrace();
+                input = TokenAuth.normalize(sessionField.getText());
+            } catch (IllegalArgumentException exception) {
+                status = "§c" + TokenAuth.errorMessage(exception);
+                return;
             }
+            if (executor == null || executor.isShutdown()) {
+                executor = Executors.newSingleThreadExecutor(runnable -> {
+                    Thread thread = new Thread(runnable, "Leader-SessionLogin");
+                    thread.setDaemon(true);
+                    return thread;
+                });
+            }
+            authenticating = true;
+            status = "Checking Minecraft token...";
+            task = MicrosoftAuth.login(input, executor)
+                    .thenAccept(session -> mc.addScheduledTask(() -> {
+                        if (mc.currentScreen != this) return;
+                        try {
+                            SessionManager.set(session);
+                            mc.displayGuiScreen(previousScreen);
+                        } catch (RuntimeException exception) {
+                            status = "§c" + TokenAuth.errorMessage(exception);
+                        } finally {
+                            authenticating = false;
+                        }
+                    }))
+                    .exceptionally(error -> {
+                        mc.addScheduledTask(() -> {
+                            if (mc.currentScreen == this) {
+                                authenticating = false;
+                                status = "§c" + TokenAuth.errorMessage(error);
+                            }
+                        });
+                        return null;
+                    });
         }
 
         super.actionPerformed(button);
@@ -115,5 +124,16 @@ public class GuiSessionLogin extends GuiScreen {
 
         if (Keyboard.KEY_ESCAPE == keyCode) mc.displayGuiScreen(previousScreen);
         else super.keyTyped(typedChar, keyCode);
+    }
+
+    @Override
+    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
+        super.mouseClicked(mouseX, mouseY, mouseButton);
+        sessionField.mouseClicked(mouseX, mouseY, mouseButton);
+    }
+
+    @Override
+    public void updateScreen() {
+        sessionField.updateCursorCounter();
     }
 }

@@ -2,8 +2,8 @@ package me.ksyz.accountmanager.auth;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Session;
-
-import java.lang.reflect.Field;
+import leader.mixin.IAccessorMinecraft;
+import java.util.concurrent.ExecutionException;
 
 /*
  * This file is derived from https://github.com/ksyzov/AccountManager.
@@ -14,35 +14,28 @@ import java.lang.reflect.Field;
 public class SessionManager {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    private static Field field = null;
-
-    private static Field getField() {
-        if (field == null) {
-            try {
-                for (Field f : Minecraft.class.getDeclaredFields()) {
-                    if (f.getType().isAssignableFrom(Session.class)) {
-                        field = f;
-                        field.setAccessible(true);
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                field = null;
-            }
-        }
-
-        return field;
-    }
-
     public static Session get() {
         return mc.getSession();
     }
 
     public static void set(Session session) {
-        try {
-            getField().set(mc, session);
-        } catch (Exception e) {
-            //
+        if (session == null) throw new IllegalArgumentException("Login did not return a session.");
+        if (mc.isCallingFromMinecraftThread()) {
+            apply(session);
+            return;
         }
+        try {
+            mc.addScheduledTask(() -> apply(session)).get();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Login was cancelled before the session could be applied.");
+        } catch (ExecutionException exception) {
+            throw new IllegalStateException("Unable to apply the login session.", exception.getCause());
+        }
+    }
+
+    private static void apply(Session session) {
+        ((IAccessorMinecraft) mc).setSession(session);
+        if (mc.getSession() != session) throw new IllegalStateException("The login session was not updated.");
     }
 }

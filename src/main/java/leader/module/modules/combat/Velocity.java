@@ -45,6 +45,7 @@ public class Velocity extends Module {
     private static final long SKIP_HURT_CONFIRMATION_NANOS = 250_000_000L;
     public final ModeProperty mode = new ModeProperty("Mode", 0, new String[]{"Vanilla","Prediction","GrimReduce","SkipTick"});
     public final IntProperty skipTick = new IntProperty("SkipTick",3,1,5,() -> mode.getValue() == 3);
+    public final BooleanProperty delayFirst = new BooleanProperty("delayfirst", false, () -> mode.getValue() == 3);
     public final BooleanProperty skipRangeCheck = new BooleanProperty("Range Check", true, () -> mode.getValue() == 3);
     public final FloatProperty skipRange = new FloatProperty("Range", 3.0F, 0.0F, 6.0F,
             () -> mode.getValue() == 3 && skipRangeCheck.getValue());
@@ -68,9 +69,9 @@ public class Velocity extends Module {
     public final BooleanProperty forceDelayRisingToFalling = new BooleanProperty("Force Delay Rising To Falling",false,() -> (mode.getValue() == 1 || mode.getValue() == 2) && delay.getValue() && !this.airBuffer.getValue());
     public final BooleanProperty airBuffer = new BooleanProperty("Delay Till On Ground", true, () -> (mode.getValue() == 1 || mode.getValue() == 2) && delay.getValue());
     public final BooleanProperty groundDelay = new BooleanProperty("Ground Delay", false, () -> (mode.getValue() == 1 || mode.getValue() == 2) && delay.getValue() && !airBuffer.getValue());
-    public final BooleanProperty rotate = new BooleanProperty("Rotate", false, () -> this.mode.getValue() == 1);
-    public final IntProperty rotateTick = new IntProperty("Rotate Ticks", 3, 1, 12, () -> this.mode.getValue() == 1 && this.rotate.getValue());
-    public final BooleanProperty autoMove = new BooleanProperty("Auto Move", false, () -> this.mode.getValue() == 1 && this.rotate.getValue());
+    public final BooleanProperty rotate = new BooleanProperty("Rotate", false, () -> this.mode.getValue() == 1 || this.mode.getValue() == 3);
+    public final IntProperty rotateTick = new IntProperty("Rotate Ticks", 3, 1, 12, () -> (this.mode.getValue() == 1 || this.mode.getValue() == 3) && this.rotate.getValue());
+    public final BooleanProperty autoMove = new BooleanProperty("Auto Move", false, () -> (this.mode.getValue() == 1 || this.mode.getValue() == 3) && this.rotate.getValue());
     public final PercentProperty chance = new PercentProperty("Chance", 100, () -> mode.getValue() == 0);
     public final PercentProperty horizontal = new PercentProperty("Horizontal", 100, () -> mode.getValue() == 0);
     public final PercentProperty vertical = new PercentProperty("Vertical", 100, () -> mode.getValue() == 0);
@@ -96,10 +97,13 @@ public class Velocity extends Module {
     private volatile boolean skipAttackWindow;
     private volatile boolean skipWaitingForMovement;
     private volatile boolean skipDelayOnly;
+    private volatile boolean skipWaitingForGround;
+    private boolean skipDelayFirstActive;
     private long skipDelayDeadlineTick;
     private long skipReleaseMovementSequence;
     private volatile int skipBoostTicks;
     private int skipBoostTotal;
+    private int skipFrozenTicks;
     private int skipFreezeTicksRemaining;
     private EntityPlayerSP skipPlayer;
     private WorldClient skipWorld;
@@ -195,7 +199,8 @@ public class Velocity extends Module {
         if (skipFreezeActive && stuck != null && stuck.isExternalSkipFreezeActive()
                 && !stuck.isTimedSkipFreezeActive()) stuck.endExternalSkipFreeze();
         skipFreezeActive = false;
-        DelayModules delayOwner = skipDelayOnly ? DelayModules.VELOCITY : DelayModules.VELOCITY_SKIP_TICK;
+        skipSuppressPackets = false;
+        DelayModules delayOwner = skipDelayOwner();
         if (skipOwnsDelay && Leader.delayManager != null && Leader.delayManager.getDelayModule() == delayOwner) {
             skipReleasingDelay = true;
             try {
@@ -211,9 +216,12 @@ public class Velocity extends Module {
         skipSequence = skipPendingFreeze = skipFreezeActive = skipReleasingDelay = skipAttackWindow = false;
         skipWaitingForMovement = false;
         skipDelayOnly = false;
+        skipWaitingForGround = false;
+        skipDelayFirstActive = false;
         skipDelayDeadlineTick = 0;
         skipBoostTicks = 0;
         skipBoostTotal = 0;
+        skipFrozenTicks = 0;
         skipFreezeTicksRemaining = 0;
         skipOwnsDelay = false;
         skipSuppressPackets = false;
@@ -232,8 +240,10 @@ public class Velocity extends Module {
                 || mc.currentScreen != null || !mc.inGameHasFocus) return false;
 
         boolean delayOnly = !isSkipTargetInRange();
+        boolean waitForGround = !delayOnly && delayFirst.getValue() && !mc.thePlayer.onGround;
         if (delayOnly) queuePredictionDelay((Packet<INetHandlerPlayClient>) packet);
-        else if (!Leader.delayManager.beginDelay(DelayModules.VELOCITY_SKIP_TICK, (Packet<INetHandlerPlayClient>) packet)) return false;
+        else if (!Leader.delayManager.beginDelay(waitForGround ? DelayModules.VELOCITY : DelayModules.VELOCITY_SKIP_TICK,
+                (Packet<INetHandlerPlayClient>) packet)) return false;
         skipOwnsDelay = true;
         skipSuppressPackets = false;
         skipPlayer = mc.thePlayer; skipWorld = mc.theWorld;
@@ -241,6 +251,8 @@ public class Velocity extends Module {
         skipDelayDeadlineTick = combatTick + skipBoostTotal;
         skipFreezeStarted = System.nanoTime();
         skipDelayOnly = delayOnly;
+        skipDelayFirstActive = waitForGround;
+        skipWaitingForGround = skipDelayFirstActive;
         skipSequence = !delayOnly;
         skipFreezeActive = false;
         skipReleasingDelay = false;
@@ -274,21 +286,28 @@ public class Velocity extends Module {
 
     private void useSkipDelayOnly() {
         boolean pendingJump = jumpFlag;
+        DelayModules delayOwner = skipDelayOwner();
         Stuck stuck = stuckModule();
         if (skipFreezeActive && stuck != null && stuck.isExternalSkipFreezeActive()
                 && !stuck.isTimedSkipFreezeActive()) stuck.endExternalSkipFreeze();
         skipTimer.release();
         skipFreezeActive = skipPendingFreeze = skipAttackWindow = skipWaitingForMovement = false;
+        skipWaitingForGround = skipDelayFirstActive = false;
         skipSuppressPackets = skipSequence = false;
         skipBoostTicks = 0;
+        skipFrozenTicks = 0;
         cancellingKillAuraAttack = false;
-        if (!skipOwnsDelay || Leader.delayManager.getDelayModule() != DelayModules.VELOCITY_SKIP_TICK) {
+        if (!skipOwnsDelay || Leader.delayManager.getDelayModule() != delayOwner) {
             resetSkipState(false);
             jumpFlag = pendingJump;
             return;
         }
         Leader.delayManager.setDelayState(true, DelayModules.VELOCITY);
         skipDelayOnly = true;
+    }
+
+    private DelayModules skipDelayOwner() {
+        return skipDelayOnly || skipDelayFirstActive ? DelayModules.VELOCITY : DelayModules.VELOCITY_SKIP_TICK;
     }
 
     private void queuePredictionDelay(Packet<INetHandlerPlayClient> packet) {
@@ -315,13 +334,13 @@ public class Velocity extends Module {
 
     private void beginSkipBoost() {
         if (skipBoostTicks > 0 || mc.thePlayer == null) return;
-        if (!skipTimer.acquire(skipBoostTotal, skipBoostTotal)) {
+        if (!skipTimer.acquire(skipFrozenTicks, skipFrozenTicks)) {
             resetSkipState(false);
             return;
         }
 
         skipWaitingForMovement = false;
-        skipBoostTicks = skipBoostTotal;
+        skipBoostTicks = skipFrozenTicks;
         skipAttackWindow = true;
     }
 
@@ -331,6 +350,7 @@ public class Velocity extends Module {
             clearSkipHurtConfirmation();
             if (skipReleasingDelay && event.getY() > 0.0) {
                 jumpFlag = jump.getValue() && !mc.thePlayer.isBurning();
+                if (!event.isCancelled()) captureKnockbackRotation(event);
             }
 
             return;
@@ -363,13 +383,7 @@ public class Velocity extends Module {
                     allowNext = true;
                     return;
                 }
-                if (this.mode.getValue() == 1 && this.rotate.getValue() && event.getY() > 0.0) {
-                    this.knockbackX = event.getX();
-                    this.knockbackZ = event.getZ();
-                    if (Math.abs(this.knockbackX) > 0.01 || Math.abs(this.knockbackZ) > 0.01) {
-                        this.rotateTickCounter = 1;
-                    }
-                }
+                if (this.mode.getValue() == 1) captureKnockbackRotation(event);
                 if (mode.getValue() == 1 && smartTimes.getValue()){
                     hitCount = computeReduceTicks((int) event.getX(), (int) event.getZ());
                 }
@@ -440,7 +454,7 @@ public class Velocity extends Module {
                 return;
             }
             if (event.getType() == EventType.PRE) {
-                cancellingKillAuraAttack = skipSequence || skipAttackWindow || skipWaitingForMovement;
+                cancellingKillAuraAttack = !skipWaitingForGround && (skipSequence || skipAttackWindow || skipWaitingForMovement);
                 if ((skipSequence || skipWaitingForMovement) && System.nanoTime() - skipFreezeStarted > 2000000000L) {
                     resetSkipState(true);
                     return;
@@ -452,24 +466,45 @@ public class Velocity extends Module {
                 if (!skipDelayOnly && (skipSequence || skipAttackWindow || skipWaitingForMovement)
                         && !isSkipTargetInRange()) useSkipDelayOnly();
                 if (skipDelayOnly) return;
+                if (skipWaitingForGround) {
+                    if (combatTick > skipDelayDeadlineTick) {
+                        resetSkipState(true);
+                        return;
+                    }
+                    if (!mc.thePlayer.onGround) return;
+                    skipWaitingForGround = false;
+                    cancellingKillAuraAttack = true;
+                }
                 if (skipPendingFreeze) {
+                    int freezeTicks = skipDelayFirstActive
+                            ? (int) Math.max(0L, Math.min((long) skipBoostTotal, skipDelayDeadlineTick - combatTick + 1L))
+                            : skipBoostTotal;
+                    if (freezeTicks <= 0) {
+                        resetSkipState(true);
+                        return;
+                    }
                     KillAura killAura = (KillAura) Leader.moduleManager.getModule(KillAura.class);
                     if (killAura != null && killAura.isEnabled()) killAura.prepareVelocityAttackWindow();
                     Stuck stuck = stuckModule();
-                    if (stuck == null || !stuck.beginExternalSkipFreeze(skipBoostTotal)) {
+                    if (stuck == null || !stuck.beginExternalSkipFreeze(freezeTicks)) {
 
                         resetSkipState(true);
                     } else {
                         skipPendingFreeze = false;
                         skipFreezeActive = true;
                         skipSuppressPackets = true;
-                        skipFreezeTicksRemaining = skipBoostTotal;
+                        skipFreezeTicksRemaining = freezeTicks;
+                        skipFrozenTicks = freezeTicks;
                     }
                 }
                 if (skipAttackWindow && (isStuckActive() || !skipTimer.isActive())) resetSkipState(true);
             } else if (event.getType() == EventType.POST) {
                 if (skipDelayOnly) {
                     if (combatTick >= skipDelayDeadlineTick) finishSkipDelayOnly();
+                    return;
+                }
+                if (skipWaitingForGround) {
+                    if (combatTick >= skipDelayDeadlineTick) resetSkipState(true);
                     return;
                 }
                 if (skipFreezeActive) {
@@ -484,18 +519,22 @@ public class Velocity extends Module {
                     }
 
                     skipFreezeTicksRemaining = stuck.getFreezeTicksRemaining();
-                    if (skipFreezeTicksRemaining > 0) return;
+                    if (skipFreezeTicksRemaining > 0
+                            && (!skipDelayFirstActive || combatTick < skipDelayDeadlineTick)) return;
+                    skipFrozenTicks = Math.max(0, skipFrozenTicks - skipFreezeTicksRemaining);
                     stuck.endExternalSkipFreeze();
 
                     {
                         skipFreezeActive = false;
+                        skipSuppressPackets = false;
                         skipReleasingDelay = true;
                         try {
-                            if (Leader.delayManager.getDelayModule() != DelayModules.VELOCITY_SKIP_TICK) {
+                            DelayModules delayOwner = skipDelayOwner();
+                            if (Leader.delayManager.getDelayModule() != delayOwner) {
                                 resetSkipState(false);
                                 return;
                             }
-                            Leader.delayManager.releaseDelay(DelayModules.VELOCITY_SKIP_TICK);
+                            Leader.delayManager.releaseDelay(delayOwner);
                         } finally { skipReleasingDelay = false; skipOwnsDelay = false; }
                         skipSequence = false;
                         skipSuppressPackets = false;
@@ -536,12 +575,50 @@ public class Velocity extends Module {
             }
         }
     }
+    private void captureKnockbackRotation(KnockbackEvent event) {
+        if (!rotate.getValue() || event.getY() <= 0.0) return;
+        this.knockbackX = event.getX();
+        this.knockbackZ = event.getZ();
+        if (Math.abs(this.knockbackX) > 0.01 || Math.abs(this.knockbackZ) > 0.01) {
+            this.rotateTickCounter = 1;
+        }
+    }
+
+    private void clearKnockbackRotation() {
+        rotateTickCounter = 0;
+        targetRotation = null;
+        knockbackX = knockbackZ = 0;
+    }
+
+    private void updateKnockbackRotation(UpdateEvent event) {
+        if (event.getType() != EventType.PRE) return;
+        int maxTick = this.rotateTick.getValue();
+        if (this.rotateTickCounter <= 0 || this.rotateTickCounter > maxTick) return;
+        if (this.rotateTickCounter == 1) {
+            double deltaX = -this.knockbackX;
+            double deltaZ = -this.knockbackZ;
+            this.targetRotation = RotationUtil.getRotationsTo(deltaX, 0, deltaZ, event.getYaw(), event.getPitch());
+        }
+        if (this.targetRotation != null && !Leader.moduleManager.getModule(Scaffold.class).isEnabled()) {
+            event.setRotation(this.targetRotation[0], this.targetRotation[1], 2);
+            event.setPervRotation(this.targetRotation[0], 2);
+        }
+        this.rotateTickCounter++;
+        if (this.rotateTickCounter > maxTick) {
+            this.rotateTickCounter = 0;
+            this.targetRotation = null;
+            this.knockbackX = 0;
+            this.knockbackZ = 0;
+        }
+    }
+
     @EventTarget
     public void onUpdate(UpdateEvent event) {
         if (mode.getValue() == 3) {
             if (!isEnabled()) return;
             if (event.getType() == EventType.PRE) {
-                cancellingKillAuraAttack = skipSequence || skipAttackWindow || skipWaitingForMovement;
+                cancellingKillAuraAttack = !skipWaitingForGround && (skipSequence || skipAttackWindow || skipWaitingForMovement);
+                if (!isStuckActive()) updateKnockbackRotation(event);
             } else if (event.getType() == EventType.POST) {
                 synchronized (this) {
                     if (skipDelayOnly && shouldReleasePredictionDelay(true, skipBoostTotal)) finishSkipDelayOnly();
@@ -554,32 +631,7 @@ public class Velocity extends Module {
             resetForStuck();
             return;
         }
-        if (event.getType() == EventType.PRE) {
-            int maxTick = this.rotateTick.getValue();
-            if (this.rotateTickCounter > 0 && this.rotateTickCounter <= maxTick) {
-                if (this.rotateTickCounter == 1) {
-                    double deltaX = -this.knockbackX;
-                    double deltaZ = -this.knockbackZ;
-                    this.targetRotation = RotationUtil.getRotationsTo(deltaX, 0, deltaZ, event.getYaw(), event.getPitch());
-                }
-                if (this.targetRotation != null && !Leader.moduleManager.getModule(Scaffold.class).isEnabled()) {
-                    event.setRotation(this.targetRotation[0], this.targetRotation[1], 2);
-                    event.setPervRotation(this.targetRotation[0], 2);
-                }
-            }
-        }
-        if (event.getType() == EventType.PRE){
-            int maxTick = this.rotateTick.getValue();
-            if (this.rotateTickCounter > 0 && this.rotateTickCounter <= maxTick) {
-                this.rotateTickCounter++;
-                if (this.rotateTickCounter > maxTick) {
-                    this.rotateTickCounter = 0;
-                    this.targetRotation = null;
-                    this.knockbackX = 0;
-                    this.knockbackZ = 0;
-                }
-            }
-        }
+        updateKnockbackRotation(event);
         if (mode.getValue() == 1) {
             if (this.reduce.getValue() && this.airPush.getValue()
                     && event.getType() == EventType.PRE
@@ -756,6 +808,7 @@ public class Velocity extends Module {
             if (!isEnabled() || event.getType() != EventType.RECEIVE) return;
             if (event.getPacket() instanceof S08PacketPlayerPosLook) {
                 clearSkipHurtConfirmation();
+                clearKnockbackRotation();
                 return;
             }
             if (event.getPacket() instanceof S19PacketEntityStatus) {
@@ -843,7 +896,10 @@ public class Velocity extends Module {
 
     @Override
     public void verifyValue(String name) {
-        if ("Mode".equals(name)) clearSkipHurtConfirmation();
+        if ("Mode".equals(name)) {
+            clearSkipHurtConfirmation();
+            clearKnockbackRotation();
+        }
         if ("Mode".equals(name) && mode.getValue() != 3
                 && (skipSequence || skipAttackWindow || skipWaitingForMovement || skipDelayOnly)) resetSkipState(true);
     }
@@ -852,7 +908,7 @@ public class Velocity extends Module {
         if (Leader.moduleManager == null) return false;
         Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
         return velocity != null && velocity.isEnabled() && velocity.mode.getValue() == 3
-                && !velocity.skipDelayOnly
+                && !velocity.skipDelayOnly && !velocity.skipWaitingForGround
                 && (velocity.skipSequence || velocity.skipWaitingForMovement || velocity.skipAttackWindow);
     }
 
@@ -901,6 +957,7 @@ public class Velocity extends Module {
         Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
         return velocity != null && velocity.isEnabled() && velocity.mode.getValue() == 3
                 && !velocity.skipDelayOnly
+                && !(velocity.skipDelayFirstActive && (velocity.skipWaitingForGround || velocity.skipReleasingDelay))
                 && (velocity.skipSuppressPackets || velocity.skipSequence || velocity.skipPendingFreeze || velocity.skipFreezeActive
                 || velocity.skipReleasingDelay || velocity.skipWaitingForMovement || velocity.skipAttackWindow);
     }
@@ -923,7 +980,10 @@ public class Velocity extends Module {
             return;
         }
         Velocity velocity = (Velocity) Leader.moduleManager.getModule(Velocity.class);
-        if (velocity != null) velocity.resetSkipState(false);
+        if (velocity != null) {
+            velocity.resetSkipState(velocity.skipDelayFirstActive);
+            velocity.clearKnockbackRotation();
+        }
     }
 
     public void dbg(String msg) {
@@ -960,6 +1020,7 @@ public class Velocity extends Module {
     @Override
     public void onDisabled() {
         resetSkipState(true);
+        clearKnockbackRotation();
         pendingExplosion = false;
         stoppedBlock = false;
         allowNext = true;
